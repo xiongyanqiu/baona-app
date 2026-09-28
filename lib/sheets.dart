@@ -276,6 +276,17 @@ class _SettingsState extends State<_Settings> {
         const Sec('她的人设（她的脑子）'),
         _PersonaBox(init: '${hs['persona'] ?? ''}', onSave: (v) => _patch({'persona': v})),
 
+        const Sec('她的展示（她在桌面上什么样）'),
+        RowTile(
+          label: '看她在电脑桌面上的样子',
+          sub: '聊天页：手指从屏幕【左边缘往右滑】就出来了（实时画面，点一下能摸她）',
+          hair: false,
+          trail: Chip2('看一眼', ico: Icons.visibility_outlined, on: () {
+            Navigator.pop(context);
+            homeKey.currentState?.openDrawer();
+          }),
+        ),
+
         const Sec('记忆与数据'),
         Row(children: [
           Chip2('她的长期记忆', ico: Icons.psychology_outlined, on: () => openMemories(context)),

@@ -330,6 +330,8 @@ class Api {
   Future<Map<String, dynamic>> shopEarn(int amount, [String why = '陪老公的奖励']) =>
       post('/api/shop/earn', {'amount': amount, 'why': why});
   Future<Map<String, dynamic>> herSettings() => get('/api/settings');
+  /// ★她的桌宠实时画面（手机左边缘往右滑看到的那个）
+  Future<Map<String, dynamic>> petShot() => get('/api/petshot');
   Future<Map<String, dynamic>> patchSettings(Map<String, dynamic> patch) => post('/api/settings', {'patch': patch});
   Future<Map<String, dynamic>> voiceOn(bool en) => post('/api/voice', {'enabled': en});
   Future<Map<String, dynamic>> setPassword(String np) => post('/api/password', {'newPassword': np});

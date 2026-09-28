@@ -6,6 +6,7 @@ import 'api.dart';
 import 'chat.dart';
 import 'game.dart';
 import 'notify.dart';
+import 'pet.dart';
 import 'sheets.dart';
 import 'shop.dart';
 import 'theme.dart';
@@ -346,6 +347,9 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 /* ------------------------------- 主界面 ------------------------------- */
+/// ★她的展示抽屉：从屏幕左边缘往右滑 / 设置里点「看一眼」都走这个
+final GlobalKey<ScaffoldState> homeKey = GlobalKey<ScaffoldState>();
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -363,7 +367,12 @@ class _HomePageState extends State<HomePage> {
           url: app.bg,
           blur: 8,
           child: Scaffold(
+            key: homeKey,
             backgroundColor: Colors.transparent,
+            // ★从屏幕左边缘往右滑 = 看她在桌面上什么样（老公 2026-09-29 要的）
+            drawer: const PetDrawer(),
+            drawerEdgeDragWidth: 32,
+            drawerScrimColor: const Color(0x66000000),
             body: Column(children: [
               _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
               Expanded(
