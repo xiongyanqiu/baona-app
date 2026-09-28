@@ -221,7 +221,7 @@ class _SettingsState extends State<_Settings> {
             ),
         ]),
 
-        const Sec('聊天背景'),
+        Sec('聊天背景'),
         Row(children: [
           Chip2('默认深色', on2: app.bg.isEmpty, on: () { app.put('bg', ''); setState(() {}); }),
           const SizedBox(width: 8),
@@ -230,9 +230,36 @@ class _SettingsState extends State<_Settings> {
             if (url.isNotEmpty) {
               app.put('bg', url);
               setState(() {});
+              _note('背景换好了 ✓ 下面能调透明度和模糊');
+            } else {
+              _note('没选到照片（相册要能打开才行）', true);
             }
           }),
+          const SizedBox(width: 8),
+          if (app.bg.isNotEmpty) Chip2('清掉', ico: Icons.close, on: () { app.put('bg', ''); setState(() {}); }),
         ]),
+        // ★2026-09-29 老公要的：设了照片之后能调透明度和模糊（默认照片 100% + 模糊 8）
+        if (app.bg.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('照片透明度 ${(app.bgOpacity * 100).round()}%', style: const TextStyle(fontSize: 12, color: kSub)),
+          Slider(
+            value: app.bgOpacity,
+            min: 0.05,
+            max: 1,
+            divisions: 19,
+            activeColor: kAccent,
+            onChanged: (v) { app.cfg['bgOpacity'] = v; app.save(); setState(() {}); },
+          ),
+          Text('模糊度 ${app.bgBlur.round()}', style: const TextStyle(fontSize: 12, color: kSub)),
+          Slider(
+            value: app.bgBlur,
+            min: 0,
+            max: 24,
+            divisions: 24,
+            activeColor: kAccent,
+            onChanged: (v) { app.cfg['bgBlur'] = v; app.save(); setState(() {}); },
+          ),
+        ],
 
         Sec('字号 ${app.fontSize.toStringAsFixed(0)}'),
         Slider(

@@ -458,16 +458,55 @@ class _AlbumState extends State<_Album> {
               toast(context, '先建个分组');
               return;
             }
-            final files = await ImagePicker().pickMultiImage(maxWidth: 1600, imageQuality: 82);
-            if (files.isEmpty) return;
-            var ok = 0;
-            for (final f in files) {
-              final b = await f.readAsBytes();
-              final r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
-              if (r?['ok'] == true) ok++;
+            // ★2026-09-29 老公报"点了没反应"：日志里电脑端一条上传请求都没有 → 是 iOS 上
+            //   pickMultiImage 有时候一张都不返回。改成：多选拿不到就退回单选（单选是好的，头像就是它选的），
+            //   而且每一步都给反馈，绝不再"点了没动静"。
+            List<XFile> files = [];
+            try {
+              files = await ImagePicker().pickMultiImage(maxWidth: 1280, imageQuality: 78);
+            } catch (_) {
+              files = [];
             }
-            if (mounted) toast(context, ok > 0 ? '传上去 $ok 张' : '没传上去');
-            _reload();
+            if (!mounted) return;
+            if (files.isEmpty) {
+              try {
+                final one = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1280, imageQuality: 78);
+                if (one != null) files = [one];
+              } catch (e) {
+                if (mounted) toast(context, '打不开相册：$e');
+                return;
+              }
+            }
+            if (files.isEmpty) {
+              if (mounted) toast(context, '没选照片');
+              return;
+            }
+            if (mounted) toast(context, '传着呢…共 ${files.length} 张');
+            var ok = 0;
+            var lastErr = '';
+            for (final f in files) {
+              try {
+                final b = await f.readAsBytes();
+                var r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
+                if (r?['ok'] != true && '${r?['error'] ?? ''}'.contains('密码')) {
+                  final pin = await _askText(context, '相册密码', obscure: true);
+                  if (pin.isNotEmpty) {
+                    await Store.setAlbumPin(pin);
+                    r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
+                  }
+                }
+                if (r?['ok'] == true) {
+                  ok++;
+                } else {
+                  lastErr = '${r?['error'] ?? '电脑端没接住'}';
+                }
+              } catch (e) {
+                lastErr = '$e';
+              }
+            }
+            if (!mounted) return;
+            toast(context, ok > 0 ? '传上去 $ok 张 ✓' : '没传上去：$lastErr');
+            if (ok > 0) _reload();
           }),
           IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
         ]),

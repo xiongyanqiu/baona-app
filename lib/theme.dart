@@ -31,7 +31,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.1.4'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.1.5'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★别再按"底栏 75pt + 安全区"自己算：Scaffold 已经把「底栏高度（含安全区）」放进 body 的
 ///   padding.bottom 里了（实测 iPhone 上 = 113）。之前自己又加了一遍，等于算了两次，
@@ -509,10 +509,11 @@ class GlassNav extends StatelessWidget {
 /* --------------------------------- 背景 --------------------------------- */
 /// 背景：有自定义壁纸就用壁纸，没有就默认深色渐变（可模糊）
 class Wall extends StatelessWidget {
-  const Wall({super.key, required this.url, this.blur = 0, required this.child});
+  const Wall({super.key, required this.url, this.blur = 0, this.opacity = 1, required this.child});
 
   final String url;
   final double blur;
+  final double opacity; // ★照片的透明度（老公 2026-09-29：设了背景照片没法调透明，字看不清）
   final Widget child;
 
   @override
@@ -530,8 +531,14 @@ class Wall extends StatelessWidget {
     if (url.isNotEmpty) {
       final p = avatarOf(url);
       base = Stack(fit: StackFit.expand, children: [
-        if (p == null) base else Image(image: p, fit: BoxFit.cover, errorBuilder: (_, __, ___) => base),
-        const ColoredBox(color: Color(0x66000000)),
+        if (p != null)
+          Opacity(
+            opacity: opacity.clamp(0.0, 1.0),
+            child: Image(image: p, fit: BoxFit.cover, errorBuilder: (_, __, ___) => base),
+          ),
+        // 透明的地方露出底下的深色底；再压一层暗角保证字看得清
+        Opacity(opacity: (1 - opacity.clamp(0.0, 1.0)) * 0.9, child: base),
+        Opacity(opacity: 0.30, child: const ColoredBox(color: Color(0xFF000000))),
       ]);
     }
     return Stack(children: [
