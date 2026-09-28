@@ -1,0 +1,550 @@
+// 包娜 App · 抽屉：设置 / 控制器 / 搜索聊天
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'api.dart';
+import 'main.dart';
+import 'theme.dart';
+import 'us.dart';
+
+/* ================================ 设置 ================================ */
+Future<void> openSettings(BuildContext context) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF120F1B),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (c) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.9,
+      maxChildSize: 0.96,
+      builder: (c, scroll) => _Settings(scroll: scroll),
+    ),
+  );
+}
+
+class _Settings extends StatefulWidget {
+  const _Settings({required this.scroll});
+  final ScrollController scroll;
+
+  @override
+  State<_Settings> createState() => _SettingsState();
+}
+
+class _SettingsState extends State<_Settings> {
+  Map<String, dynamic> hs = {};
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    hs = Map<String, dynamic>.from(app.herSet);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final j = await app.api?.herSettings();
+    if (!mounted) return;
+    if (j != null && j['ok'] == true && j['s'] is Map) {
+      setState(() {
+        hs = Map<String, dynamic>.from(j['s'] as Map);
+        app.herSet = hs;
+      });
+    }
+  }
+
+  Future<void> _patch(Map<String, dynamic> p) async {
+    setState(() {
+      _saving = true;
+      hs.addAll(p);
+      app.herSet = Map<String, dynamic>.from(hs);
+    });
+    final r = await app.api?.patchSettings(p);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (r != null && r['ok'] != true) toast(context, '没设上：${r['error'] ?? ''}');
+  }
+
+  Future<void> _pickAvatar(String which) async {
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
+    if (f == null) return;
+    final b = await f.readAsBytes();
+    await _patch({which: 'data:image/jpeg;base64,${base64Encode(b)}'});
+    if (mounted) toast(context, '头像换好了');
+  }
+
+  bool _b(String k, [bool d = false]) => hs[k] == true || (hs[k] == null && d);
+
+  @override
+  Widget build(BuildContext context) {
+    final nick = TextEditingController(text: '${hs['nickName'] ?? '包娜'}');
+    return ListView(
+      controller: widget.scroll,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
+      children: [
+        Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
+        const SizedBox(height: 12),
+        Row(children: [
+          const Text('设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          if (_saving) const Text('存着呢…', style: TextStyle(fontSize: 12, color: kSub)),
+          const Spacer(),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
+        ]),
+
+        const Sec('她叫什么（你看到她叫这个）'),
+        Row(children: [
+          Expanded(child: TextField(controller: nick, decoration: const InputDecoration(hintText: '包娜'))),
+          const SizedBox(width: 8),
+          FilledButton(onPressed: () => _patch({'nickName': nick.text.trim()}), child: const Text('存')),
+        ]),
+
+        const Sec('头像'),
+        Row(children: [
+          _AvBox(title: '我的', data: '${hs['myAvatar'] ?? ''}', onTap: () => _pickAvatar('myAvatar')),
+          const SizedBox(width: 12),
+          _AvBox(title: '她的', data: '${hs['herAvatar'] ?? ''}', onTap: () => _pickAvatar('herAvatar')),
+        ]),
+
+        const Sec('气泡颜色'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final c in ['#7C6BF5', '#F55B8C', '#4CC9F0', '#FFB86B', '#57D9A3', '#B98CFF'])
+            GestureDetector(
+              onTap: () {
+                app.put('myColor', c);
+                setState(() {});
+              },
+              child: Container(width: 30, height: 30, decoration: BoxDecoration(color: hexColor(c), shape: BoxShape.circle, border: Border.all(color: app.myColor == hexColor(c) ? Colors.white : kLine, width: 2))),
+            ),
+        ]),
+
+        const Sec('聊天背景'),
+        Row(children: [
+          Chip2('默认深色', on2: app.bg.isEmpty, on: () { app.put('bg', ''); setState(() {}); }),
+          const SizedBox(width: 8),
+          Chip2('从相册选一张', on: () async {
+            final url = await pickAlbumImage(context);
+            if (url.isNotEmpty) {
+              app.put('bg', url);
+              setState(() {});
+            }
+          }),
+        ]),
+
+        Sec('字号 ${app.fontSize.toStringAsFixed(0)}'),
+        Slider(
+          value: app.fontSize,
+          min: 13,
+          max: 22,
+          divisions: 9,
+          activeColor: kAccent,
+          onChanged: (v) {
+            app.cfg['fontSize'] = v;
+            setState(() {});
+          },
+          onChangeEnd: (_) => app.save(),
+        ),
+
+        const Sec('显示与提醒'),
+        SwitchRow('显示时间', app.cfg['showTime'] == true, (v) { app.put('showTime', v); setState(() {}); }),
+        SwitchRow('提示音', app.cfg['sound'] != false, (v) { app.put('sound', v); setState(() {}); }),
+        SwitchRow('震动', app.cfg['vibrate'] != false, (v) { app.put('vibrate', v); setState(() {}); }),
+        SwitchRow('通知（她发消息弹出来）', app.cfg['notify'] != false, (v) { app.put('notify', v); setState(() {}); }),
+        SwitchRow('你说话时她自动看一眼', app.cfg['liveWatch'] == true, (v) { app.put('liveWatch', v); setState(() {}); }, sub: '每轮都看一眼更真，但费点算力'),
+
+        const Sec('她的语音条'),
+        SwitchRow('让她发语音', app.voiceEnabled, (v) async {
+          final r = await app.api?.voiceOn(v);
+          if (!mounted) return;
+          if (r != null && r['ok'] == true) {
+            setState(() {
+              app.voiceEnabled = r['enabled'] == true;
+            });
+            toast(context, v ? '她会发语音条了' : '她只打字了');
+          } else {
+            toast(context, '没设上');
+          }
+        }),
+
+        const Sec('她主动找你'),
+        SwitchRow('允许她主动发消息', _b('autoChatEnabled'), (v) => _patch({'autoChatEnabled': v})),
+        SwitchRow('用你们的长记忆', _b('useMemories', true), (v) => _patch({'useMemories': v})),
+        SwitchRow('她会发表情', _b('emoteEnabled', true), (v) => _patch({'emoteEnabled': v})),
+        const Sec('作息（她这个点会犯困）'),
+        Row(children: [
+          Expanded(child: _SmallField(label: '睡', value: '${hs['sleepStart'] ?? '23:30'}', onDone: (v) => _patch({'sleepStart': v}))),
+          const SizedBox(width: 10),
+          Expanded(child: _SmallField(label: '醒', value: '${hs['sleepEnd'] ?? '07:30'}', onDone: (v) => _patch({'sleepEnd': v}))),
+        ]),
+
+        const Sec('她会做的动作'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final a in [
+            ['actPetHead', '摸头'],
+            ['actTickle', '挠痒'],
+            ['actWave', '招手'],
+            ['actEat', '吃东西'],
+            ['actSleep', '睡觉'],
+            ['actSit', '坐下'],
+            ['actDance', '跳舞'],
+            ['actStretch', '伸懒腰'],
+            ['actHappy', '开心'],
+            ['actWalk', '走动'],
+          ])
+            Chip2('${a[1]}', on2: _b(a[0], true), on: () => _patch({a[0]: !_b(a[0], true)})),
+        ]),
+
+        const Sec('记忆与数据'),
+        Row(children: [
+          Chip2('她的长期记忆', ico: Icons.psychology_outlined, on: () => openMemories(context)),
+          const SizedBox(width: 8),
+          Chip2('她的本事（技能）', ico: Icons.auto_awesome, on: () => openSkills(context)),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Chip2('清空聊天记录', ico: Icons.delete_outline, on: () async {
+            final ok = await _confirm(context, '清空你们俩的全部聊天记录？电脑那边也清');
+            if (ok) {
+              await app.api?.clearChat();
+              if (mounted) toast(context, '清空了');
+            }
+          }),
+          const SizedBox(width: 8),
+          Chip2('改手机端口令', ico: Icons.lock_outline, on: () async {
+            final np = await _ask(context, '新口令（至少 4 位）', '');
+            if (np.length < 4) return;
+            final r = await app.api?.setPassword(np);
+            if (mounted) toast(context, r?['ok'] == true ? '改好了，要用新口令重新登录' : '${r?['error'] ?? '没改成'}');
+          }),
+        ]),
+        const SizedBox(height: 10),
+        Chip2('退出登录', ico: Icons.logout, on: () async {
+          await Store.wipe();
+          app.api?.dispose();
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => ConnectPage(host: Store.baseUrl.isEmpty ? kHosts[0]['url']! : Store.baseUrl)),
+              (r) => false,
+            );
+          }
+        }),
+      ],
+    );
+  }
+}
+
+class _AvBox extends StatelessWidget {
+  const _AvBox({required this.title, required this.data, required this.onTap});
+  final String title, data;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Column(children: [
+          Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: kGlass,
+              border: Border.all(color: kLine),
+              image: data.isEmpty ? null : DecorationImage(image: NetworkImage(data), fit: BoxFit.cover),
+            ),
+            child: data.isEmpty ? const Icon(Icons.add_a_photo_outlined, size: 20) : null,
+          ),
+          const SizedBox(height: 5),
+          Text(title, style: const TextStyle(fontSize: 11.5, color: kSub)),
+        ]),
+      );
+}
+
+class _SmallField extends StatefulWidget {
+  const _SmallField({required this.label, required this.value, required this.onDone});
+  final String label, value;
+  final ValueChanged<String> onDone;
+
+  @override
+  State<_SmallField> createState() => _SmallFieldState();
+}
+
+class _SmallFieldState extends State<_SmallField> {
+  late final TextEditingController c = TextEditingController(text: widget.value);
+  @override
+  void dispose() { c.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: c,
+        decoration: InputDecoration(hintText: widget.label),
+        onSubmitted: widget.onDone,
+        onTapOutside: (_) => widget.onDone(c.text.trim()),
+      );
+}
+
+Future<bool> _confirm(BuildContext c, String text) async =>
+    (await showDialog<bool>(context: c, builder: (x) => AlertDialog(content: Text(text), actions: [
+      TextButton(onPressed: () => Navigator.pop(x, false), child: const Text('算了')),
+      FilledButton(onPressed: () => Navigator.pop(x, true), child: const Text('确定')),
+    ]))) == true;
+
+Future<String> _ask(BuildContext c, String title, String init) async {
+  final t = TextEditingController(text: init);
+  final r = await showDialog<String>(
+    context: c,
+    builder: (x) => AlertDialog(title: Text(title), content: TextField(controller: t, autofocus: true), actions: [
+      TextButton(onPressed: () => Navigator.pop(x, ''), child: const Text('算了')),
+      FilledButton(onPressed: () => Navigator.pop(x, t.text.trim()), child: const Text('好')),
+    ]),
+  );
+  return r ?? '';
+}
+
+/* =============================== 控制器 =============================== */
+Future<void> openCtrl(BuildContext context) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF120F1B),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, maxChildSize: 0.96, builder: (c, s) => _Ctrl(scroll: s)),
+  );
+}
+
+class _Ctrl extends StatefulWidget {
+  const _Ctrl({required this.scroll});
+  final ScrollController scroll;
+
+  @override
+  State<_Ctrl> createState() => _CtrlState();
+}
+
+class _CtrlState extends State<_Ctrl> {
+  Map<String, dynamic> ct = {};
+  String cat = 'normal';
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _t = Timer.periodic(const Duration(seconds: 6), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final j = await app.api?.ctrl();
+    if (!mounted) return;
+    if (j != null && j['ctrl'] is Map) setState(() => ct = Map<String, dynamic>.from(j['ctrl'] as Map));
+  }
+
+  Future<void> _cmd(String cmd, [dynamic val]) async {
+    final r = await app.api?.ctrlCmd(cmd, val);
+    if (!mounted) return;
+    if (r != null && r['ctrl'] is Map) setState(() => ct = Map<String, dynamic>.from(r['ctrl'] as Map));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final arousal = (ct['arousal'] as num?)?.toInt() ?? 0;
+    final tier = '${ct['tier'] ?? 'idle'}';
+    final book = (ct['playbook'] as Map?) ?? {};
+    final finishOpts = ((ct['finishOpts'] as List?) ?? []).map((e) => '$e').toList();
+    final plays = ((book.entries).where((e) => '${(e.value as Map)['cat']}' == cat)).toList();
+
+    return ListView(
+      controller: widget.scroll,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
+      children: [
+        Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
+        Row(children: [
+          const Text('控制器', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          Text('$tier · 兴奋度 $arousal', style: const TextStyle(fontSize: 12.5, color: kAccent2)),
+          const Spacer(),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
+        ]),
+        const Sec('她的兴奋度'),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(value: (arousal.clamp(0, 100)) / 100, minHeight: 12, backgroundColor: kGlass, color: kAccent2),
+        ),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          Chip2('轻碰一下', ico: Icons.touch_app_outlined, on: () => _cmd('tap')),
+          Chip2('兴奋 +10', on: () => _cmd('arousalAdd', 10)),
+          Chip2('兴奋 −10', on: () => _cmd('arousalAdd', -10)),
+          Chip2('清零', on: () => _cmd('arousalReset')),
+        ]),
+        const Sec('强度 / 节奏 / 模式'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in [0, 1, 2, 3, 4, 5])
+            Chip2('档 $v', on2: ((ct['level'] as num?)?.toInt() ?? 0) == v, on: () => _cmd('level', v)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in ['slow', 'fast', 'wave', 'pulse'])
+            Chip2(v == 'slow' ? '慢' : (v == 'fast' ? '快' : (v == 'wave' ? '波浪' : '脉冲')), on2: '${ct['pattern']}' == v, on: () => _cmd('pattern', v)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in ['idle', 'auto', 'manual', 'edge'])
+            Chip2(v == 'idle' ? '待机' : (v == 'auto' ? '自动' : (v == 'manual' ? '手动' : '边缘')), on2: '${ct['mode']}' == v, on: () => _cmd('mode', v)),
+        ]),
+        if (finishOpts.isNotEmpty) ...[
+          const Sec('结束方式'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final f in finishOpts) Chip2(f, on2: '${ct['finish']}' == f, on: () => _cmd('finish', f)),
+          ]),
+        ],
+        const Sec('你完事了'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in ['none', 'inside', 'outside', 'mouth', 'face'])
+            Chip2(v == 'none' ? '还没有' : (v == 'inside' ? '体内' : (v == 'outside' ? '体外' : (v == 'mouth' ? '嘴里' : '脸上'))), on2: '${ct['heDone']}' == v, on: () => _cmd('heDone', v)),
+        ]),
+        const Sec('亲密互动'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final c in [['normal', '日常'], ['adult', '床上'], ['devil', '狠一点'], ['self', '她自己']])
+            Chip2('${c[1]}', on2: cat == c[0], on: () => setState(() => cat = c[0])),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final e in plays)
+            Chip2('${(e.value as Map)['label'] ?? e.key}', on2: '${ct['play']}' == e.key, on: () => _cmd('play', e.key)),
+        ]),
+        if ('${ct['play']}' != 'null' && book['${ct['play']}'] is Map) ...[
+          const Sec('这一招怎么来'),
+          for (final p in (((book['${ct['play']}'] as Map)['params'] as List?) ?? []))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${(p as List)[0]}', style: const TextStyle(fontSize: 12, color: kSub)),
+                const SizedBox(height: 5),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final o in (p[1] as List))
+                    Chip2('$o', on2: '${((ct['params'] as Map?)?['${ct['play']}'] as Map?)?[p[0]]}' == '$o', on: () => _cmd('param', {'play': '${ct['play']}', 'key': '${p[0]}', 'val': '$o'})),
+                ]),
+              ]),
+            ),
+        ],
+        const Sec('她的动作开关'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          Chip2('全都在动', on2: ct['movingAll'] == true, on: () => _cmd('movingAll', true)),
+          Chip2('让她停下来', on2: ct['movingAll'] == false, on: () => _cmd('movingAll', false)),
+        ]),
+        const Sec('记录'),
+        Text('高潮过 ${ct['edgeCount'] ?? 0} 次 · 今天这段 ${ct['sessEdge'] ?? 0} 次 · 羁绊 ${ct['bond'] ?? 0}',
+            style: const TextStyle(fontSize: 12.5, color: kSub)),
+      ],
+    );
+  }
+}
+
+/* ================================ 搜索 ================================ */
+Future<void> openSearch(BuildContext context) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF120F1B),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (c) => const _Search(),
+  );
+}
+
+class _Search extends StatefulWidget {
+  const _Search();
+  @override
+  State<_Search> createState() => _SearchState();
+}
+
+class _SearchState extends State<_Search> {
+  List<Msg> _all = [];
+  String q = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final j = await app.api?.history(limit: 500);
+    if (!mounted) return;
+    setState(() {
+      _all = ((j?['messages'] as List?) ?? []).map((e) => Msg.fromJson(Map.from(e))).toList();
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ql = q.trim().toLowerCase();
+    final hits = ql.isEmpty ? <Msg>[] : _all.where((m) => m.content.toLowerCase().contains(ql)).toList().reversed.take(60).toList();
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.8,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 6),
+            child: Row(children: [
+              Expanded(child: TextField(autofocus: true, onChanged: (v) => setState(() => q = v), decoration: const InputDecoration(hintText: '搜你们的聊天记录…'))),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
+            ]),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(padding: const EdgeInsets.fromLTRB(14, 4, 14, 20), children: [
+                    if (ql.isEmpty) const Padding(padding: EdgeInsets.only(top: 30), child: Center(child: Text('输入关键词搜聊天记录', style: TextStyle(color: kSub)))),
+                    if (ql.isNotEmpty && hits.isEmpty) const Padding(padding: EdgeInsets.only(top: 30), child: Center(child: Text('没搜到～', style: TextStyle(color: kSub)))),
+                    for (final m in hits) _Hit(m: m, q: q.trim()),
+                  ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _Hit extends StatelessWidget {
+  const _Hit({required this.m, required this.q});
+  final Msg m;
+  final String q;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = m.content;
+    final pos = raw.toLowerCase().indexOf(q.toLowerCase());
+    Widget txt;
+    if (pos >= 0) {
+      txt = RichText(
+        text: TextSpan(style: const TextStyle(fontSize: 13.5, color: kText, height: 1.45), children: [
+          TextSpan(text: raw.substring(0, pos)),
+          TextSpan(text: raw.substring(pos, pos + q.length), style: const TextStyle(backgroundColor: Color(0x667C6BF5), fontWeight: FontWeight.w600)),
+          TextSpan(text: raw.substring(pos + q.length)),
+        ]),
+      );
+    } else {
+      txt = Text(raw, style: const TextStyle(fontSize: 13.5, height: 1.45));
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(color: kGlass, borderRadius: BorderRadius.circular(12), border: Border.all(color: kLine)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${m.role == 'me' || m.role == 'user' ? '我' : app.nick} · ${fmtClock(m.time ?? 0)}', style: const TextStyle(fontSize: 11, color: kSub)),
+        const SizedBox(height: 4),
+        txt,
+      ]),
+    );
+  }
+}

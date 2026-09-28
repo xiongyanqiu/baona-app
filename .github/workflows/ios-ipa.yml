@@ -1,0 +1,53 @@
+name: 编 ipa（未签名）
+
+# 用法：推到 GitHub 后，仓库页面 → Actions → 左边「编 ipa（未签名）」→ 右边 Run workflow
+# 跑完在这个 run 页面最下面 Artifacts 里下载 baona-ipa（里面就是 BaonaApp-unsigned.ipa）
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 报一下环境（Xcode 版本）
+        run: |
+          xcodebuild -version
+          xcode-select -p
+          sw_vers
+
+      - name: 装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - name: 拉依赖
+        run: |
+          flutter --version
+          flutter pub get
+
+      - name: 编未签名 iOS 包
+        run: flutter build ios --release --no-codesign
+
+      - name: 打成 ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry BaonaApp-unsigned.ipa Payload
+          ls -lh BaonaApp-unsigned.ipa
+          unzip -l BaonaApp-unsigned.ipa | head -20
+          md5 BaonaApp-unsigned.ipa
+
+      - name: 传上去（下载用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: baona-ipa
+          path: BaonaApp-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
