@@ -29,7 +29,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.1.2'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.1.3'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 const double kNavSpace = 78;
 const Color kHair = Color(0x1FFFFFFF); // 发丝分隔线

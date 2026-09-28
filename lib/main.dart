@@ -364,8 +364,13 @@ class _HomePageState extends State<HomePage> {
   bool _navHidden = false;
   double _lastPix = 0;
 
-  /// ★往下滑 → 底栏收起来；往回滑（或滑回顶）→ 又出来（老公 2026-09-29 要的）
+  /// ★下滑收起底栏：**聊天页不参与**（聊天时底栏要一直钉在那儿），只有商城/游戏/我们才收
   bool _onScroll(ScrollNotification n) {
+    if (_tab == 0) {
+      // 回到聊天页 → 底栏一定是出来的
+      if (_navHidden) setState(() => _navHidden = false);
+      return false;
+    }
     if (n is! ScrollUpdateNotification) return false;
     final p = n.metrics.pixels;
     final d = p - _lastPix;
