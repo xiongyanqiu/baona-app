@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'api.dart';
 import 'main.dart';
 import 'theme.dart';
+import 'stickers.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -217,7 +218,11 @@ class _ChatPageState extends State<ChatPage> {
                 },
               ),
       ),
-      if (_emojiPanel) _EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
+      // ★底栏是悬浮玻璃 → 聊天这半截整块往上抬，输入栏跟底栏保持同一条线（老公 2026-09-29）
+      Padding(
+        padding: const EdgeInsets.only(bottom: kNavSpace),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+      if (_emojiPanel) EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
       _Composer(
         ctl: _inp,
         onSend: _sendText,
@@ -248,6 +253,8 @@ class _ChatPageState extends State<ChatPage> {
           onGame: () => setState(() => _funPanel = false),
           onShop: () => setState(() => _funPanel = false),
         ),
+        ]),
+      ),
     ]);
   }
 }
@@ -494,58 +501,6 @@ class _FunPanel extends StatelessWidget {
               ]),
             ),
         ]),
-      ),
-    );
-  }
-}
-
-class _EmojiPanel extends StatelessWidget {
-  const _EmojiPanel({required this.onPick, required this.onClose});
-  final void Function(String) onPick;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final a = app.api;
-    final list = app.emoji.isEmpty ? List.generate(84, (i) => {'name': 'emoji-${'${i + 1}'.padLeft(3, '0')}.jpg'}) : app.emoji;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
-      child: GlassSurface(
-        radius: 26,
-        blur: kBlur,
-        pad: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-        child: SizedBox(
-      height: 246,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 0, 2),
-          child: Row(children: [
-            const Text('表情包', style: TextStyle(fontSize: 12.5, color: kSub)),
-            const Spacer(),
-            IconButton(onPressed: onClose, icon: const Icon(Icons.keyboard_arrow_down, size: 20)),
-          ]),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8),
-            itemCount: list.length,
-            itemBuilder: (c, i) {
-              final n = '${list[i]['name']}';
-              return GestureDetector(
-                onTap: () => onPick(n),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: a == null
-                      ? const ColoredBox(color: kGlass)
-                      : Image.network(a.emojiUrl(n), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: kGlass)),
-                ),
-              );
-            },
-          ),
-        ),
-      ]),
-        ),
       ),
     );
   }

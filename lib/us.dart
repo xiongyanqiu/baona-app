@@ -46,7 +46,7 @@ class _UsPageState extends State<UsPage> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 24), children: [
+      child: ListView(padding: const EdgeInsets.fromLTRB(14, 6, 14, kNavSpace + 24), children: [
         const Sec('我们的东西'),
         Row(children: [
           Expanded(child: _Tile(ico: Icons.photo_library_outlined, t: '相册', s: '里头的照片', on: () => openAlbum(context))),
@@ -173,7 +173,7 @@ class _MemState extends State<_Mem> {
     final inp = TextEditingController();
     return ListView(
       controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, kNavSpace + 28),
       children: [
         Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
         Row(children: [
@@ -286,7 +286,7 @@ class _SkillsState extends State<_Skills> {
   @override
   Widget build(BuildContext context) => ListView(
         controller: widget.scroll,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, kNavSpace + 28),
         children: [
           Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
           Row(children: [
@@ -416,7 +416,7 @@ class _AlbumState extends State<_Album> {
     final cur = _g.isEmpty ? null : _g[_cur];
     return ListView(
       controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 26),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, kNavSpace + 26),
       children: [
         Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
         Row(children: [

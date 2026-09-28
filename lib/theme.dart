@@ -29,7 +29,9 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.1.1'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.1.2'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+/// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
+const double kNavSpace = 78;
 const Color kHair = Color(0x1FFFFFFF); // 发丝分隔线
 const Color kSpecTop = Color(0x5CFFFFFF); // 上缘高光
 const Color kSpecBottom = Color(0x0FFFFFFF); // 下缘收暗
@@ -183,10 +185,11 @@ class Glass extends StatelessWidget {
 
 /// 按下去轻微缩一下（真机手感，别做花哨动效）
 class PressScale extends StatefulWidget {
-  const PressScale({super.key, required this.child, this.onTap, this.radius = kRCapsule, this.scale = 0.96});
+  const PressScale({super.key, required this.child, this.onTap, this.onLong, this.radius = kRCapsule, this.scale = 0.96});
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLong;
   final double radius;
   final double scale;
 
@@ -204,6 +207,7 @@ class _PressScaleState extends State<PressScale> {
         onTapCancel: () => setState(() => _down = false),
         onTapUp: (_) => setState(() => _down = false),
         onTap: widget.onTap,
+        onLongPress: widget.onLong,
         child: AnimatedScale(
           scale: _down ? widget.scale : 1,
           duration: const Duration(milliseconds: 130),

@@ -332,6 +332,13 @@ class Api {
   Future<Map<String, dynamic>> herSettings() => get('/api/settings');
   /// ★她的桌宠实时画面（手机左边缘往右滑看到的那个）
   Future<Map<String, dynamic>> petShot() => get('/api/petshot');
+  /// ★她的脑子：模型列表 / 切换（老公 2026-09-29）
+  Future<Map<String, dynamic>> llm() => get('/api/llm');
+  Future<Map<String, dynamic>> llmUse(String id) => post('/api/llm/use', {'id': id});
+  /// ★表情包：手机上加一张 / 删一张（共享库：他加的她也能发）
+  Future<Map<String, dynamic>> emojiAdd(String data, [String name = '']) =>
+      post('/api/emoji/add', {'data': data, 'name': name});
+  Future<Map<String, dynamic>> emojiDel(String name) => post('/api/emoji/del', {'name': name});
   Future<Map<String, dynamic>> patchSettings(Map<String, dynamic> patch) => post('/api/settings', {'patch': patch});
   Future<Map<String, dynamic>> voiceOn(bool en) => post('/api/voice', {'enabled': en});
   Future<Map<String, dynamic>> setPassword(String np) => post('/api/password', {'newPassword': np});
@@ -368,7 +375,10 @@ class Api {
     return host + '/' + path;
   }
 
-  String emojiUrl(String name) => imgUrl(name.startsWith('/') ? name : '/emoji/$name');
+  String emojiUrl(String name) => imgUrl('/emoji/${_enc(name)}');
+
+  /// 表情名里可能是中文（你加的表情）→ 每段都要 URL 编码，不然请求会挂
+  static String _enc(String p) => p.split('/').map(Uri.encodeComponent).join('/');
 
   String voiceUrl(String v) {
     if (v.startsWith('/')) return host + v;

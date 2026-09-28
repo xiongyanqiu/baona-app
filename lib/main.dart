@@ -24,6 +24,7 @@ class AppCtl extends ChangeNotifier {
   bool voiceEnabled = false;
   bool coupleEnabled = false;
   List<Map> emoji = [];
+  Set<String> emojiMine = {}; // ★哪些是「我加的」（可以长按删）
   Map<String, dynamic> herSet = {};
   Map<String, dynamic> cfg = Map<String, dynamic>.from(kDefCfg);
 
@@ -64,6 +65,7 @@ class AppCtl extends ChangeNotifier {
     final e = await a.emojiList();
     if (e['ok'] == true) {
       emoji = ((e['list'] as List?) ?? []).map((x) => {'name': '$x'}).toList();
+      emojiMine = ((e['mine'] as List?) ?? []).map((x) => '$x').toSet();
       notifyListeners();
     }
   }
@@ -359,6 +361,22 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _tab = 0;
+  bool _navHidden = false;
+  double _lastPix = 0;
+
+  /// ★往下滑 → 底栏收起来；往回滑（或滑回顶）→ 又出来（老公 2026-09-29 要的）
+  bool _onScroll(ScrollNotification n) {
+    if (n is! ScrollUpdateNotification) return false;
+    final p = n.metrics.pixels;
+    final d = p - _lastPix;
+    _lastPix = p;
+    if (d > 8 && p > 60 && !_navHidden) {
+      setState(() => _navHidden = true);
+    } else if ((d < -8 || p <= 2) && _navHidden) {
+      setState(() => _navHidden = false);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -369,22 +387,37 @@ class _HomePageState extends State<HomePage> {
           child: Scaffold(
             key: homeKey,
             backgroundColor: Colors.transparent,
+            extendBody: true, // ★内容从玻璃底栏底下滚过去（玻璃才是"浮在上面"的）
             // ★从屏幕左边缘往右滑 = 看她在桌面上什么样（老公 2026-09-29 要的）
             drawer: const PetDrawer(),
             drawerEdgeDragWidth: 32,
             drawerScrimColor: const Color(0x66000000),
-            body: Column(children: [
-              _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
-              Expanded(
-                child: IndexedStack(index: _tab, children: const [
-                  ChatPage(),
-                  ShopPage(),
-                  GamePage(),
-                  UsPage(),
-                ]),
+            body: NotificationListener<ScrollNotification>(
+              onNotification: _onScroll,
+              child: Column(children: [
+                _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
+                Expanded(
+                  child: IndexedStack(index: _tab, children: const [
+                    ChatPage(),
+                    ShopPage(),
+                    GamePage(),
+                    UsPage(),
+                  ]),
+                ),
+              ]),
+            ),
+            bottomNavigationBar: AnimatedSlide(
+              offset: _navHidden ? const Offset(0, 1.3) : Offset.zero,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              child: _Nav(
+                tab: _tab,
+                onTap: (i) => setState(() {
+                  _tab = i;
+                  _navHidden = false;
+                }),
               ),
-            ]),
-            bottomNavigationBar: _Nav(tab: _tab, onTap: (i) => setState(() => _tab = i)),
+            ),
           ),
         ),
       );

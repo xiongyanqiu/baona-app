@@ -127,6 +127,29 @@ class _SettingsState extends State<_Settings> {
         const SizedBox(height: 10),
         const _Probe(),
 
+        const Sec('她的脑子（模型）'),
+        const _ModelBox(),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, top: 6, bottom: 2),
+          child: Text('点了立刻生效（她下一句就用新的）。「本地」那个要你先在电脑上把模型开关打开；走网络的那几个你电脑关着也能用。',
+              style: TextStyle(fontSize: 11.5, color: kSub, height: 1.4)),
+        ),
+
+        const Sec('连接（在外头也能连）'),
+        RowTile(
+          label: '现在连的是',
+          sub: '家里 ${kHosts[0]['url']!.replaceFirst('http://', '')} · 外头（蒲公英）${kHosts[1]['url']!.replaceFirst('http://', '')}',
+          hair: false,
+          trail: Chip2('换个地址', ico: Icons.wifi_tethering, on: () {
+            final nav = Navigator.of(context);
+            nav.pop();
+            nav.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => ConnectPage(host: Store.baseUrl.isEmpty ? kHosts[0]['url']! : Store.baseUrl)),
+              (r) => false,
+            );
+          }),
+        ),
+
         const Sec('她叫什么（你看到她叫这个）'),
         Row(children: [
           Expanded(child: TextField(controller: nick, decoration: const InputDecoration(hintText: '包娜'))),
@@ -383,6 +406,87 @@ class _PersonaBoxState extends State<_PersonaBox> {
           ),
         ]),
       ]);
+}
+
+/// ★2026-09-29：她的脑子（模型）——手机端直接看她现在用哪个、想换就换
+class _ModelBox extends StatefulWidget {
+  const _ModelBox();
+
+  @override
+  State<_ModelBox> createState() => _ModelBoxState();
+}
+
+class _ModelBoxState extends State<_ModelBox> {
+  List<Map<String, dynamic>> ps = [];
+  String active = '';
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final a = app.api;
+    if (a == null) return;
+    final j = await a.llm();
+    if (!mounted) return;
+    if (j['ok'] == true) {
+      setState(() {
+        active = '${j['activeId'] ?? ''}';
+        ps = ((j['providers'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      });
+    }
+  }
+
+  Future<void> _use(String id) async {
+    final a = app.api;
+    if (a == null) return;
+    if (id == active) return;
+    setState(() => busy = true);
+    final r = await a.llmUse(id);
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      if (r['ok'] == true) active = id;
+    });
+    toast(context, r['ok'] == true ? '换好了：${r['name'] ?? id}' : '${r['error'] ?? '没换成'}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (ps.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 6),
+        child: Text('没拿到模型列表（电脑端开着吗？）', style: TextStyle(fontSize: 12, color: kSub)),
+      );
+    }
+    return Column(children: [
+      for (final p in ps)
+        PressScale(
+          onTap: busy ? null : () => _use('${p['id']}'),
+          radius: kRCard,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: Row(children: [
+              Icon('${p['id']}' == active ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  size: 18, color: '${p['id']}' == active ? kAccent2 : kSub),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${p['name']}', style: const TextStyle(fontSize: 14)),
+                  Text('模型 ${p['model']}${p['local'] == true ? ' · 跑在你电脑上' : ' · 走网络'}',
+                      style: const TextStyle(fontSize: 11, color: kSub)),
+                ]),
+              ),
+              if ('${p['id']}' == active)
+                const Text('在用', style: TextStyle(fontSize: 11.5, color: kOk, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+    ]);
+  }
 }
 
 class _AvBox extends StatelessWidget {
