@@ -505,7 +505,7 @@ class _AvBox extends StatelessWidget {
               shape: BoxShape.circle,
               color: kGlass,
               border: Border.all(color: kLine),
-              image: data.isEmpty ? null : DecorationImage(image: NetworkImage(data), fit: BoxFit.cover),
+              image: avatarOf(data) == null ? null : DecorationImage(image: avatarOf(data)!, fit: BoxFit.cover),
             ),
             child: data.isEmpty ? const Icon(Icons.add_a_photo_outlined, size: 20) : null,
           ),

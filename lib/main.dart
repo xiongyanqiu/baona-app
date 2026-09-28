@@ -106,7 +106,7 @@ class AppCtl extends ChangeNotifier {
 
 final app = AppCtl.i;
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Store.init();
   await Notify.i.init();
@@ -117,7 +117,31 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
   ));
-  runApp(const BaonaApp());
+  // ★自检用：URL 带 ?safe=34&kb=300 就能当成「iPhone 底部安全区 / 键盘弹起」来看布局
+  //   （手机上不会有这两个参数 → 完全不受影响）
+  final _q = Uri.base.queryParameters;
+  final _safe = double.tryParse(_q['safe'] ?? '') ?? 0;
+  final _kb = double.tryParse(_q['kb'] ?? '') ?? 0;
+  runApp(_InsetsProbe(safe: _safe, kb: _kb, child: const BaonaApp()));
+}
+
+/// 只在自检时才包一层（把安全区/键盘高度灌进去），平时什么都不过手
+class _InsetsProbe extends StatelessWidget {
+  const _InsetsProbe({required this.safe, required this.kb, required this.child});
+
+  final double safe;
+  final double kb;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (safe == 0 && kb == 0) return child;
+    final m = MediaQuery.of(context);
+    return MediaQuery(
+      data: m.copyWith(padding: m.padding.copyWith(bottom: safe), viewInsets: EdgeInsets.only(bottom: kb)),
+      child: child,
+    );
+  }
 }
 
 class BaonaApp extends StatefulWidget {
@@ -450,7 +474,7 @@ class _Header extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                image: av.isEmpty ? null : DecorationImage(image: NetworkImage(av), fit: BoxFit.cover),
+                image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
               ),
               child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))) : null,
             ),

@@ -7,6 +7,8 @@
 //  4) 形状统一用胶囊与大圆角（continuous corner 观感）
 //  5) 动效短而稳：按下去轻微缩放（spring 手感），不做花哨弹跳
 //  6) 文字用系统字重分层：大标题 w700 / 正文 w400 / 说明 kSub
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -29,9 +31,42 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.1.3'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.1.4'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
-const double kNavSpace = 78;
+/// ★别再按"底栏 75pt + 安全区"自己算：Scaffold 已经把「底栏高度（含安全区）」放进 body 的
+///   padding.bottom 里了（实测 iPhone 上 = 113）。之前自己又加了一遍，等于算了两次，
+///   输入栏被顶到老高 —— 2026-09-29 老公报的"输入栏和底栏之间空一条"就是这个。
+const double kNavSpace = 84;
+const double kNavGap = 10; // 输入栏跟底栏之间留的呼吸位
+
+/// 悬浮底栏实际占的高度（Scaffold 报多少就用多少）+ 呼吸位
+double navSpace(BuildContext c) {
+  final p = MediaQuery.of(c).padding.bottom;
+  return (p > 0 ? p : kNavSpace) + kNavGap;
+}
+
+/// 键盘是不是弹着？两个信号取其一（都能在实测里对上）：
+///   ① 原始 view 的 viewInsets（真机上就是键盘高度；Scaffold 会把 body 的 MediaQuery 版抹成 0，所以不能用 MediaQuery.viewInsets）
+///   ② Scaffold 把 body 的 padding.bottom 抹成 0 —— 只有键盘弹着时才会这样（底栏高度那会儿是 113）
+bool kbUp(BuildContext c) {
+  if (View.of(c).viewInsets.bottom > 0) return true;
+  return MediaQuery.of(c).padding.bottom == 0;
+}
+
+/// 头像/背景可能是两种东西：https 地址，或者手机上传后的 data:image/...（电脑端存的就是 dataURL）
+/// ★iOS 上 NetworkImage 读 data URL 会直接报错 → 必须走 MemoryImage，头像才显示得出来
+ImageProvider? avatarOf(String s) {
+  if (s.isEmpty) return null;
+  if (s.startsWith('data:')) {
+    final i = s.indexOf(',');
+    try {
+      return MemoryImage(base64Decode(i >= 0 ? s.substring(i + 1) : s));
+    } catch (_) {
+      return null;
+    }
+  }
+  return NetworkImage(s);
+}
 const Color kHair = Color(0x1FFFFFFF); // 发丝分隔线
 const Color kSpecTop = Color(0x5CFFFFFF); // 上缘高光
 const Color kSpecBottom = Color(0x0FFFFFFF); // 下缘收暗
@@ -493,8 +528,9 @@ class Wall extends StatelessWidget {
       child: SizedBox.expand(),
     );
     if (url.isNotEmpty) {
+      final p = avatarOf(url);
       base = Stack(fit: StackFit.expand, children: [
-        Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => base),
+        if (p == null) base else Image(image: p, fit: BoxFit.cover, errorBuilder: (_, __, ___) => base),
         const ColoredBox(color: Color(0x66000000)),
       ]);
     }

@@ -97,7 +97,7 @@ class _PetDrawerState extends State<PetDrawer> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                  image: av.isEmpty ? null : DecorationImage(image: NetworkImage(av), fit: BoxFit.cover),
+                  image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
                 ),
                 child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))) : null,
               ),

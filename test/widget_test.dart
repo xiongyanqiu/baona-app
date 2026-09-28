@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:baona_app/api.dart';
 import 'package:baona_app/notify.dart';
+import 'package:baona_app/theme.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -46,5 +48,43 @@ void main() {
     expect(long.length, lessThanOrEqualTo(61));
     expect(long.endsWith('…'), true);
     expect(Notify.clean('<<看:床上>>'), '');
+  });
+
+  test('相册照片地址必须带 k（2026-09-29 修的坑：以前丢了 k，手机上相册全是空白）', () {
+    final a = Api('http://192.168.31.120:9000');
+    a.albumKey = 'b2d2b9903ec5';
+    expect(a.albumPhotoUrl('/api/album/photo/ph123'), 'http://192.168.31.120:9000/api/album/photo/ph123?k=b2d2b9903ec5');
+    a.albumKey = '';
+    expect(a.albumPhotoUrl('/api/album/photo/ph123'), 'http://192.168.31.120:9000/api/album/photo/ph123');
+  });
+
+  test('头像：dataURL 必须走内存图（iPhone 上 NetworkImage 读 dataURL 直接报错）', () {
+    expect(avatarOf(''), isNull);
+    expect(avatarOf('http://x/y.jpg'), isA<NetworkImage>());
+    expect(
+        avatarOf('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='),
+        isA<MemoryImage>());
+    expect(avatarOf('data:image/png;base64,@@@这不是base64@@@'), isNull);
+  });
+
+  testWidgets('底栏高度按 Scaffold 报的 padding.bottom 算（别自己再加一遍）；键盘要问原始 view', (tester) async {
+    Future<List<num>> probe(double navFromScaffold, double kb) async {
+      tester.view.viewInsets = FakeViewPadding(bottom: kb);
+      double nav = -1;
+      bool up = false;
+      await tester.pumpWidget(MediaQuery(
+        data: MediaQueryData(padding: EdgeInsets.only(bottom: navFromScaffold)),
+        child: MaterialApp(home: Builder(builder: (c) {
+          nav = navSpace(c);
+          up = kbUp(c);
+          return const SizedBox();
+        })),
+      ));
+      return [nav, up ? 1 : 0];
+    }
+
+    expect(await probe(113, 0), [123, 0]); // iPhone：底栏 113（含安全区）→ 留 10 呼吸
+    expect(await probe(79, 0), [89, 0]); // 没有安全区的机器
+    expect(await probe(0, 300), [94, 1]); // 键盘弹着 → kbUp 必须认出（布局会把留白归零）
   });
 }

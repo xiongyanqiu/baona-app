@@ -46,7 +46,7 @@ class _UsPageState extends State<UsPage> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 6, 14, kNavSpace + 24), children: [
+      child: ListView(padding: EdgeInsets.fromLTRB(14, 6, 14, navSpace(context) + 24), children: [
         const Sec('我们的东西'),
         Row(children: [
           Expanded(child: _Tile(ico: Icons.photo_library_outlined, t: '相册', s: '里头的照片', on: () => openAlbum(context))),
@@ -173,7 +173,7 @@ class _MemState extends State<_Mem> {
     final inp = TextEditingController();
     return ListView(
       controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, kNavSpace + 28),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
       children: [
         Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
         Row(children: [
@@ -286,7 +286,7 @@ class _SkillsState extends State<_Skills> {
   @override
   Widget build(BuildContext context) => ListView(
         controller: widget.scroll,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, kNavSpace + 28),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
         children: [
           Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
           Row(children: [
@@ -359,6 +359,13 @@ Future<List<AlbGroup>> _loadAlbumWithPin(BuildContext context) async {
   if (a == null) return [];
   var j = await a.album();
   if (j['ok'] != true) {
+    // ★先拿聊天口令试一下（电脑端相册密码默认就是它）——省得每次都让你输
+    if (Store.albumPin.isEmpty && Store.pwd.isNotEmpty) {
+      await Store.setAlbumPin(Store.pwd);
+      j = await a.album();
+    }
+  }
+  if (j['ok'] != true) {
     final pin = await _askText(context, '相册密码', obscure: true);
     if (pin.isEmpty) return [];
     await Store.setAlbumPin(pin);
@@ -383,11 +390,11 @@ Future<String> pickAlbumImage(BuildContext context) async {
       itemCount: all.length,
       itemBuilder: (c, i) => GestureDetector(
         onTap: () => Navigator.pop(c, all[i].url),
-        child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.imgUrl(all[i].url), fit: BoxFit.cover)),
+        child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(all[i].url), fit: BoxFit.cover)),
       ),
     ),
   );
-  return picked == null ? '' : app.api!.imgUrl(picked);
+  return picked == null ? '' : app.api!.albumPhotoUrl(picked);
 }
 
 class _Album extends StatefulWidget {
@@ -402,12 +409,28 @@ class _AlbumState extends State<_Album> {
   late List<AlbGroup> _g = widget.groups;
   int _cur = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    // ★2026-09-29：默认要选【有照片的那个分组】——以前默认是第一个，他那个第一组"日常"是空的，
+    //   点开相册看着就像"没有内容"（实测 App 连一张照片都没去请求）
+    _cur = _firstWithPhotos();
+  }
+
+  int _firstWithPhotos() {
+    for (var i = 0; i < _g.length; i++) {
+      if (_g[i].photos.isNotEmpty) return i;
+    }
+    return 0;
+  }
+
   Future<void> _reload() async {
     final j = await app.api?.album();
     if (!mounted || j?['ok'] != true) return;
     setState(() {
       _g = ((j!['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
       if (_cur >= _g.length) _cur = 0;
+      if (_g.isNotEmpty && _g[_cur].photos.isEmpty) _cur = _firstWithPhotos(); // 当前这组空了就换有图的
     });
   }
 
@@ -416,7 +439,7 @@ class _AlbumState extends State<_Album> {
     final cur = _g.isEmpty ? null : _g[_cur];
     return ListView(
       controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, kNavSpace + 26),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 26),
       children: [
         Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
         Row(children: [
@@ -464,6 +487,11 @@ class _AlbumState extends State<_Album> {
         ),
         if (cur != null) ...[
           const SizedBox(height: 8),
+          if (cur.photos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 26),
+              child: Center(child: Text('这个分组还没照片（点右上「传照片」加几张）', style: TextStyle(color: kSub, fontSize: 12.5))),
+            ),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -473,7 +501,7 @@ class _AlbumState extends State<_Album> {
               final ph = cur.photos[i];
               return GestureDetector(
                 onTap: () => _viewPhoto(ph),
-                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.imgUrl(ph.url), fit: BoxFit.cover)),
+                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.cover)),
               );
             },
           ),
@@ -489,7 +517,7 @@ class _AlbumState extends State<_Album> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(app.api!.imgUrl(ph.url), fit: BoxFit.contain)),
+          ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.contain)),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Chip2('♥ ${ph.likes}', on: () async {

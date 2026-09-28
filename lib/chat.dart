@@ -22,6 +22,7 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final List<Msg> _msgs = [];
   final TextEditingController _inp = TextEditingController();
+  final FocusNode _focus = FocusNode(); // ★管键盘（弹出来就收面板 / 点空白就收键盘）
   final ScrollController _sc = ScrollController();
   final AudioPlayer _audio = AudioPlayer();
   StreamSubscription? _sub;
@@ -42,11 +43,21 @@ class _ChatPageState extends State<ChatPage> {
       if (_sc.position.pixels <= 40 && _hasMore && !_loading) _load(more: true);
     });
     _audio.onPlayerComplete.listen((_) => setState(() => _playingUrl = null));
+    // ★一开始打字就把表情/功能面板收起来（不然面板+键盘叠在一起，屏幕只剩一条缝）
+    _focus.addListener(() {
+      if (_focus.hasFocus && (_emojiPanel || _funPanel)) {
+        setState(() {
+          _emojiPanel = false;
+          _funPanel = false;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _focus.dispose();
     _inp.dispose();
     _sc.dispose();
     _audio.dispose();
@@ -200,13 +211,31 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final a = app.api;
     if (a == null) return const Center(child: CircularProgressIndicator());
+    // ★自检：URL 带 ?dbg=1 时，把这页的真实布局数字打到控制台（手机上没有这个参数，不受影响）
+    if (Uri.base.queryParameters['dbg'] == '1') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          final box = context.findRenderObject() as RenderBox?;
+          final dy = box == null ? -1 : box.localToGlobal(Offset(0, box.size.height)).dy;
+          final m = MediaQuery.of(context);
+          // ignore: avoid_print
+          print('[dbg] screen=${m.size.height} padB=${m.padding.bottom} kb=${m.viewInsets.bottom} '
+              'navSpace=${navSpace(context)} pageBottomY=${dy.toStringAsFixed(1)}');
+        } catch (_) {}
+      });
+    }
     return Column(children: [
       Expanded(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
+            : GestureDetector(
+                // ★点空白处把键盘收回去（iOS 上滑列表也能收：keyboardDismissBehavior）
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                behavior: HitTestBehavior.opaque,
+                child: ListView.builder(
                 controller: _sc,
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(14, 8, 14, kbUp(context) ? 16 : navSpace(context) + 16),
                 itemCount: _msgs.length + (_typing ? 1 : 0) + (_hasMore ? 1 : 0),
                 itemBuilder: (c, i) {
                   if (_hasMore && i == 0) {
@@ -216,15 +245,17 @@ class _ChatPageState extends State<ChatPage> {
                   if (k >= _msgs.length) return const _TypingBubble();
                   return _Bubble(m: _msgs[k], onResend: () => _send({'text': _msgs[k].content}), onPlay: _play, playing: _playingUrl, urlOf: a);
                 },
+                ),
               ),
       ),
       // ★底栏是悬浮玻璃 → 聊天这半截整块往上抬，输入栏跟底栏保持同一条线（老公 2026-09-29）
       Padding(
-        padding: const EdgeInsets.only(bottom: kNavSpace),
+        padding: EdgeInsets.only(bottom: kbUp(context) ? 6 : navSpace(context)),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
       if (_emojiPanel) EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
       _Composer(
         ctl: _inp,
+        focus: _focus,
         onSend: _sendText,
         onPlus: () => setState(() {
           _funPanel = !_funPanel;
@@ -366,7 +397,7 @@ class _MiniAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-        image: av.isEmpty ? null : DecorationImage(image: NetworkImage(av), fit: BoxFit.cover),
+        image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
       ),
       child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 13))) : null,
     );
@@ -395,8 +426,9 @@ class _TypingBubble extends StatelessWidget {
 
 /* ------------------------------- 输入区 ------------------------------- */
 class _Composer extends StatelessWidget {
-  _Composer({required this.ctl, required this.onSend, required this.onPlus, required this.onSticker});
+  _Composer({required this.ctl, required this.focus, required this.onSend, required this.onPlus, required this.onSticker});
   final TextEditingController ctl;
+  final FocusNode focus;
   final VoidCallback onSend, onPlus, onSticker;
 
   @override
@@ -414,6 +446,7 @@ class _Composer extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: TextField(
                   controller: ctl,
+                  focusNode: focus,
                   minLines: 1,
                   maxLines: 4,
                   textInputAction: TextInputAction.send,

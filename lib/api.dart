@@ -217,6 +217,7 @@ class Api {
   Api(this.host);
   String host;                       // http://192.168.31.120:9000
   String token = '';
+  String albumKey = '';              // ★相册照片的保密 key（/api/album 返回，必须带在照片地址后面）
   WebSocketChannel? _ws;
   final StreamController<Map<String, dynamic>> _ev = StreamController.broadcast();
 
@@ -350,7 +351,20 @@ class Api {
   Future<Map<String, dynamic>> couple() => get('/api/couple');
   Future<Map<String, dynamic>> coupleLike(String id) => post('/api/couple/like', {'id': id});
   Future<Map<String, dynamic>> coupleComment(String id, String text) => post('/api/couple/comment', {'id': id, 'text': text});
-  Future<Map<String, dynamic>> album() => get('/api/album');
+  Future<Map<String, dynamic>> album() async {
+    final j = await get('/api/album');
+    // ★相册照片的地址是 /api/album/photo/<id>，但直连会 404 —— 必须带上这个 key（老公 2026-09-29：
+    //   之前把 k 丢了，手机上相册全是空白）
+    if (j['ok'] == true && j['k'] != null && '${j['k']}'.isNotEmpty) albumKey = '${j['k']}';
+    return j;
+  }
+
+  /// 相册照片的真实可访问地址（自动带上 k）
+  String albumPhotoUrl(String u) {
+    final base = imgUrl(u);
+    if (albumKey.isEmpty) return base;
+    return base + (base.contains('?') ? '&' : '?') + 'k=' + Uri.encodeComponent(albumKey);
+  }
   // ★2026-09-29 修：相册这四个口电脑端也只认 POST（旧版 GET → 404 → 建分组/点赞/评论/传照片全没反应）
   Future<Map<String, dynamic>> albumGroup(String action, {String? id, String? name}) =>
       post('/api/album/group', {'action': action, if (id != null) 'id': id, if (name != null) 'name': name});

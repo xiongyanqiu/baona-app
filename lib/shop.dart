@@ -113,7 +113,7 @@ class _ShopPageState extends State<ShopPage> {
       ),
       Expanded(
         child: GridView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, kNavSpace + 12),
+          padding: EdgeInsets.fromLTRB(12, 12, 12, navSpace(context) + 12),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 0.72),
           itemCount: items.length,
           itemBuilder: (c, i) => _Card(it: items[i], url: app.api!.imgUrl(items[i].img), onBuy: (forHer) => _buy(items[i], forHer)),
@@ -124,7 +124,7 @@ class _ShopPageState extends State<ShopPage> {
 
   Widget _bag() {
     final s = _s!;
-    return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, kNavSpace + 12), children: [
+    return ListView(padding: EdgeInsets.fromLTRB(12, 12, 12, navSpace(context) + 12), children: [
       const Sec('我买的'),
       if (s.bagMe.isEmpty) const Text('背包空空的', style: TextStyle(color: kSub, fontSize: 13)),
       for (final b in s.bagMe) _BagRow(b: b, url: app.api!.imgUrl(b.img), onUse: () => _act('use', b.id), onGive: () => _act('give', b.id)),
@@ -136,7 +136,7 @@ class _ShopPageState extends State<ShopPage> {
 
   Widget _wallet(ShopState s) {
     final amt = TextEditingController();
-    return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, kNavSpace + 12), children: [
+    return ListView(padding: EdgeInsets.fromLTRB(12, 12, 12, navSpace(context) + 12), children: [
       Row(children: [
         Expanded(child: Glass(child: Column(children: [const Text('我的钱包', style: TextStyle(color: kSub, fontSize: 12)), const SizedBox(height: 6), Text('¥${s.my}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600))]))),
         const SizedBox(width: 10),
