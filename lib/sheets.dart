@@ -72,8 +72,11 @@ class _SettingsState extends State<_Settings> {
     setState(() {
       _saving = true;
       hs.addAll(p);
-      app.herSet = Map<String, dynamic>.from(hs);
     });
+    // ★2026-09-29：以前只在这页 setState，顶栏头像和聊天背景不跟着变 —— 他改完看着就像"没改上"。
+    //   这里直接通知全局（app 是 ChangeNotifier，主界面挂着 AnimatedBuilder 听）
+    app.herSet = Map<String, dynamic>.from(hs);
+    app.notifyListeners();
     final r = await app.api?.patchSettings(p);
     if (r == null) {
       _note('手机没连上电脑端（同一个 WiFi？桌宠开着？）', true);
