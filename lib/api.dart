@@ -317,9 +317,10 @@ class Api {
   Future<Map<String, dynamic>> ctrl() => get('/api/ctrl');
   Future<Map<String, dynamic>> ctrlCmd(String cmd, dynamic val) => post('/api/ctrl', {'cmd': cmd, 'val': val});
   Future<Map<String, dynamic>> game() => get('/api/game');
-  Future<Map<String, dynamic>> gameRoll(String who) => get('/api/game/roll', q: {'who': who});
-  Future<Map<String, dynamic>> gameMode(String m) => get('/api/game/mode', q: {'m': m});
-  Future<Map<String, dynamic>> gameTile(int i, String t) => get('/api/game/tile', q: {'i': '$i', 't': t});
+  // ★2026-09-29 修：电脑端这三个口只认 POST（旧版写成 GET → 服务端 404 → 手机上点了没反应）
+  Future<Map<String, dynamic>> gameRoll(String who) => post('/api/game/roll', {'who': who});
+  Future<Map<String, dynamic>> gameMode(String m) => post('/api/game/mode?m=${Uri.encodeComponent(m)}');
+  Future<Map<String, dynamic>> gameTile(int i, String t) => post('/api/game/tile?i=$i&t=${Uri.encodeComponent(t)}');
   Future<Map<String, dynamic>> shop() => get('/api/shop');
   Future<Map<String, dynamic>> catalog() => get('/api/shop/catalog');
   Future<Map<String, dynamic>> shopBuy(String code, bool forHer) => post('/api/shop/buy', {'code': code, 'forHer': forHer});
@@ -341,12 +342,13 @@ class Api {
   Future<Map<String, dynamic>> coupleLike(String id) => post('/api/couple/like', {'id': id});
   Future<Map<String, dynamic>> coupleComment(String id, String text) => post('/api/couple/comment', {'id': id, 'text': text});
   Future<Map<String, dynamic>> album() => get('/api/album');
+  // ★2026-09-29 修：相册这四个口电脑端也只认 POST（旧版 GET → 404 → 建分组/点赞/评论/传照片全没反应）
   Future<Map<String, dynamic>> albumGroup(String action, {String? id, String? name}) =>
-      get('/api/album/group', q: {'action': action, if (id != null) 'id': id, if (name != null) 'name': name});
-  Future<Map<String, dynamic>> albumLike(String id) => get('/api/album/like', q: {'id': id});
-  Future<Map<String, dynamic>> albumComment(String id, String text) => get('/api/album/comment', q: {'id': id, 'text': text});
+      post('/api/album/group', {'action': action, if (id != null) 'id': id, if (name != null) 'name': name});
+  Future<Map<String, dynamic>> albumLike(String id) => post('/api/album/like', {'id': id});
+  Future<Map<String, dynamic>> albumComment(String id, String text) => post('/api/album/comment', {'id': id, 'text': text});
   Future<Map<String, dynamic>> albumUpload(String group, String data) =>
-      get('/api/album/upload', q: {'group': group, 'data': data});
+      post('/api/album/upload', {'group': group, 'data': data});
   Future<Map<String, dynamic>> chatImg(String data) => post('/api/chatimg', {'data': data});
 
   /// 发消息（她那边会真的收到）—— 群里那套 payload 原样带上

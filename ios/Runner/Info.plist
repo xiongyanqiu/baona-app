@@ -37,6 +37,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>拍张照给她看</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>连你电脑上的她（同一个 WiFi 里的端口）——不连上，聊天和设置都发不出去</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>给她发语音条、录声音</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

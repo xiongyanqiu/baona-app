@@ -37,6 +37,10 @@ class _Settings extends StatefulWidget {
 class _SettingsState extends State<_Settings> {
   Map<String, dynamic> hs = {};
   bool _saving = false;
+  // ★2026-09-29 加：抽屉自己顶上的提示条。以前只有 toast，而 toast 弹在抽屉【下面】被盖住，
+  //   看不见 = 手机上像「点了没反应」（老公报的：设置里基本所有功能点了没反应）
+  String _msg = '';
+  bool _bad = false;
 
   @override
   void initState() {
@@ -56,6 +60,14 @@ class _SettingsState extends State<_Settings> {
     }
   }
 
+  void _note(String t, [bool bad = false]) {
+    if (!mounted) return;
+    setState(() {
+      _msg = t;
+      _bad = bad;
+    });
+  }
+
   Future<void> _patch(Map<String, dynamic> p) async {
     setState(() {
       _saving = true;
@@ -63,9 +75,15 @@ class _SettingsState extends State<_Settings> {
       app.herSet = Map<String, dynamic>.from(hs);
     });
     final r = await app.api?.patchSettings(p);
+    if (r == null) {
+      _note('手机没连上电脑端（同一个 WiFi？桌宠开着？）', true);
+    } else if (r['ok'] == true) {
+      _note('存好了 ✓');
+    } else {
+      _note('没设上：${r['error'] ?? '电脑端没接住'}', true);
+    }
     if (!mounted) return;
     setState(() => _saving = false);
-    if (r != null && r['ok'] != true) toast(context, '没设上：${r['error'] ?? ''}');
   }
 
   Future<void> _pickAvatar(String which) async {
@@ -73,7 +91,6 @@ class _SettingsState extends State<_Settings> {
     if (f == null) return;
     final b = await f.readAsBytes();
     await _patch({which: 'data:image/jpeg;base64,${base64Encode(b)}'});
-    if (mounted) toast(context, '头像换好了');
   }
 
   bool _b(String k, [bool d = false]) => hs[k] == true || (hs[k] == null && d);
@@ -90,16 +107,43 @@ class _SettingsState extends State<_Settings> {
         Row(children: [
           const Text('设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
-          if (_saving) const Text('存着呢…', style: TextStyle(fontSize: 12, color: kSub)),
-          const Spacer(),
+          if (_saving)
+            const Text('存着呢…', style: TextStyle(fontSize: 12, color: kSub))
+          else if (_msg.isNotEmpty)
+            Expanded(
+              child: Text(_msg,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _bad ? const Color(0xFFFF9A9A) : const Color(0xFF57D9A3))),
+            )
+          else
+            const Spacer(),
           IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
         ]),
+
+        const SizedBox(height: 10),
+        const _Probe(),
 
         const Sec('她叫什么（你看到她叫这个）'),
         Row(children: [
           Expanded(child: TextField(controller: nick, decoration: const InputDecoration(hintText: '包娜'))),
           const SizedBox(width: 8),
-          FilledButton(onPressed: () => _patch({'nickName': nick.text.trim()}), child: const Text('存')),
+          FilledButton(
+            onPressed: () async {
+              final v = nick.text.trim();
+              if (v.isEmpty) return;
+              await _patch({'nickName': v});
+              if (hs['nickName'] == v) {
+                app.nick = v; // ★2026-09-29 改名立刻在这 App 里生效（以前改完这页一点动静都没有）
+                app.notifyListeners();
+                _note('以后她就叫「$v」✓');
+              }
+            },
+            child: const Text('存'),
+          ),
         ]),
 
         const Sec('头像'),
@@ -544,6 +588,59 @@ class _Hit extends StatelessWidget {
         Text('${m.role == 'me' || m.role == 'user' ? '我' : app.nick} · ${fmtClock(m.time ?? 0)}', style: const TextStyle(fontSize: 11, color: kSub)),
         const SizedBox(height: 4),
         txt,
+      ]),
+    );
+  }
+}
+
+
+/// ★2026-09-29 加：连接体检——手机跟电脑端到底通不通，一眼看见。
+/// （老公报「点了没反应」；以后先点这个：通了=手机端问题，连不上=电脑/WiFi/桌宠问题）
+class _Probe extends StatefulWidget {
+  const _Probe();
+
+  @override
+  State<_Probe> createState() => _ProbeState();
+}
+
+class _ProbeState extends State<_Probe> {
+  String _r = '';
+  bool _busy = false;
+
+  Future<void> _test() async {
+    setState(() {
+      _busy = true;
+      _r = '测着呢…';
+    });
+    final t = await app.api?.ping() ?? '手机没连上（回登录页填电脑地址、输口令）';
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _r = t;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = app.online;
+    return Glass(
+      pad: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      radius: 12,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('跟电脑端连着吗', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 8),
+          Chip2('测一下', ico: Icons.wifi_tethering, on: _busy ? () {} : _test),
+          const Spacer(),
+          Text(on ? '在线' : '离线',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: on ? const Color(0xFF57D9A3) : const Color(0xFFFF9A9A))),
+        ]),
+        const SizedBox(height: 4),
+        Text(_r.isEmpty ? '地址 ${app.api?.host ?? '没填'} · 她 ${app.nick} · ${app.status}' : _r,
+            style: const TextStyle(fontSize: 11.5, color: kSub)),
       ]),
     );
   }

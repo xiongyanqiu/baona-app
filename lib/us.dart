@@ -215,7 +215,8 @@ class _MemState extends State<_Mem> {
               Expanded(child: Text(it.text, style: const TextStyle(fontSize: 13.5, height: 1.45))),
               IconButton(
                 onPressed: () async {
-                  await app.api?.memoryRemove(it.id);
+                  final r = await app.api?.memoryRemove(it.id);
+                  if (mounted) toast(context, r?['ok'] == true ? '删掉了' : '没删掉：${r?['error'] ?? '手机没连上'}');
                   _load();
                 },
                 icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFFF9A9A)),
@@ -424,7 +425,8 @@ class _AlbumState extends State<_Album> {
           Chip2('新建分组', ico: Icons.add, on: () async {
             final n = await _askText(context, '新分组叫什么？（她的裸照 / 日常 / 出门）');
             if (n.isEmpty) return;
-            await app.api?.albumGroup('add', name: n);
+            final r = await app.api?.albumGroup('add', name: n);
+            if (mounted) toast(context, r?['ok'] == true ? '分组建好了：$n' : '没建成：${r?['error'] ?? '手机没连上'}');
             _reload();
           }),
           const SizedBox(width: 6),
@@ -491,7 +493,11 @@ class _AlbumState extends State<_Album> {
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Chip2('♥ ${ph.likes}', on: () async {
-              await app.api?.albumLike(ph.id);
+              final r = await app.api?.albumLike(ph.id);
+              if (r?['ok'] != true) {
+                if (c.mounted) toast(c, '点不了赞：${r?['error'] ?? '手机没连上'}');
+                return;
+              }
               if (c.mounted) Navigator.pop(c);
               _reload();
             }),
@@ -499,7 +505,11 @@ class _AlbumState extends State<_Album> {
             Chip2('评论', on: () async {
               final t = await _askText(context, '说点什么');
               if (t.isEmpty) return;
-              await app.api?.albumComment(ph.id, t);
+              final r2 = await app.api?.albumComment(ph.id, t);
+              if (r2?['ok'] != true) {
+                if (c.mounted) toast(c, '评论没上去：${r2?['error'] ?? '手机没连上'}');
+                return;
+              }
               if (c.mounted) Navigator.pop(c);
               _reload();
             }),

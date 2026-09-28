@@ -53,7 +53,11 @@ class _GamePageState extends State<GamePage> {
     if (a == null) return;
     final j = await a.gameRoll(who);
     if (!mounted) return;
-    if (j['state'] is Map) setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
+    if (j['state'] is Map) {
+      setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
+    } else {
+      toast(context, '掷不了：${j['error'] ?? '电脑端没接住'}');
+    }
   }
 
   @override
@@ -99,8 +103,12 @@ class _GamePageState extends State<GamePage> {
                   final a = app.api!;
                   final j = await a.gameMode('${m['id']}');
                   if (!mounted) return;
-                  if (j['state'] is Map) setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
-                  toast(context, '换成：${m['name'] ?? m['id']}');
+                  if (j['state'] is Map) {
+                    setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
+                    toast(context, '换成：${m['name'] ?? m['id']}');
+                  } else {
+                    toast(context, '换不了：${j['error'] ?? '电脑端没接住'}');
+                  }
                 }),
               ),
           ],
@@ -144,7 +152,12 @@ class _GamePageState extends State<GamePage> {
                         if (ok != true) return;
                         final j = await app.api!.gameTile(i, c.text.trim());
                         if (!mounted) return;
-                        if (j['state'] is Map) setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
+                        if (j['state'] is Map) {
+                          setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
+                          toast(context, '改好了');
+                        } else {
+                          toast(context, '改不了：${j['error'] ?? '电脑端没接住'}');
+                        }
                       }
                     : null,
               ),
