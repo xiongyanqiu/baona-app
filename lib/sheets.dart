@@ -15,13 +15,13 @@ Future<void> openSettings(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
     builder: (c) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.9,
       maxChildSize: 0.96,
-      builder: (c, scroll) => _Settings(scroll: scroll),
+      builder: (c, scroll) => GlassSheet(child: _Settings(scroll: scroll)),
     ),
   );
 }
@@ -153,7 +153,25 @@ class _SettingsState extends State<_Settings> {
           _AvBox(title: '她的', data: '${hs['herAvatar'] ?? ''}', onTap: () => _pickAvatar('herAvatar')),
         ]),
 
+        const Sec('她的外观（穿什么）'),
+        RowTile(
+          label: '穿不穿',
+          sub: '你在这儿改，她桌面上跟着换',
+          hair: false,
+          trail: SegCtl(
+            options: const [
+              {'v': 'default', 't': '白T'},
+              {'v': 'hoodie', 't': '卫衣'},
+              {'v': 'dress', 't': '裙子'},
+              {'v': 'nude', 't': '裸着'},
+            ],
+            value: '${hs['outfit'] ?? 'default'}',
+            onPick: (v) => _patch({'outfit': v}),
+          ),
+        ),
+
         const Sec('气泡颜色'),
+        const Padding(padding: EdgeInsets.only(left: 2, bottom: 6), child: Text('我的话', style: TextStyle(fontSize: 12, color: kSub))),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final c in ['#7C6BF5', '#F55B8C', '#4CC9F0', '#FFB86B', '#57D9A3', '#B98CFF'])
             GestureDetector(
@@ -162,6 +180,18 @@ class _SettingsState extends State<_Settings> {
                 setState(() {});
               },
               child: Container(width: 30, height: 30, decoration: BoxDecoration(color: hexColor(c), shape: BoxShape.circle, border: Border.all(color: app.myColor == hexColor(c) ? Colors.white : kLine, width: 2))),
+            ),
+        ]),
+        const SizedBox(height: 12),
+        const Padding(padding: EdgeInsets.only(left: 2, bottom: 6), child: Text('她的话', style: TextStyle(fontSize: 12, color: kSub))),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final c in ['#2A2A35', '#4A2E52', '#2E4A52', '#52362E', '#3B4A36', '#3A3550'])
+            GestureDetector(
+              onTap: () {
+                app.put('herColor', c);
+                setState(() {});
+              },
+              child: Container(width: 30, height: 30, decoration: BoxDecoration(color: hexColor(c), shape: BoxShape.circle, border: Border.all(color: app.herColor == hexColor(c) ? Colors.white : kLine, width: 2))),
             ),
         ]),
 
@@ -192,15 +222,17 @@ class _SettingsState extends State<_Settings> {
           onChangeEnd: (_) => app.save(),
         ),
 
-        const Sec('显示与提醒'),
-        SwitchRow('显示时间', app.cfg['showTime'] == true, (v) { app.put('showTime', v); setState(() {}); }),
+        const Sec('聊天显示'),
+        SwitchRow('显示时间戳（每条消息几点）', app.cfg['showTime'] == true, (v) { app.put('showTime', v); setState(() {}); }),
         SwitchRow('提示音', app.cfg['sound'] != false, (v) { app.put('sound', v); setState(() {}); }),
         SwitchRow('震动', app.cfg['vibrate'] != false, (v) { app.put('vibrate', v); setState(() {}); }),
         SwitchRow('通知（她发消息弹出来）', app.cfg['notify'] != false, (v) { app.put('notify', v); setState(() {}); }),
         SwitchRow('你说话时她自动看一眼', app.cfg['liveWatch'] == true, (v) { app.put('liveWatch', v); setState(() {}); }, sub: '每轮都看一眼更真，但费点算力'),
 
-        const Sec('她的语音条'),
-        SwitchRow('让她发语音', app.voiceEnabled, (v) async {
+        const Sec('语音'),
+        SwitchRow('语音模式（她的话能直接念出来）', _b('voiceMode'), (v) => _patch({'voiceMode': v}),
+            sub: '开着：她按口语写（带喘声、拖音、语气词），手机上能收到语音条；关掉：恢复普通文字'),
+        SwitchRow('让她发语音条', app.voiceEnabled, (v) async {
           final r = await app.api?.voiceOn(v);
           if (!mounted) return;
           if (r != null && r['ok'] == true) {
@@ -241,6 +273,9 @@ class _SettingsState extends State<_Settings> {
             Chip2('${a[1]}', on2: _b(a[0], true), on: () => _patch({a[0]: !_b(a[0], true)})),
         ]),
 
+        const Sec('她的人设（她的脑子）'),
+        _PersonaBox(init: '${hs['persona'] ?? ''}', onSave: (v) => _patch({'persona': v})),
+
         const Sec('记忆与数据'),
         Row(children: [
           Chip2('她的长期记忆', ico: Icons.psychology_outlined, on: () => openMemories(context)),
@@ -275,9 +310,68 @@ class _SettingsState extends State<_Settings> {
             );
           }
         }),
+        const SizedBox(height: 20),
+        Center(child: Text('包娜 App v$kAppVer · Liquid Glass 版', style: const TextStyle(fontSize: 11.5, color: kSub))),
       ],
     );
   }
+}
+
+/// ★2026-09-29 加：她的人设编辑框（电脑端网页有、手机端以前没有）
+class _PersonaBox extends StatefulWidget {
+  const _PersonaBox({required this.init, required this.onSave});
+  final String init;
+  final ValueChanged<String> onSave;
+
+  @override
+  State<_PersonaBox> createState() => _PersonaBoxState();
+}
+
+class _PersonaBoxState extends State<_PersonaBox> {
+  late final TextEditingController c = TextEditingController(text: widget.init);
+
+  @override
+  void didUpdateWidget(covariant _PersonaBox old) {
+    super.didUpdateWidget(old);
+    // 从电脑端拉回来的人设（第一次打开时是空的）
+    if (widget.init.isNotEmpty && c.text.isEmpty) c.text = widget.init;
+  }
+
+  @override
+  void dispose() {
+    c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        GlassSurface(
+          radius: kRCard,
+          blur: 12,
+          pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: TextField(
+            controller: c,
+            maxLines: 8,
+            minLines: 6,
+            maxLength: 40000,
+            style: const TextStyle(fontSize: 13.5, height: 1.5),
+            decoration: const InputDecoration(
+              hintText: '她是谁、什么性格、怎么说话…',
+              counterText: '',
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: Chip2('保存人设', ico: Icons.check, on2: true, on: () => widget.onSave(c.text)),
+          ),
+        ]),
+      ]);
 }
 
 class _AvBox extends StatelessWidget {
@@ -351,9 +445,9 @@ Future<void> openCtrl(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, maxChildSize: 0.96, builder: (c, s) => _Ctrl(scroll: s)),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, maxChildSize: 0.96, builder: (c, s) => GlassSheet(child: _Ctrl(scroll: s))),
   );
 }
 
@@ -496,9 +590,9 @@ Future<void> openSearch(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (c) => const _Search(),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
+    builder: (c) => const GlassSheet(child: _Search()),
   );
 }
 

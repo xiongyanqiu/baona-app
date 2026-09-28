@@ -388,10 +388,12 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final av = '${app.herSet['herAvatar'] ?? ''}';
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 8, 4),
+    return GlassBar(
+      top: true,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
         child: Row(children: [
           GestureDetector(
             onTap: onUs,
@@ -424,6 +426,7 @@ class _Header extends StatelessWidget {
           IconButton(onPressed: onCtrl, icon: const Icon(Icons.tune, size: 20), tooltip: '控制器'),
           IconButton(onPressed: onSet, icon: const Icon(Icons.settings_outlined, size: 20), tooltip: '设置'),
         ]),
+        ),
       ),
     );
   }
@@ -435,37 +438,14 @@ class _Nav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   @override
-  Widget build(BuildContext context) {
-    const items = [
-      [Icons.chat_bubble_outline, Icons.chat_bubble, '聊天'],
-      [Icons.shopping_bag_outlined, Icons.shopping_bag, '商城'],
-      [Icons.casino_outlined, Icons.casino, '游戏'],
-      [Icons.favorite_border, Icons.favorite, '我们'],
-    ];
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xCC0B0B0F),
-        border: Border(top: BorderSide(color: kLine)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(children: [
-          for (var i = 0; i < items.length; i++)
-            Expanded(
-              child: InkWell(
-                onTap: () => onTap(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(tab == i ? items[i][1] as IconData : items[i][0] as IconData, size: 21, color: tab == i ? kAccent2 : kSub),
-                    const SizedBox(height: 3),
-                    Text('${items[i][2]}', style: TextStyle(fontSize: 11, color: tab == i ? kAccent2 : kSub)),
-                  ]),
-                ),
-              ),
-            ),
-        ]),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GlassNav(
+        index: tab,
+        onTap: onTap,
+        items: const [
+          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '聊天'},
+          {'off': Icons.shopping_bag_outlined, 'on': Icons.shopping_bag, 't': '商城'},
+          {'off': Icons.casino_outlined, 'on': Icons.casino, 't': '游戏'},
+          {'off': Icons.favorite_border, 'on': Icons.favorite, 't': '我们'},
+        ],
+      );
 }

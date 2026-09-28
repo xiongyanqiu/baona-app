@@ -299,16 +299,14 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         if (m.voice != null && m.voice!.isNotEmpty)
-          GestureDetector(
-            onTap: () => onPlay(urlOf.voiceUrl(m.voice!)),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: me ? app.myColor.withValues(alpha: 0.35) : app.herColor,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: kLine),
-              ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: GlassSurface(
+              radius: kRCapsule,
+              blur: 12,
+              tint: me ? app.myColor : app.herColor,
+              onTap: () => onPlay(urlOf.voiceUrl(m.voice!)),
+              pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(playing == urlOf.voiceUrl(m.voice!) ? Icons.graphic_eq : Icons.play_arrow, size: 16),
                 const SizedBox(width: 6),
@@ -317,20 +315,15 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         if (text.isNotEmpty)
-          Container(
+          ConstrainedBox(
             constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            decoration: BoxDecoration(
-              color: me ? app.myColor.withValues(alpha: 0.30) : app.herColor,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(me ? 16 : 5),
-                bottomRight: Radius.circular(me ? 5 : 16),
-              ),
-              border: Border.all(color: me ? kAccent.withValues(alpha: 0.45) : kLine),
+            child: GlassSurface(
+              radius: 20,
+              blur: 14,
+              tint: me ? app.myColor : app.herColor,
+              pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: SelectableText(text, style: TextStyle(fontSize: fs, height: 1.45)),
             ),
-            child: SelectableText(text, style: TextStyle(fontSize: fs, height: 1.45)),
           ),
         if (m.st == 'failed')
           TextButton(onPressed: onResend, child: const Text('没发出去 · 点我重发', style: TextStyle(fontSize: 11.5, color: Color(0xFFFF9A9A)))),
@@ -382,9 +375,11 @@ class _TypingBubble extends StatelessWidget {
         child: Row(children: [
           const _MiniAvatar(),
           const SizedBox(width: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(color: app.herColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: kLine)),
+          GlassSurface(
+            radius: 20,
+            blur: 14,
+            tint: app.herColor,
+            pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: const Text('她正在打字…', style: TextStyle(fontSize: 12.5, color: kSub)),
           ),
         ]),
@@ -398,9 +393,9 @@ class _Composer extends StatelessWidget {
   final VoidCallback onSend, onPlus, onSticker;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => GlassBar(
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-        decoration: const BoxDecoration(color: Color(0x990B0B0F), border: Border(top: BorderSide(color: kLine))),
         child: SafeArea(
           top: false,
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -420,8 +415,9 @@ class _Composer extends StatelessWidget {
             ),
             _RoundBtn(icon: Icons.emoji_emotions_outlined, on: onSticker),
             const SizedBox(width: 6),
-            GestureDetector(
+            PressScale(
               onTap: onSend,
+              radius: kRCapsule,
               child: Container(
                 width: 42,
                 height: 42,
@@ -430,6 +426,7 @@ class _Composer extends StatelessWidget {
               ),
             ),
           ]),
+        ),
         ),
       );
 }
@@ -440,15 +437,11 @@ class _RoundBtn extends StatelessWidget {
   final VoidCallback on;
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => GlassSurface(
+        radius: kRCapsule,
+        blur: 12,
         onTap: on,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(color: kGlass, borderRadius: BorderRadius.circular(12), border: Border.all(color: kLine)),
-          child: Icon(icon, size: 21, color: kText.withValues(alpha: 0.9)),
-        ),
+        child: SizedBox(width: 42, height: 42, child: Center(child: Icon(icon, size: 21, color: kText.withValues(alpha: 0.9)))),
       );
 }
 
@@ -467,8 +460,8 @@ class _FunPanel extends StatelessWidget {
       [Icons.shopping_bag_outlined, '商城'],
     ];
     final ons = [onPhoto, onSticker, onDice, onPacket, onGame, onShop];
-    return Container(
-      color: const Color(0xE60B0B0F),
+    return GlassBar(
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         for (var i = 0; i < cells.length; i++)
@@ -486,6 +479,7 @@ class _FunPanel extends StatelessWidget {
             ]),
           ),
       ]),
+      ),
     );
   }
 }
@@ -499,9 +493,9 @@ class _EmojiPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = app.api;
     final list = app.emoji.isEmpty ? List.generate(84, (i) => {'name': 'emoji-${'${i + 1}'.padLeft(3, '0')}.jpg'}) : app.emoji;
-    return Container(
+    return GlassBar(
+      child: SizedBox(
       height: 236,
-      color: const Color(0xE60B0B0F),
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 8, 4),
@@ -531,6 +525,7 @@ class _EmojiPanel extends StatelessWidget {
           ),
         ),
       ]),
+      ),
     );
   }
 }

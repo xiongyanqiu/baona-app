@@ -166,7 +166,7 @@ class _GamePageState extends State<GamePage> {
       ),
       Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        decoration: const BoxDecoration(color: Color(0x990B0B0F), border: Border(top: BorderSide(color: kLine))),
+        decoration: const BoxDecoration(color: Color(0x1AFFFFFF), border: Border(top: BorderSide(color: kHair))),
         child: SafeArea(
           top: false,
           child: Column(children: [

@@ -130,9 +130,9 @@ Future<void> openMemories(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.85, builder: (c, s) => _Mem(scroll: s)),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.85, builder: (c, s) => GlassSheet(child: _Mem(scroll: s))),
   );
 }
 
@@ -251,9 +251,9 @@ Future<void> openSkills(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => _Skills(scroll: s)),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => GlassSheet(child: _Skills(scroll: s))),
   );
 }
 
@@ -348,9 +348,9 @@ Future<void> openAlbum(BuildContext context) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF120F1B),
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => _Album(scroll: s, groups: groups)),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8A000000),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => GlassSheet(child: _Album(scroll: s, groups: groups))),
   );
 }
 
