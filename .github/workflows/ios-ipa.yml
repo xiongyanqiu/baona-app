@@ -34,6 +34,7 @@ jobs:
 
       - name: 编未签名 iOS 包（xcodebuild 直编，绕开 flutter 的签名检查）
         run: |
+          flutter build ios --release --no-codesign --config-only
           cd ios
           pod install
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= build
