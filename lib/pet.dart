@@ -49,6 +49,13 @@ class _PetDrawerState extends State<PetDrawer> {
   Future<void> _refresh() async {
     final a = app.api;
     if (a == null) return;
+    // ★2026-09-29 老公说"这个软件太卡、非常吃网络"：以前不管抽屉开没开都每 1.6 秒拉一张
+    //   （≈1.5MB/分钟），抽屉关着也在拉。现在只在真的看得见时才拉；App 退到后台也不拉。
+    if (!mounted) return;
+    final sc = Scaffold.maybeOf(context);
+    if (sc != null && !sc.isDrawerOpen) return;
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life != null && life != AppLifecycleState.resumed) return;
     final j = await a.petShot();
     if (!mounted) return;
     final s = '${j['img'] ?? ''}';

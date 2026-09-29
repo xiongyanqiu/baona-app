@@ -408,6 +408,7 @@ class _Album extends StatefulWidget {
 class _AlbumState extends State<_Album> {
   late List<AlbGroup> _g = widget.groups;
   int _cur = 0;
+  bool _up = false; // 正在传照片（按钮变成"传着呢…"）
 
   @override
   void initState() {
@@ -437,116 +438,131 @@ class _AlbumState extends State<_Album> {
   @override
   Widget build(BuildContext context) {
     final cur = _g.isEmpty ? null : _g[_cur];
-    return ListView(
-      controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 26),
-      children: [
-        Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
-        Row(children: [
-          const Text('相册', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Chip2('新建分组', ico: Icons.add, on: () async {
-            final n = await _askText(context, '新分组叫什么？（她的裸照 / 日常 / 出门）');
-            if (n.isEmpty) return;
-            final r = await app.api?.albumGroup('add', name: n);
-            if (mounted) toast(context, r?['ok'] == true ? '分组建好了：$n' : '没建成：${r?['error'] ?? '手机没连上'}');
-            _reload();
-          }),
-          const SizedBox(width: 6),
-          Chip2('传照片', ico: Icons.upload_outlined, on: () async {
-            if (cur == null) {
-              toast(context, '先建个分组');
-              return;
-            }
-            // ★2026-09-29 老公报"点了没反应"：日志里电脑端一条上传请求都没有 → 是 iOS 上
-            //   pickMultiImage 有时候一张都不返回。改成：多选拿不到就退回单选（单选是好的，头像就是它选的），
-            //   而且每一步都给反馈，绝不再"点了没动静"。
-            List<XFile> files = [];
-            try {
-              files = await ImagePicker().pickMultiImage(maxWidth: 1280, imageQuality: 78);
-            } catch (_) {
-              files = [];
-            }
-            if (!mounted) return;
-            if (files.isEmpty) {
-              try {
-                final one = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1280, imageQuality: 78);
-                if (one != null) files = [one];
-              } catch (e) {
-                if (mounted) toast(context, '打不开相册：$e');
-                return;
-              }
-            }
-            if (files.isEmpty) {
-              if (mounted) toast(context, '没选照片');
-              return;
-            }
-            if (mounted) toast(context, '传着呢…共 ${files.length} 张');
-            var ok = 0;
-            var lastErr = '';
-            for (final f in files) {
-              try {
-                final b = await f.readAsBytes();
-                var r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
-                if (r?['ok'] != true && '${r?['error'] ?? ''}'.contains('密码')) {
-                  final pin = await _askText(context, '相册密码', obscure: true);
-                  if (pin.isNotEmpty) {
-                    await Store.setAlbumPin(pin);
-                    r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
-                  }
-                }
-                if (r?['ok'] == true) {
-                  ok++;
-                } else {
-                  lastErr = '${r?['error'] ?? '电脑端没接住'}';
-                }
-              } catch (e) {
-                lastErr = '$e';
-              }
-            }
-            if (!mounted) return;
-            toast(context, ok > 0 ? '传上去 $ok 张 ✓' : '没传上去：$lastErr');
-            if (ok > 0) _reload();
-          }),
-          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
-        ]),
-        if (_g.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 30), child: Center(child: Text('相册还是空的', style: TextStyle(color: kSub)))),
-        SizedBox(
-          height: 38,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (var i = 0; i < _g.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8, top: 4),
-                  child: Chip2('${_g[i].name}', on2: i == _cur, on: () => setState(() => _cur = i)),
-                ),
-            ],
-          ),
+    final total = cur == null ? 0 : cur.photos.length;
+    final head = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)))),
+      Row(children: [
+        Text('相册${total > 0 ? '（共 $total 张）' : ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        Chip2(_up ? '传着呢…' : '传照片', ico: _up ? Icons.hourglass_bottom : Icons.upload_outlined, on: _up ? () {} : _upload),
+        const SizedBox(width: 6),
+        Chip2('新建分组', ico: Icons.add, on: () async {
+          final n = await _askText(context, '新分组叫什么？（她的裸照 / 日常 / 出门）');
+          if (n.isEmpty) return;
+          final r = await app.api?.albumGroup('add', name: n);
+          if (mounted) toast(context, r?['ok'] == true ? '分组建好了：$n' : '没建成：${r?['error'] ?? '手机没连上'}');
+          _reload();
+        }),
+        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20)),
+      ]),
+      if (_g.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 30), child: Center(child: Text('相册还是空的', style: TextStyle(color: kSub)))),
+      SizedBox(
+        height: 38,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (var i = 0; i < _g.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: 8, top: 4),
+                child: Chip2('${_g[i].name}${_g[i].photos.isEmpty ? ' · 空' : ' · ${_g[i].photos.length}'}', on2: i == _cur, on: () => setState(() => _cur = i)),
+              ),
+          ],
         ),
-        if (cur != null) ...[
-          const SizedBox(height: 8),
-          if (cur.photos.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 26),
-              child: Center(child: Text('这个分组还没照片（点右上「传照片」加几张）', style: TextStyle(color: kSub, fontSize: 12.5))),
-            ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+      ),
+      if (cur != null && cur.photos.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 26),
+          child: Center(child: Text('这个分组还没照片（点右上「传照片」加几张）', style: TextStyle(color: kSub, fontSize: 12.5))),
+        ),
+      const SizedBox(height: 8),
+    ]);
+    // ★2026-09-29：以前是 ListView 里塞一个 shrinkWrap 的 GridView → 170 张照片一次性全下载（≈22MB，
+    //   所以他觉得"照片加载太慢、非常吃网络"）。改成 sliver 懒加载：只下载屏幕上看得见的那几张。
+    return CustomScrollView(
+      controller: widget.scroll,
+      slivers: [
+        SliverPadding(padding: const EdgeInsets.fromLTRB(14, 10, 14, 0), sliver: SliverToBoxAdapter(child: head)),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 26),
+          sliver: SliverGrid.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 6, crossAxisSpacing: 6),
-            itemCount: cur.photos.length,
+            itemCount: total,
             itemBuilder: (c, i) {
-              final ph = cur.photos[i];
+              final ph = cur!.photos[i];
               return GestureDetector(
                 onTap: () => _viewPhoto(ph),
-                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.cover)),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    app.api!.albumPhotoUrl(ph.url),
+                    fit: BoxFit.cover,
+                    // 缩略图解码：内存少一大截（网络还是原图，懒加载已经挡住了大头）
+                    cacheWidth: 420,
+                    errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1B1B22), child: const Center(child: Icon(Icons.broken_image_outlined, size: 18, color: kSub))),
+                  ),
+                ),
               );
             },
           ),
-        ],
+        ),
       ],
     );
+  }
+
+  /// 传照片：多选拿不到就退回单选；每一步都说话；传的时候按钮变成"传着呢…"
+  Future<void> _upload() async {
+    final cur = _g.isEmpty ? null : _g[_cur];
+    if (cur == null) {
+      toast(context, '先建个分组');
+      return;
+    }
+    List<XFile> files = [];
+    try {
+      files = await ImagePicker().pickMultiImage(maxWidth: 1024, imageQuality: 72);
+    } catch (_) {
+      files = [];
+    }
+    if (!mounted) return;
+    if (files.isEmpty) {
+      try {
+        final one = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 72);
+        if (one != null) files = [one];
+      } catch (e) {
+        if (mounted) toast(context, '打不开相册：$e');
+        return;
+      }
+    }
+    if (files.isEmpty) {
+      if (mounted) toast(context, '没选照片');
+      return;
+    }
+    setState(() => _up = true);
+    var ok = 0;
+    var lastErr = '';
+    for (final f in files) {
+      try {
+        final b = await f.readAsBytes();
+        var r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
+        if (r?['ok'] != true && '${r?['error'] ?? ''}'.contains('密码')) {
+          final pin = await _askText(context, '相册密码', obscure: true);
+          if (pin.isNotEmpty) {
+            await Store.setAlbumPin(pin);
+            r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
+          }
+        }
+        if (r?['ok'] == true) {
+          ok++;
+        } else {
+          lastErr = '${r?['error'] ?? '电脑端没接住'}';
+        }
+      } catch (e) {
+        lastErr = '$e';
+      }
+    }
+    if (!mounted) return;
+    setState(() => _up = false);
+    toast(context, ok > 0 ? '传上去 $ok 张 ✓' : '没传上去：$lastErr');
+    if (ok > 0) _reload();
   }
 
   void _viewPhoto(AlbPhoto ph) {

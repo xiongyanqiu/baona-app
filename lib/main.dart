@@ -31,7 +31,7 @@ class AppCtl extends ChangeNotifier {
   String get bg => '${cfg['bg'] ?? ''}';
   // ★背景照片的透明度和模糊（老公 2026-09-29 要的：设了照片得能调透明，不然字看不清）
   double get bgOpacity => ((cfg['bgOpacity'] as num?)?.toDouble() ?? 1).clamp(0.05, 1.0);
-  double get bgBlur => ((cfg['bgBlur'] as num?)?.toDouble() ?? 8).clamp(0, 24);
+  double get bgBlur => ((cfg['bgBlur'] as num?)?.toDouble() ?? 0).clamp(0, 24); // ★默认 0：照片先给清晰的，想要朦胧自己往上拖
   double get fontSize => (cfg['fontSize'] as num?)?.toDouble() ?? 16;
   int get bubbleMax => (cfg['bubbleMax'] as num?)?.toInt() ?? 4;
   Color get myColor => hexColor('${cfg['myColor'] ?? '#7C6BF5'}');
