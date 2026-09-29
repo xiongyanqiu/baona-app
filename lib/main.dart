@@ -470,17 +470,24 @@ class _HomePageState extends State<HomePage> {
             drawerScrimColor: const Color(0x66000000),
             body: NotificationListener<ScrollNotification>(
               onNotification: _onScroll,
-              child: Column(children: [
-                _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
-                Expanded(
-                  child: IndexedStack(index: _tab, children: const [
-                    ChatPage(),
-                    ShopPage(),
-                    GamePage(),
-                    UsPage(),
-                  ]),
-                ),
-              ]),
+              // Scaffold(extendBody) 会往 body 里塞一份底栏高的底部 padding，各页 navSpace
+              //   又自己加一层，输入框/按钮被双重抬到半空（2026-09-30 报修）。这里把 Scaffold
+              //   塞的清掉，留白统一由各页 navSpace(基于 viewPadding) 自己算。
+              child: MediaQuery.removePadding(
+                context: context,
+                removeBottom: true,
+                child: Column(children: [
+                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
+                  Expanded(
+                    child: IndexedStack(index: _tab, children: const [
+                      ChatPage(),
+                      ShopPage(),
+                      GamePage(),
+                      UsPage(),
+                    ]),
+                  ),
+                ]),
+              ),
             ),
             bottomNavigationBar: AnimatedSlide(
               offset: _navHidden ? const Offset(0, 1.3) : Offset.zero,

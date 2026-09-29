@@ -33,26 +33,23 @@ const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
 const String kAppVer = '1.2.2 (16)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
-/// ★Scaffold 用的是 extendBody: true → body 一直滚到玻璃底栏底下，MediaQuery.padding.bottom
-///   里只有安全区（≈34），不含底栏高度。所以底栏占多少必须自己算（玻璃胶囊 + 上下留白 + 安全区），
-///   不然输入栏只被抬一小截、下半截被底栏玻璃盖住 —— 2026-09-30 老公报的"输入框挤在底栏下面露一半"。
+/// ★主界面的 body 已经用 MediaQuery.removePadding 把 Scaffold 塞的底部 padding 清掉了（main.dart），
+///   所以这里不能再读 padding.bottom（那会被键盘/Scaffold 改），只认设备真实安全区 viewPadding：
+///   glass 胶囊 47 + SafeArea 上下留白 14 + 真机安全区 + 呼吸位 10。
+///   2026-09-30：之前读 padding.bottom 被 Scaffold 塞进底栏高(≈113) → 输入框被顶到半空。
 const double kNavInner = 47; // 玻璃胶囊内容高：pad6 + 图标20 + 2 + 文字≈13 + pad6
 const double kNavMargin = 14; // GlassNav 里 SafeArea 的上下留白（上6 + 下8）
 const double kNavGap = 10; // 输入栏跟底栏之间留的呼吸位
 
 /// 悬浮底栏实际占的高度（胶囊 + 留白 + 底部安全区）+ 呼吸位
 double navSpace(BuildContext c) {
-  final p = MediaQuery.of(c).padding.bottom;
-  return kNavInner + kNavMargin + (p > 0 ? p : 0) + kNavGap;
+  final vp = View.of(c).viewPadding.bottom; // 真机安全区（Scaffold/键盘都改不到这个）
+  return kNavInner + kNavMargin + (vp > 0 ? vp : 0) + kNavGap;
 }
 
-/// 键盘是不是弹着？两个信号取其一（都能在实测里对上）：
-///   ① 原始 view 的 viewInsets（真机上就是键盘高度；Scaffold 会把 body 的 MediaQuery 版抹成 0，所以不能用 MediaQuery.viewInsets）
-///   ② Scaffold 把 body 的 padding.bottom 抹成 0 —— 只有键盘弹着时才会这样（底栏高度那会儿是 113）
-bool kbUp(BuildContext c) {
-  if (View.of(c).viewInsets.bottom > 0) return true;
-  return MediaQuery.of(c).padding.bottom == 0;
-}
+/// 键盘是不是弹着？只认真实的键盘高度（viewInsets），不依赖 MediaQuery.padding：
+///   主界面 body 已 removePadding 清掉底部 padding，老写法「padding.bottom == 0 就是键盘」不再成立。
+bool kbUp(BuildContext c) => View.of(c).viewInsets.bottom > 0;
 
 /// 头像/背景可能是两种东西：https 地址，或者手机上传后的 data:image/...（电脑端存的就是 dataURL）
 /// ★iOS 上 NetworkImage 读 data URL 会直接报错 → 必须走 MemoryImage，头像才显示得出来
