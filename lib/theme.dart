@@ -31,18 +31,19 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.2.2'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.2.2 (16)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
-/// ★别再按"底栏 75pt + 安全区"自己算：Scaffold 已经把「底栏高度（含安全区）」放进 body 的
-///   padding.bottom 里了（实测 iPhone 上 = 113）。之前自己又加了一遍，等于算了两次，
-///   输入栏被顶到老高 —— 2026-09-29 老公报的"输入栏和底栏之间空一条"就是这个。
-const double kNavSpace = 84;
+/// ★Scaffold 用的是 extendBody: true → body 一直滚到玻璃底栏底下，MediaQuery.padding.bottom
+///   里只有安全区（≈34），不含底栏高度。所以底栏占多少必须自己算（玻璃胶囊 + 上下留白 + 安全区），
+///   不然输入栏只被抬一小截、下半截被底栏玻璃盖住 —— 2026-09-30 老公报的"输入框挤在底栏下面露一半"。
+const double kNavInner = 47; // 玻璃胶囊内容高：pad6 + 图标20 + 2 + 文字≈13 + pad6
+const double kNavMargin = 14; // GlassNav 里 SafeArea 的上下留白（上6 + 下8）
 const double kNavGap = 10; // 输入栏跟底栏之间留的呼吸位
 
-/// 悬浮底栏实际占的高度（Scaffold 报多少就用多少）+ 呼吸位
+/// 悬浮底栏实际占的高度（胶囊 + 留白 + 底部安全区）+ 呼吸位
 double navSpace(BuildContext c) {
   final p = MediaQuery.of(c).padding.bottom;
-  return (p > 0 ? p : kNavSpace) + kNavGap;
+  return kNavInner + kNavMargin + (p > 0 ? p : 0) + kNavGap;
 }
 
 /// 键盘是不是弹着？两个信号取其一（都能在实测里对上）：
