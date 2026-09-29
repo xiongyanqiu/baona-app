@@ -83,8 +83,17 @@ class _ChatPageState extends State<ChatPage> {
   void _onEvent(Map<String, dynamic> e) {
     final t = '${e['type']}';
     if (t == 'msg') {
-      final m = Msg.fromJson(e);
+      // ★2026-09-29 老公报"只出现头像框、过一会儿才加载出文字"的真凶：
+      //   电脑端发的形状是 {type:'msg', msg:{role,content,...}}，这里以前直接把最外层丢给
+      //   Msg.fromJson → content 拿到的是空字符串 → 先画一个只有头像的空泡泡，等下次刷新才有字。
+      //   现在先拆信封。
+      final raw = e['msg'];
+      final body = raw is Map ? Map<String, dynamic>.from(raw) : e;
+      final m = Msg.fromJson(body);
       if (m.role == 'user' || m.role == 'me') m.role = 'me';
+      // 防御：正文/表情/语音/图全空的，一律不画（宁可少一条，也不出空泡泡）
+      final hasSomething = m.content.isNotEmpty || (m.sticker?.isNotEmpty ?? false) || (m.voice?.isNotEmpty ?? false);
+      if (!hasSomething) return;
       // 自己发的（乐观显示过）就就地升级，不重复
       final i = _msgs.lastIndexWhere((x) => x.st == 'pending' && x.role == 'me' && x.content == m.content);
       setState(() {
@@ -97,11 +106,32 @@ class _ChatPageState extends State<ChatPage> {
       });
       _toBottom();
     } else if (t == 'msg-patch') {
-      final idx = Msg.toInt(e['idx']);
-      final v = e['voice']?.toString();
-      if (idx != null && v != null && v.isNotEmpty) {
-        final i = _msgs.indexWhere((x) => x.idx == idx);
+      // ★电脑端这条的形状是 {type:'msg-patch', cid, patch:{voice:...}}，以前按 idx 找 → 永远找不到
+      final cid = e['cid']?.toString();
+      final patch = e['patch'];
+      final v = patch is Map ? patch['voice']?.toString() : e['voice']?.toString();
+      if (v != null && v.isNotEmpty) {
+        var i = -1;
+        if (cid != null && cid.isNotEmpty) i = _msgs.indexWhere((x) => x.cid == cid);
+        if (i < 0) {
+          final idx = Msg.toInt(e['idx']);
+          if (idx != null) i = _msgs.indexWhere((x) => x.idx == idx);
+        }
         if (i >= 0) setState(() => _msgs[i].voice = v);
+      }
+    } else if (t == 'voice') {
+      // ★电脑端语音条是"文字先到、语音合成好了再补推"：{type:'voice', cid, url}
+      //   以前手机端完全不认这条 → 她的语音条要等下次刷新才出现
+      final cid = e['cid']?.toString();
+      final u = e['url']?.toString();
+      if (cid != null && cid.isNotEmpty && u != null && u.isNotEmpty) {
+        final i = _msgs.indexWhere((x) => x.cid == cid);
+        if (i >= 0) {
+          setState(() {
+            _msgs[i].voice = u;
+            _msgs[i].content = '';
+          });
+        }
       }
     } else if (t == 'typing') {
       setState(() => _typing = e['on'] != false);

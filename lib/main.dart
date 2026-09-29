@@ -47,6 +47,20 @@ class AppCtl extends ChangeNotifier {
     save();
   }
 
+  /// ★电脑端有变化时会推一条 {type:'state'}（不带内容，就是"你来拿一次"）
+  ///   以前直接读 e['status']/e['online'] → 永远是旧值 → 顶栏状态/在线一直不更新
+  Future<void> refreshState() async {
+    final a = api;
+    if (a == null) return;
+    final j = await a.state();
+    if (j['ok'] == true) {
+      nick = '${j['nick'] ?? nick}';
+      status = '${j['status'] ?? status}';
+      online = j['online'] == true;
+      notifyListeners();
+    }
+  }
+
   Future<void> loadBootstrap() async {
     final a = app.api;
     if (a == null) return;
@@ -87,17 +101,18 @@ class AppCtl extends ChangeNotifier {
     a.events.listen((e) {
       final t = '${e['type']}';
       if (t == 'state') {
-        status = '${e['status'] ?? status}';
-        online = e['online'] == true;
-        notifyListeners();
+        refreshState(); // ★去取一次（这条事件本身不带内容）
       } else if (t == 'hello') {
         online = true;
         notifyListeners();
       } else if (t == 'msg') {
         // 她在后台的时候才弹通知（你在里面聊着就不叮了）
-        final role = '${e['role'] ?? ''}';
+        // ★2026-09-29：通知一直不弹就是这个 —— 正文包在 e['msg'] 里，以前读最外层永远是空
+        final raw = e['msg'];
+        final body = raw is Map ? Map<String, dynamic>.from(raw) : e;
+        final role = '${body['role'] ?? ''}';
         if (role != 'me' && role != 'user' && !Notify.i.foreground && cfg['notify'] != false) {
-          final txt = '${e['content'] ?? ''}';
+          final txt = '${body['content'] ?? ''}';
           if (txt.trim().isNotEmpty) {
             Notify.i.show(nick, txt, vibrate: cfg['vibrate'] != false);
           }

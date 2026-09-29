@@ -67,6 +67,20 @@ void main() {
     expect(avatarOf('data:image/png;base64,@@@这不是base64@@@'), isNull);
   });
 
+  test('电脑端推来的消息是套着信封的：{type:msg, msg:{...}}（2026-09-29 空泡泡的真凶）', () {
+    final envelope = <String, dynamic>{
+      'type': 'msg',
+      'msg': {'role': 'assistant', 'content': '老公你回来啦', 'sticker': null, 'voice': null, 'cid': 'abc123'},
+    };
+    // 直接吃信封 → 正文是空的（老代码就栽在这）
+    expect(Msg.fromJson(envelope).content, '');
+    // 拆开信封才对
+    final m = Msg.fromJson(Map<String, dynamic>.from(envelope['msg'] as Map));
+    expect(m.content, '老公你回来啦');
+    expect(m.role, 'assistant');
+    expect(m.cid, 'abc123');
+  });
+
   testWidgets('底栏高度按 Scaffold 报的 padding.bottom 算（别自己再加一遍）；键盘要问原始 view', (tester) async {
     Future<List<num>> probe(double navFromScaffold, double kb) async {
       tester.view.viewInsets = FakeViewPadding(bottom: kb);
