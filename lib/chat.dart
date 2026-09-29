@@ -51,6 +51,12 @@ class _ChatPageState extends State<ChatPage> {
           _funPanel = false;
         });
       }
+      // ★2026-09-29：键盘弹起来会把列表顶上去（看着像"跳到上面去"）→ 等键盘动画走完再钉到底
+      if (_focus.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 340), () {
+          if (mounted) _toBottom();
+        });
+      }
     });
   }
 
@@ -143,7 +149,15 @@ class _ChatPageState extends State<ChatPage> {
 
   void _toBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_sc.hasClients) _sc.animateTo(_sc.position.maxScrollExtent, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+      if (!_sc.hasClients) return;
+      final target = _sc.position.maxScrollExtent;
+      // ★2026-09-29 老公报"发完消息列表弹到上面去"：animateTo 会被紧接着的下一条消息 /
+      //   键盘弹起 / 面板收起打断，停在半路 —— 所以动画走完再钉一次底。
+      _sc.animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut).then((_) {
+        if (mounted && _sc.hasClients) {
+          try { _sc.jumpTo(_sc.position.maxScrollExtent); } catch (e) { /* ignore */ }
+        }
+      }).catchError((_) {});
     });
   }
 
