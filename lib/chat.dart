@@ -172,6 +172,23 @@ class _ChatPageState extends State<ChatPage> {
     _send({'text': t});
   }
 
+  /// ★2026-09-29：用手机摄像头给她看一眼 —— 拍一张传上去，电脑端会让她真看到（她的眼睛）
+  Future<void> _eyeFromCamera() async {
+    final a = app.api;
+    if (a == null) return;
+    try {
+      final f = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1280, imageQuality: 78);
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      toast(context, '让她看着呢…');
+      final r = await a.eyePush('data:image/jpeg;base64,${base64Encode(bytes)}');
+      if (!mounted) return;
+      toast(context, r['ok'] == true ? '她看到了 ✓ 等她说' : '没送过去：${r['error'] ?? '连不上'}');
+    } catch (e) {
+      if (mounted) toast(context, '打不开相机：$e');
+    }
+  }
+
   Future<void> _sendPhoto() async {
     final a = app.api;
     if (a == null) return;
@@ -331,6 +348,11 @@ class _ChatPageState extends State<ChatPage> {
           onLook: (q) => setState(() {
             _funPanel = false;
             _send({'text': q});
+          }),
+          // 用这台手机自己的摄像头拍一张给她看
+          onEye: () => setState(() {
+            _funPanel = false;
+            _eyeFromCamera();
           }),
         ),
         ]),
@@ -573,8 +595,8 @@ class _RoundBtn extends StatelessWidget {
 }
 
 class _FunPanel extends StatelessWidget {
-  const _FunPanel({required this.onPhoto, required this.onSticker, required this.onDice, required this.onPacket, required this.onGame, required this.onShop, required this.onLook});
-  final VoidCallback onPhoto, onSticker, onDice, onPacket, onGame, onShop;
+  const _FunPanel({required this.onPhoto, required this.onSticker, required this.onDice, required this.onPacket, required this.onGame, required this.onShop, required this.onLook, required this.onEye});
+  final VoidCallback onPhoto, onSticker, onDice, onPacket, onGame, onShop, onEye;
   final void Function(String) onLook; // ★「让她看看」= 用她的眼睛（我 / 床上 / 桌上）
 
   @override
@@ -604,6 +626,9 @@ class _FunPanel extends StatelessWidget {
             Chip2('床上', ico: Icons.bed_outlined, on: () => onLook('看看床上')),
             const SizedBox(width: 8),
             Chip2('桌上', ico: Icons.desk_outlined, on: () => onLook('看看桌上')),
+            const SizedBox(width: 8),
+            // ★用这台手机自己的摄像头（她那两只眼睛看不到的角度，随手拍给她看）
+            Chip2('用手机拍', ico: Icons.photo_camera_outlined, on: onEye),
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
