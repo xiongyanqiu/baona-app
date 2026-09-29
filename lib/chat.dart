@@ -28,6 +28,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription? _sub;
   bool _loading = true;
   bool _typing = false;
+  int _cidSeq = 0;   // ★2026-09-30 发一条出两条：本地这条自己带编号，服务端广播回来按编号认领
   bool _emojiPanel = false;
   bool _funPanel = false;
   int _limit = 30;
@@ -101,7 +102,9 @@ class _ChatPageState extends State<ChatPage> {
       final hasSomething = m.content.isNotEmpty || (m.sticker?.isNotEmpty ?? false) || (m.voice?.isNotEmpty ?? false);
       if (!hasSomething) return;
       // 自己发的（乐观显示过）就就地升级，不重复
-      final i = _msgs.lastIndexWhere((x) => x.st == 'pending' && x.role == 'me' && x.content == m.content);
+      // ★2026-09-30 发一条出两条的真凶修法：先按编号认（最准），认不着再退回"内容 + pending"
+      final ecid = '${body['cid'] ?? e['cid'] ?? ''}';
+      final i = findEchoTarget(_msgs, m, ecid);
       setState(() {
         if (m.role == 'me' && i >= 0) {
           _msgs[i] = m..st = 'ok';
@@ -166,7 +169,11 @@ class _ChatPageState extends State<ChatPage> {
     if (a == null) return;
     try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有 */ } // ★发出去手感跟一下
     final text = '${payload['text'] ?? ''}';
-    final m = Msg(role: 'me', content: show ?? text, st: 'pending', time: DateTime.now().millisecondsSinceEpoch, sticker: payload['sticker']?.toString());
+    // ★2026-09-30 修"发一条出两条"：本地先画的这条以前不带编号，服务端把它广播回来时认不出是自己的
+    //   → 又画了一条一模一样的。现在这条自己带编号，发出去也带同一个。
+    final cid = '${payload['cid'] ?? 'c${DateTime.now().millisecondsSinceEpoch}-${++_cidSeq}'}';
+    payload['cid'] = cid;
+    final m = Msg(role: 'me', content: show ?? text, st: 'pending', time: DateTime.now().millisecondsSinceEpoch, sticker: payload['sticker']?.toString(), cid: cid);
     setState(() {
       _msgs.add(m);
       _emojiPanel = false;

@@ -66,7 +66,6 @@ const Map<String, dynamic> kDefCfg = {
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
   Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid});
-
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
@@ -381,7 +380,9 @@ class Api {
   /// 发消息（她那边会真的收到）—— 群里那套 payload 原样带上
   Future<Map<String, dynamic>> send(Map<String, dynamic> payload) {
     final b = Map<String, dynamic>.from(payload);
-    b['cid'] = 'c${DateTime.now().millisecondsSinceEpoch}';
+    // ★2026-09-30 修"发一条出两条"：本地先画的那条（chat.dart）已经带了 cid，别在这里换新的 ——
+    //   换了新的编号，服务端广播回来时就认不出是自己那条 → 又被画一遍。
+    if (b['cid'] == null) b['cid'] = 'c${DateTime.now().millisecondsSinceEpoch}';
     return post('/api/send', b);
   }
 
@@ -428,4 +429,16 @@ String fmtDay(int t) {
   if (diff == 1) return '昨天 $hhmm';
   if (d.year == now.year) return '${d.month}月${d.day}日 $hhmm';
   return '${d.year}年${d.month}月${d.day}日 $hhmm';
+}
+
+/// ★2026-09-30 修"发一条出两条"：服务端会把你说的话广播回来（多设备同步要用），
+/// 手机端必须认出"这条就是我刚发的本地那条"，就地升级、绝不重复画。
+/// 返回列表里该落在哪个下标；-1 = 确实是一条新消息（才 add）。
+int findEchoTarget(List<Msg> list, Msg echo, String cid) {
+  if (echo.role == 'me' && cid.isNotEmpty) {
+    final byCid = list.indexWhere((x) => x.role == 'me' && x.cid == cid);
+    if (byCid >= 0) return byCid;   // ① 按编号认（最准）
+  }
+  // ② 兜底：还没被确认的本地那条 + 内容一样
+  return list.lastIndexWhere((x) => x.st == 'pending' && x.role == 'me' && x.content == echo.content);
 }
