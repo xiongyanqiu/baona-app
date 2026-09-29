@@ -31,7 +31,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.1.7'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.1.8'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★别再按"底栏 75pt + 安全区"自己算：Scaffold 已经把「底栏高度（含安全区）」放进 body 的
 ///   padding.bottom 里了（实测 iPhone 上 = 113）。之前自己又加了一遍，等于算了两次，
@@ -484,11 +484,28 @@ class GlassNav extends StatelessWidget {
                           borderRadius: BorderRadius.circular(kRCapsule),
                         ),
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(
-                            (index == i ? items[i]['on'] : items[i]['off']) as IconData,
-                            size: 20,
-                            color: index == i ? Colors.white : kSub,
-                          ),
+                          Stack(clipBehavior: Clip.none, children: [
+                            Icon(
+                              (index == i ? items[i]['on'] : items[i]['off']) as IconData,
+                              size: 20,
+                              color: index == i ? Colors.white : kSub,
+                            ),
+                            // ★2026-09-29：她来消息时聊天 tab 上的小红点（他在别的页也一眼知道）
+                            if (items[i]['badge'] == true)
+                              Positioned(
+                                right: -4,
+                                top: -2,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF5B7A),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: const Color(0xFF17131F), width: 1.6),
+                                  ),
+                                ),
+                              ),
+                          ]),
                           const SizedBox(height: 2),
                           Text('${items[i]['t']}',
                               style: TextStyle(

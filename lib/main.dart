@@ -25,6 +25,8 @@ class AppCtl extends ChangeNotifier {
   bool coupleEnabled = false;
   List<Map> emoji = [];
   Set<String> emojiMine = {}; // ★哪些是「我加的」（可以长按删）
+  int unread = 0;              // ★她来消息时底栏聊天图标上的小红点
+  bool chatVisible = true;     // 他现在是不是就待在聊天页（不在就攒小红点）
   Map<String, dynamic> herSet = {};
   Map<String, dynamic> cfg = Map<String, dynamic>.from(kDefCfg);
 
@@ -64,7 +66,10 @@ class AppCtl extends ChangeNotifier {
   Future<void> loadBootstrap() async {
     final a = app.api;
     if (a == null) return;
-    final j = await a.bootstrap();
+    // ★2026-09-29：以前这三件事是排队等的（bootstrap → herSettings → emoji），启动慢一截；
+    //   现在一起发出去，谁先回来谁先用。
+    final rs = await Future.wait<Map<String, dynamic>>([a.bootstrap(), a.herSettings(), a.emojiList()]);
+    final j = rs[0];
     if (j['ok'] == true) {
       nick = '${j['nick'] ?? nick}';
       status = '${j['status'] ?? status}';
@@ -74,12 +79,12 @@ class AppCtl extends ChangeNotifier {
       notifyListeners();
       Notify.i.ask();          // 连上了就问一次通知权限
     }
-    final s = await a.herSettings();
+    final s = rs[1];
     if (s['ok'] == true && s['s'] is Map) {
       herSet = Map<String, dynamic>.from(s['s'] as Map);
       notifyListeners();
     }
-    final e = await a.emojiList();
+    final e = rs[2];
     if (e['ok'] == true) {
       emoji = ((e['list'] as List?) ?? []).map((x) => {'name': '$x'}).toList();
       emojiMine = ((e['mine'] as List?) ?? []).map((x) => '$x').toSet();
@@ -111,7 +116,16 @@ class AppCtl extends ChangeNotifier {
         final raw = e['msg'];
         final body = raw is Map ? Map<String, dynamic>.from(raw) : e;
         final role = '${body['role'] ?? ''}';
-        if (role != 'me' && role != 'user' && !Notify.i.foreground && cfg['notify'] != false) {
+        final mine = (role == 'me' || role == 'user');
+        // ★2026-09-29：她的消息 + 他没待在聊天页 → 底栏聊天图标上冒小红点（顺手震一下）
+        if (!mine && !chatVisible) {
+          unread += 1;
+          notifyListeners();
+        }
+        if (!mine) {
+          try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有，忽略 */ }
+        }
+        if (!mine && !Notify.i.foreground && cfg['notify'] != false) {
           final txt = '${body['content'] ?? ''}';
           if (txt.trim().isNotEmpty) {
             Notify.i.show(nick, txt, vibrate: cfg['vibrate'] != false);
@@ -460,9 +474,13 @@ class _HomePageState extends State<HomePage> {
               curve: Curves.easeOutCubic,
               child: _Nav(
                 tab: _tab,
+                unread: app.unread > 0,
                 onTap: (i) => setState(() {
+                  HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
                   _tab = i;
                   _navHidden = false;
+                  if (i == 0) app.unread = 0; // 进了聊天就没有小红点了
+                  app.chatVisible = (i == 0);
                 }),
               ),
             ),
@@ -523,16 +541,18 @@ class _Header extends StatelessWidget {
 }
 
 class _Nav extends StatelessWidget {
-  const _Nav({required this.tab, required this.onTap});
+  const _Nav({required this.tab, required this.onTap, this.unread = false});
   final int tab;
   final ValueChanged<int> onTap;
+  final bool unread;
 
   @override
   Widget build(BuildContext context) => GlassNav(
         index: tab,
         onTap: onTap,
-        items: const [
-          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '聊天'},
+        items: [
+          // ★她来消息时聊天那个图标上冒个小红点
+          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '聊天', 'badge': unread},
           {'off': Icons.shopping_bag_outlined, 'on': Icons.shopping_bag, 't': '商城'},
           {'off': Icons.casino_outlined, 'on': Icons.casino, 't': '游戏'},
           {'off': Icons.favorite_border, 'on': Icons.favorite, 't': '我们'},

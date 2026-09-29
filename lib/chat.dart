@@ -150,6 +150,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _send(Map<String, dynamic> payload, {String? show}) async {
     final a = app.api;
     if (a == null) return;
+    try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有 */ } // ★发出去手感跟一下
     final text = '${payload['text'] ?? ''}';
     final m = Msg(role: 'me', content: show ?? text, st: 'pending', time: DateTime.now().millisecondsSinceEpoch, sticker: payload['sticker']?.toString());
     setState(() {
@@ -273,7 +274,20 @@ class _ChatPageState extends State<ChatPage> {
                   }
                   final k = i - (_hasMore ? 1 : 0);
                   if (k >= _msgs.length) return const _TypingBubble();
-                  return _Bubble(m: _msgs[k], onResend: () => _send({'text': _msgs[k].content}), onPlay: _play, playing: _playingUrl, urlOf: a);
+                  final m = _msgs[k];
+                  final prev = k > 0 ? _msgs[k - 1] : null;
+                  // ★2026-09-29：隔得久（>30 分钟）或跨天时插一行时间，翻记录一眼知道"这是啥时候说的"
+                  final gap = prev == null || (m.time != null && prev.time != null && (m.time! - prev.time!) > 30 * 60 * 1000);
+                  final bubble = _Bubble(m: m, onResend: () => _send({'text': m.content}), onPlay: _play, playing: _playingUrl, urlOf: a);
+                  if (!gap) return bubble;
+                  return Column(children: [
+                    if (m.time != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10, bottom: 2),
+                        child: Text(fmtDay(m.time!), style: const TextStyle(fontSize: 11, color: kSub)),
+                      ),
+                    bubble,
+                  ]);
                 },
                 ),
               ),
@@ -313,6 +327,11 @@ class _ChatPageState extends State<ChatPage> {
           }),
           onGame: () => setState(() => _funPanel = false),
           onShop: () => setState(() => _funPanel = false),
+          // 让她用眼睛看一眼（手机上也能使唤她的眼睛了）
+          onLook: (q) => setState(() {
+            _funPanel = false;
+            _send({'text': q});
+          }),
         ),
         ]),
       ),
@@ -398,7 +417,10 @@ class _Bubble extends StatelessWidget {
       ],
     );
 
-    return Padding(
+    // ★2026-09-29：正在发的那条淡一点（一眼看出"还没发出去"），发出去就恢复
+    return Opacity(
+      opacity: m.st == 'pending' ? 0.6 : 1,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         mainAxisAlignment: me ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -410,6 +432,7 @@ class _Bubble extends StatelessWidget {
           ],
           Flexible(child: body),
         ],
+      ),
       ),
     );
   }
@@ -434,8 +457,21 @@ class _MiniAvatar extends StatelessWidget {
   }
 }
 
-class _TypingBubble extends StatelessWidget {
+class _TypingBubble extends StatefulWidget {
   const _TypingBubble();
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderStateMixin {
+  // ★2026-09-29：她说"正在打字"的时候点会跳 —— 一眼知道对面在动，不是在卡
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1050))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -448,7 +484,17 @@ class _TypingBubble extends StatelessWidget {
             blur: 14,
             tint: app.herColor,
             pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: const Text('她正在打字…', style: TextStyle(fontSize: 12.5, color: kSub)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Text('她正在打字', style: TextStyle(fontSize: 12.5, color: kSub)),
+              const SizedBox(width: 6),
+              AnimatedBuilder(
+                animation: _c,
+                builder: (c, _) {
+                  final n = (_c.value * 3).floor().clamp(0, 2) + 1;
+                  return Text('.' * n, style: const TextStyle(fontSize: 13, height: 1.0, color: kSub, letterSpacing: 1.5));
+                },
+              ),
+            ]),
           ),
         ]),
       );
@@ -527,8 +573,9 @@ class _RoundBtn extends StatelessWidget {
 }
 
 class _FunPanel extends StatelessWidget {
-  const _FunPanel({required this.onPhoto, required this.onSticker, required this.onDice, required this.onPacket, required this.onGame, required this.onShop});
+  const _FunPanel({required this.onPhoto, required this.onSticker, required this.onDice, required this.onPacket, required this.onGame, required this.onShop, required this.onLook});
   final VoidCallback onPhoto, onSticker, onDice, onPacket, onGame, onShop;
+  final void Function(String) onLook; // ★「让她看看」= 用她的眼睛（我 / 床上 / 桌上）
 
   @override
   Widget build(BuildContext context) {
@@ -547,7 +594,19 @@ class _FunPanel extends StatelessWidget {
         radius: 26,
         blur: kBlur,
         pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        child: Column(children: [
+          // ★2026-09-29：她的眼睛也能从手机上用（以前只有电脑端能让她看）
+          Row(children: [
+            const Text('让她看看', style: TextStyle(fontSize: 12, color: kSub)),
+            const SizedBox(width: 10),
+            Chip2('你', ico: Icons.remove_red_eye_outlined, on: () => onLook('看看我')),
+            const SizedBox(width: 8),
+            Chip2('床上', ico: Icons.bed_outlined, on: () => onLook('看看床上')),
+            const SizedBox(width: 8),
+            Chip2('桌上', ico: Icons.desk_outlined, on: () => onLook('看看桌上')),
+          ]),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           for (var i = 0; i < cells.length; i++)
             PressScale(
               onTap: ons[i],
@@ -563,6 +622,7 @@ class _FunPanel extends StatelessWidget {
                 Text('${cells[i][1]}', style: const TextStyle(fontSize: 11, color: kSub)),
               ]),
             ),
+          ]),
         ]),
       ),
     );

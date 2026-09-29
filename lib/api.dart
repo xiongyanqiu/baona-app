@@ -411,3 +411,19 @@ String fmtClock(int t) {
   final sameDay = d.year == now.year && d.month == now.month && d.day == now.day;
   return sameDay ? '$h:$m' : '${d.month}/${d.day} $h:$m';
 }
+
+/// 聊天里那行"这时候说的"：今天 14:32 / 昨天 22:10 / 9月27日 23:07
+String fmtDay(int t) {
+  if (t <= 0) return '';
+  final d = DateTime.fromMillisecondsSinceEpoch(t);
+  final now = DateTime.now();
+  final h = d.hour.toString().padLeft(2, '0'), m = d.minute.toString().padLeft(2, '0');
+  final today = DateTime(now.year, now.month, now.day);
+  final that = DateTime(d.year, d.month, d.day);
+  final diff = today.difference(that).inDays;
+  final hhmm = '$h:$m';
+  if (diff == 0) return '今天 $hhmm';
+  if (diff == 1) return '昨天 $hhmm';
+  if (d.year == now.year) return '${d.month}月${d.day}日 $hhmm';
+  return '${d.year}年${d.month}月${d.day}日 $hhmm';
+}
