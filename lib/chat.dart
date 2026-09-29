@@ -34,6 +34,9 @@ class _ChatPageState extends State<ChatPage> {
   int _limit = 30;
   bool _hasMore = false;
   String? _playingUrl;
+  // ★2026-09-30 修"对话记录乱跳"：记录"我现在在不在底部"——
+  //   在底部 → 新消息/打字自动钉底；翻看历史 → 绝不打扰（不然你看旧消息时列表老被拉走）
+  bool _atBottom = true;
 
   @override
   void initState() {
@@ -41,6 +44,9 @@ class _ChatPageState extends State<ChatPage> {
     _load();
     _sub = app.api?.events.listen(_onEvent);
     _sc.addListener(() {
+      if (!_sc.hasClients) return;
+      final atBottom = _sc.position.pixels >= _sc.position.maxScrollExtent - 80;
+      if (atBottom != _atBottom) _atBottom = atBottom;
       if (_sc.position.pixels <= 40 && _hasMore && !_loading) _load(more: true);
     });
     _audio.onPlayerComplete.listen((_) => setState(() => _playingUrl = null));
@@ -74,6 +80,11 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _load({bool more = false}) async {
     final a = app.api;
     if (a == null) return;
+    // ★2026-09-30 加载更多：记下"当前第一条"和"当前滚动位置"，
+    //   回来后在头部插新消息，并把位置补偿回原位（以前 clear+addAll → 列表整个重建 → 乱跳）
+    final oldFirstKey = _msgs.isNotEmpty ? (_msgs.first.cid ?? 'i${_msgs.first.idx}') : null;
+    final oldOffset = _sc.hasClients ? _sc.position.pixels : 0.0;
+    final oldCount = _msgs.length;
     if (more) _limit += 30;
     final j = await a.history(limit: _limit);
     if (!mounted) return;
@@ -85,6 +96,17 @@ class _ChatPageState extends State<ChatPage> {
       _hasMore = j['hasMore'] == true;
       _loading = false;
     });
+    if (more && _sc.hasClients) {
+      // 新消息插在头部 → 旧列表第一条下移了 → 按"新增条数 × 平均行高"把位置补回去
+      final added = _msgs.length - oldCount;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_sc.hasClients) return;
+        final target = (oldOffset + added * 46).clamp(0.0, _sc.position.maxScrollExtent);
+        try { _sc.jumpTo(target); } catch (e) { /* ignore */ }
+      });
+    } else if (!more) {
+      _toBottom();
+    }
   }
 
   void _onEvent(Map<String, dynamic> e) {
@@ -150,7 +172,10 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  void _toBottom() {
+  void _toBottom({bool force = false}) {
+    // ★2026-09-30：不在底部就别把列表拉走（翻看历史/看旧消息时绝不打扰）；
+    //   自己发的消息 force=true 总是钉底。
+    if (!force && !_atBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_sc.hasClients) return;
       final target = _sc.position.maxScrollExtent;
@@ -179,7 +204,7 @@ class _ChatPageState extends State<ChatPage> {
       _emojiPanel = false;
       _funPanel = false;
     });
-    _toBottom();
+    _toBottom(force: true);
     final r = await a.send(payload);
     if (!mounted) return;
     setState(() => m.st = r['ok'] == true ? 'ok' : 'failed');

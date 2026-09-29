@@ -360,11 +360,13 @@ class Api {
     return j;
   }
 
-  /// 相册照片的真实可访问地址（自动带上 k）
-  String albumPhotoUrl(String u) {
+  /// 相册照片的真实可访问地址（自动带上 k；w>0 时请求缩略图，省流量省内存）
+  String albumPhotoUrl(String u, {int? w}) {
     final base = imgUrl(u);
     if (albumKey.isEmpty) return base;
-    return base + (base.contains('?') ? '&' : '?') + 'k=' + Uri.encodeComponent(albumKey);
+    var s = base + (base.contains('?') ? '&' : '?') + 'k=' + Uri.encodeComponent(albumKey);
+    if (w != null && w > 0) s += '&w=$w';
+    return s;
   }
   // ★2026-09-29 修：相册这四个口电脑端也只认 POST（旧版 GET → 404 → 建分组/点赞/评论/传照片全没反应）
   Future<Map<String, dynamic>> albumGroup(String action, {String? id, String? name}) =>

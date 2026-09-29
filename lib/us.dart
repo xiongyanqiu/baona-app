@@ -390,7 +390,7 @@ Future<String> pickAlbumImage(BuildContext context) async {
       itemCount: all.length,
       itemBuilder: (c, i) => GestureDetector(
         onTap: () => Navigator.pop(c, all[i].url),
-        child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(all[i].url), fit: BoxFit.cover)),
+        child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(all[i].url, w: 500), fit: BoxFit.cover)),
       ),
     ),
   );
@@ -494,10 +494,13 @@ class _AlbumState extends State<_Album> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Image.network(
-                    app.api!.albumPhotoUrl(ph.url),
+                    // ★2026-09-29 缩略图：网格只下小图（服务端 ?w=500 返回，流量少一大截），点开才看原图
+                    app.api!.albumPhotoUrl(ph.url, w: 500),
                     fit: BoxFit.cover,
-                    // 缩略图解码：内存少一大截（网络还是原图，懒加载已经挡住了大头）
+                    // 缩略图解码：内存少一大截（网络也走缩略图了）
                     cacheWidth: 420,
+                    loadingBuilder: (c, child, prog) =>
+                        prog == null ? child : Container(color: const Color(0xFF1B1B22)),
                     errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1B1B22), child: const Center(child: Icon(Icons.broken_image_outlined, size: 18, color: kSub))),
                   ),
                 ),

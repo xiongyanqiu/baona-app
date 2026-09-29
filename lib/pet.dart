@@ -53,7 +53,9 @@ class _PetDrawerState extends State<PetDrawer> {
     //   （≈1.5MB/分钟），抽屉关着也在拉。现在只在真的看得见时才拉；App 退到后台也不拉。
     if (!mounted) return;
     final sc = Scaffold.maybeOf(context);
-    if (sc != null && !sc.isDrawerOpen) return;
+    // ★2026-09-30 左滑看不到她的修复：以前只看 isDrawerOpen（完全打开才 true），
+    //   滑到一半就开始拉，画面尽早出来；isDrawerAttached 覆盖『正在滑开』的状态
+    if (sc != null && !sc.isDrawerOpen && !sc.isDrawerAttached) return;
     final life = WidgetsBinding.instance.lifecycleState;
     if (life != null && life != AppLifecycleState.resumed) return;
     final j = await a.petShot();
@@ -195,8 +197,12 @@ class _PetDrawerState extends State<PetDrawer> {
   }
 }
 
-/// data:image/png;base64,xxx → 字节
+/// data:image/png;base64,xxx → 字节（解码失败返回空，Image.memory 会走 errorBuilder，不白屏）
 Uint8List dataUriBytes(String uri) {
-  final i = uri.indexOf(',');
-  return base64Decode(i >= 0 ? uri.substring(i + 1) : uri);
+  try {
+    final i = uri.indexOf(',');
+    return base64Decode(i >= 0 ? uri.substring(i + 1) : uri);
+  } catch (e) {
+    return Uint8List(0);
+  }
 }
