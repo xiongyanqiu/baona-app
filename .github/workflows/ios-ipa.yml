@@ -32,13 +32,16 @@ jobs:
           flutter --version
           flutter pub get
 
-      - name: 编未签名 iOS 包
-        run: flutter build ios --release --no-codesign
+      - name: 编未签名 iOS 包（xcodebuild 直编，绕开 flutter 的签名检查）
+        run: |
+          cd ios
+          pod install
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= build
 
       - name: 打成 ipa
         run: |
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          cp -R ios/build/DerivedData/Build/Products/Release-iphoneos/Runner.app Payload/
           zip -qry BaonaApp-unsigned.ipa Payload
           ls -lh BaonaApp-unsigned.ipa
           unzip -l BaonaApp-unsigned.ipa | head -20
