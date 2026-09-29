@@ -372,7 +372,8 @@ class Api {
       post('/api/album/group', {'action': action, if (id != null) 'id': id, if (name != null) 'name': name});
   Future<Map<String, dynamic>> albumLike(String id) => post('/api/album/like', {'id': id});
   Future<Map<String, dynamic>> albumComment(String id, String text) => post('/api/album/comment', {'id': id, 'text': text});
-  Future<Map<String, dynamic>> eyePush(String data) => post('/api/eye', {'data': data});
+  Future<Map<String, dynamic>> eyePush(String data, {String why = ''}) =>
+      post('/api/eye', {'data': data, if (why.isNotEmpty) 'why': why});
   Future<Map<String, dynamic>> albumUpload(String group, String data) =>
       post('/api/album/upload', {'group': group, 'data': data});
   Future<Map<String, dynamic>> chatImg(String data) => post('/api/chatimg', {'data': data});

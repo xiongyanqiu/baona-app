@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'eye.dart';
 import 'chat.dart';
 import 'game.dart';
 import 'notify.dart';
@@ -27,6 +28,7 @@ class AppCtl extends ChangeNotifier {
   Set<String> emojiMine = {}; // ★哪些是「我加的」（可以长按删）
   int unread = 0;              // ★她来消息时底栏聊天图标上的小红点
   bool chatVisible = true;     // 他现在是不是就待在聊天页（不在就攒小红点）
+  bool eyeOn = false;          // ★她在用手机前置看你（拍的那一下，聊天里会显示"她在看你…"）
   Map<String, dynamic> herSet = {};
   Map<String, dynamic> cfg = Map<String, dynamic>.from(kDefCfg);
 
@@ -105,7 +107,19 @@ class AppCtl extends ChangeNotifier {
     if (a == null) return;
     a.events.listen((e) {
       final t = '${e['type']}';
-      if (t == 'state') {
+      if (t == 'eye') {
+        // ★2026-09-29 老公要的：她自己看你 —— 电脑端喊一嗓子，我们立刻用【前置】拍一张回过去。
+        //   iOS 后台不给开摄像头 → 只在前台拍；不在前台就跳过，电脑端退回那两台固定摄像头。
+        final life = WidgetsBinding.instance.lifecycleState;
+        if (life == AppLifecycleState.resumed && !PhoneEye.busy) {
+          eyeOn = true;
+          notifyListeners();
+          PhoneEye.shootAndSend(a, why: '${e['why'] ?? ''}').then((_) {
+            eyeOn = false;
+            notifyListeners();
+          });
+        }
+      } else if (t == 'state') {
         refreshState(); // ★去取一次（这条事件本身不带内容）
       } else if (t == 'hello') {
         online = true;
