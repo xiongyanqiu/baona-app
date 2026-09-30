@@ -579,17 +579,17 @@ class _VideoLibPageState extends State<VideoLibPage> {
     final cur = _cur.clamp(0, list.length - 1);
     return LayoutBuilder(builder: (c, cons) {
       final cw = cons.maxWidth;
-      final w = cw * 0.60; // 卡片宽度：主视频适中，两侧露出一部分
-      final gap = w * 0.40; // 相邻卡片错位间距（露出的边缘宽度）
+      final w = cw * 0.52; // 卡片宽度：主视频适中，两侧完整可见的缩小视频
+      final gap = w * 0.60; // 中心距：左右视频大部分可见，只被主视频压住一部分
       final lo = (cur - 2).clamp(0, list.length - 1);
       final hi = (cur + 2).clamp(0, list.length - 1);
       final items = <Widget>[];
       for (var i = lo; i <= hi; i++) {
         final dist = (i - cur).abs();
         final left = (cw - w) / 2 + (i - cur) * gap;
-        final scale = dist == 0 ? 1.0 : 0.84 - dist * 0.06;
-        final op = dist == 0 ? 1.0 : 0.60 - dist * 0.10;
-        final topPad = dist * 20.0; // 两侧轻微下沉，更有层次
+        final scale = dist == 0 ? 1.0 : 0.88 - dist * 0.12; // 左右视频缩小但完整可见
+        final op = dist == 0 ? 1.0 : 0.90 - dist * 0.13; // 清晰可见，越远越淡
+        final topPad = dist * 14.0; // 两侧轻微下沉，更有层次
         items.add(AnimatedPositioned(
           key: ValueKey('cv$i'),
           duration: const Duration(milliseconds: 300),
