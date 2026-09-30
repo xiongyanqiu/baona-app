@@ -114,10 +114,12 @@ class _ChatPageState extends State<ConversationPage> {
       return;
     }
     if (!mounted) return;
-    final list = ((j['messages'] as List?) ?? []).map((e) => Msg.fromJson(Map.from(e))).toList();
+    final list = ((j?['messages'] as List?) ?? []).map((e) => Msg.fromJson(Map.from(e))).toList();
     setState(() {
-      _msgs = MsgsLocal.merge(list, _msgs);
-      _hasMore = j['hasMore'] == true;
+      _msgs
+        ..clear()
+        ..addAll(MsgsLocal.merge(list, _msgs));
+      _hasMore = j?['hasMore'] == true;
       _loading = false;
     });
     // ★同步成功 → 落盘，下次打开/断网直接看本地
