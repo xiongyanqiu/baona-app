@@ -31,25 +31,23 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.2.2 (16)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.2.2 (17)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
-/// ★主界面的 body 已经用 MediaQuery.removePadding 把 Scaffold 塞的底部 padding 清掉了（main.dart），
-///   所以这里不能再读 padding.bottom（那会被键盘/Scaffold 改），只认设备真实安全区 viewPadding：
-///   glass 胶囊 47 + SafeArea 上下留白 14 + 真机安全区 + 呼吸位 10。
-///   2026-09-30：之前读 padding.bottom 被 Scaffold 塞进底栏高(≈113) → 输入框被顶到半空。
+/// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
+///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
+///   胶囊 47 + SafeArea 上下留白 14 + iPhone 底部安全区 34 + 呼吸位 10 = 105，直接钉死。
+///   覆盖聊天/飞行棋/商城/我们 所有页面，任何环境都一样。
 const double kNavInner = 47; // 玻璃胶囊内容高：pad6 + 图标20 + 2 + 文字≈13 + pad6
 const double kNavMargin = 14; // GlassNav 里 SafeArea 的上下留白（上6 + 下8）
+const double kNavSafe = 34; // iPhone 带 home 条底部安全区（固定值，不赌环境）
 const double kNavGap = 10; // 输入栏跟底栏之间留的呼吸位
 
-/// 悬浮底栏实际占的高度（胶囊 + 留白 + 底部安全区）+ 呼吸位
-double navSpace(BuildContext c) {
-  final vp = View.of(c).viewPadding.bottom; // 真机安全区（Scaffold/键盘都改不到这个）
-  return kNavInner + kNavMargin + (vp > 0 ? vp : 0) + kNavGap;
-}
+/// 悬浮底栏实际占的高度（胶囊 + 留白 + 底部安全区）+ 呼吸位 —— 恒为 105
+double navSpace(BuildContext c) => kNavInner + kNavMargin + kNavSafe + kNavGap;
 
-/// 键盘是不是弹着？只认真实的键盘高度（viewInsets），不依赖 MediaQuery.padding：
-///   主界面 body 已 removePadding 清掉底部 padding，老写法「padding.bottom == 0 就是键盘」不再成立。
-bool kbUp(BuildContext c) => View.of(c).viewInsets.bottom > 0;
+/// 键盘是不是弹着？只认 body 收到的键盘高度（MediaQuery.viewInsets）。
+///   键盘弹起时 Scaffold 会把它写进 body 的 MediaQuery，最贴近布局实际。
+bool kbUp(BuildContext c) => MediaQuery.of(c).viewInsets.bottom > 0;
 
 /// 头像/背景可能是两种东西：https 地址，或者手机上传后的 data:image/...（电脑端存的就是 dataURL）
 /// ★iOS 上 NetworkImage 读 data URL 会直接报错 → 必须走 MemoryImage，头像才显示得出来
