@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'theme.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
 /// 一个视频条目
@@ -269,6 +270,11 @@ class _VideoLibPageState extends State<VideoLibPage> {
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w700)),
+                const SizedBox(width: 8),
+                Text('v' + kAppVer,
+                    style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11)),
                 const Spacer(),
                 // 管理分类
                 IconButton(
