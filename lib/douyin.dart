@@ -88,23 +88,6 @@ class _DouyinPageState extends State<DouyinPage> {
             ),
           ),
         ),
-        // 顶部加载进度条
-        ValueListenableBuilder<double>(
-          valueListenable: _c.onProgress,
-          builder: (c, v, _) {
-            if (v >= 1 || v <= 0) return const SizedBox.shrink();
-            return Positioned(
-              top: MediaQuery.of(c).padding.top + 48,
-              left: 0, right: 0,
-              child: LinearProgressIndicator(
-                value: v,
-                minHeight: 2,
-                backgroundColor: const Color(0x22FFFFFF),
-                color: Colors.white,
-              ),
-            );
-          },
-        ),
       ]),
     );
   }

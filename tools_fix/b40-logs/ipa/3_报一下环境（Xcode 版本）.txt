@@ -1,0 +1,12 @@
+﻿2026-09-30T16:20:29.8548700Z ##[group]Run xcodebuild -version
+2026-09-30T16:20:29.8548990Z [36;1mxcodebuild -version[0m
+2026-09-30T16:20:29.8549180Z [36;1mxcode-select -p[0m
+2026-09-30T16:20:29.8549340Z [36;1msw_vers[0m
+2026-09-30T16:20:29.8584040Z shell: /bin/bash -e {0}
+2026-09-30T16:20:29.8584220Z ##[endgroup]
+2026-09-30T16:20:29.9392140Z Xcode 26.6
+2026-09-30T16:20:29.9392520Z Build version 17F113
+2026-09-30T16:20:29.9434170Z /Applications/Xcode_26.6.app/Contents/Developer
+2026-09-30T16:20:29.9499810Z ProductName:		macOS
+2026-09-30T16:20:29.9500510Z ProductVersion:		26.6.2
+2026-09-30T16:20:29.9500790Z BuildVersion:		25G83
