@@ -468,7 +468,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   double _lastPix = 0;
   // ★2.0 第一波：切 tab 淡入（保持各页状态，只是透明度过渡）
   late final AnimationController _fadeCtrl =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 170), value: 1);
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 230), value: 1);
 
   @override
   void dispose() {
@@ -521,13 +521,20 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 child: Column(children: [
                   _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
                   Expanded(
-                    // ★2.0 第一波：切 tab 淡入
-                    child: FadeTransition(opacity: _fadeCtrl, child: IndexedStack(index: _tab, children: const [
-                      ChatListPage(),
-                      ShopPage(),
-                      GamePage(),
-                      UsPage(),
-                    ])),
+                    // ★2.0 第二波：切 tab 淡入 + 轻微上滑（更明显）
+                    child: FadeTransition(
+                      opacity: _fadeCtrl,
+                      child: SlideTransition(
+                        position: Tween(begin: const Offset(0, 0.02), end: Offset.zero)
+                            .animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic)),
+                        child: IndexedStack(index: _tab, children: const [
+                          ChatListPage(),
+                          ShopPage(),
+                          GamePage(),
+                          UsPage(),
+                        ]),
+                      ),
+                    ),
                   ),
                 ]),
               ),

@@ -483,14 +483,17 @@ class GlassNav extends StatelessWidget {
                           Stack(clipBehavior: Clip.none, children: [
                             // ★2.0 第一波：图标 filled/outline 切换平滑过渡 + 选中项微放大（iOS 标签栏手感）
                             AnimatedScale(
-                              scale: index == i ? 1.18 : 1.0,
-                              duration: const Duration(milliseconds: 190),
-                              curve: Curves.easeOutCubic,
+                              scale: index == i ? 1.26 : 1.0,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutBack,
                               child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 190),
-                                switchInCurve: Curves.easeOut,
+                                duration: const Duration(milliseconds: 220),
+                                switchInCurve: Curves.easeOutBack,
                                 switchOutCurve: Curves.easeIn,
-                                transitionBuilder: (c, anim) => FadeTransition(opacity: anim, child: c),
+                                transitionBuilder: (c, anim) => ScaleTransition(
+                                  scale: Tween(begin: 0.75, end: 1.0).animate(anim),
+                                  child: FadeTransition(opacity: anim, child: c),
+                                ),
                                 child: Icon(
                                   (index == i ? items[i]['on'] : items[i]['off']) as IconData,
                                   key: ValueKey<bool>(index == i),
@@ -521,6 +524,18 @@ class GlassNav extends StatelessWidget {
                                   fontSize: 10.5,
                                   fontWeight: index == i ? FontWeight.w600 : FontWeight.w400,
                                   color: index == i ? Colors.white : kSub)),
+                          // ★2.0 第二波：选中指示小横条（滑出来=iOS 标签栏的确认感）
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            width: index == i ? 14 : 0,
+                            height: 3,
+                            margin: const EdgeInsets.only(top: 3),
+                            decoration: BoxDecoration(
+                              color: index == i ? Colors.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
                         ]),
                       ),
                     ),
