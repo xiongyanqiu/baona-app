@@ -772,16 +772,15 @@ class _SearchState extends State<_Search> {
     final ql = q.trim().toLowerCase();
     final hits = ql.isEmpty ? <Msg>[] : _all.where((m) => m.content.toLowerCase().contains(ql)).toList().reversed.take(60).toList();
     // ★2026-09-30：键盘弹起时弹窗被顶到屏幕顶 → 搜索栏贴/撞状态栏。
-    //   修：SafeArea 保护顶部安全区 + 键盘弹起时高度自适应（刚好停在键盘上方）
+    //   SafeArea 在 showModalBottomSheet 里不可靠 → 显式用 MediaQuery.padding 算安全区：
+    //   顶部 padding = 状态栏+刘海高，高度 = 屏高 - 键盘高 - 顶部安全区，总高正好停在键盘上方
     final mq = MediaQuery.of(context);
     final kb = mq.viewInsets.bottom;
-    final sheetH = kb > 0 ? (mq.size.height - kb - 8) : mq.size.height * 0.8;
+    final topPad = mq.padding.top;
+    final sheetH = kb > 0 ? (mq.size.height - kb - topPad - 8) : mq.size.height * 0.8;
     return Padding(
-      padding: EdgeInsets.only(bottom: kb),
-      child: SafeArea(
-        top: true,
-        bottom: false,
-        child: SizedBox(
+      padding: EdgeInsets.fromLTRB(0, topPad, 0, kb),
+      child: SizedBox(
         height: sheetH,
         child: Column(children: [
           Padding(
@@ -801,7 +800,6 @@ class _SearchState extends State<_Search> {
                   ]),
           ),
         ]),
-        ),
       ),
     );
   }
