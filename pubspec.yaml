@@ -42,7 +42,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1   # 消息通知（她发消息时手机弹出来）
   camera: ^0.12.1
   video_player: ^2.9.2                   # 抖音页视频播放
-  video_thumbnail: ^1.0.2            # 视频库封面缩略图
+  video_thumbnail: ^0.5.6            # 视频库封面缩略图
   webview_flutter: ^4.10.0              # ★b40 抖音手机直连（内置官方网页版，不走电脑中转）
 
 dev_dependencies:
