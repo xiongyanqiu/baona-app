@@ -468,6 +468,7 @@ class _HomePageState extends State<HomePage> {
   double _lastPix = 0;
   // ★2.0 第四波：页面换成 PageView —— 手指左右滑页面跟手走（iOS 26 Liquid Glass 标签栏规范）
   final PageController _pageCtrl = PageController();
+  bool _firstScroll = true; // ★切页后第一条滚动只校准位置，不误收起底栏（不然切回滚动中的页面底栏立刻消失）
 
   @override
   void dispose() {
@@ -480,7 +481,8 @@ class _HomePageState extends State<HomePage> {
     if (i == _tab) return;
     setState(() {
       _tab = i;
-      _navHidden = false;
+      _navHidden = false; // ★切页先让底栏出来，他不想看时自己往上滑才收
+      _firstScroll = true; // 下一条滚动只校准位置，不碰底栏
       if (i == 0) app.unread = 0; // 进了聊天就没有小红点了
       app.chatVisible = (i == 0);
     });
@@ -496,7 +498,15 @@ class _HomePageState extends State<HomePage> {
       return false;
     }
     if (n is! ScrollUpdateNotification) return false;
+    // ★PageView 横向滑动(切页)的通知不碰底栏逻辑，别把 _lastPix 污染了
+    if (n.metrics.axis != Axis.vertical) return false;
     final p = n.metrics.pixels;
+    // 切页后第一条纵向通知只校准位置：无论新页面滚到哪，底栏都保持呼出，等他自己滑
+    if (_firstScroll) {
+      _firstScroll = false;
+      _lastPix = p;
+      return false;
+    }
     final d = p - _lastPix;
     _lastPix = p;
     if (d > 8 && p > 60 && !_navHidden) {
@@ -542,7 +552,8 @@ class _HomePageState extends State<HomePage> {
                         HapticFeedback.selectionClick(); // 翻页轻震
                         setState(() {
                           _tab = i;
-                          _navHidden = false;
+                          _navHidden = false; // ★横滑切页底栏也是先出来
+                          _firstScroll = true;
                           if (i == 0) app.unread = 0;
                           app.chatVisible = (i == 0);
                         });
