@@ -1,9 +1,10 @@
-// 包娜 · 视频库（独立入口，b49）
+// 包娜 · 视频库（独立入口，v26.2）
 // 方案A：3D CoverFlow 旋转轮播 —— 当前封面立起居中，两侧倾斜缩小后退
 // - 视频存在手机本地（App 文档目录），不传电脑
 // - 点击封面 → 全屏播放该视频
-// - 分类：日常 / 老婆的 / 收藏 / 其他（全部 = 混排）
-// - 右上角设置头像入口：相册选图存本地，对话列表头像同步
+// - 分类：自定义（默认 日常/老婆的/收藏/其他，可增删改）
+// - 封面：真实视频第一帧缩略图（video_thumbnail），无缩略图时回退渐变卡片
+// - 右上角头像设置入口：相册选图存本地，对话列表头像同步
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -13,26 +14,32 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 /// 一个视频条目
 class VlVideo {
   final String path;
-  final String cat;
+  String cat;
   final int added;
-  VlVideo({required this.path, required this.cat, required this.added});
+  String thumb; // 缩略图本地路径（可为空）
+  VlVideo(
+      {required this.path,
+      required this.cat,
+      required this.added,
+      this.thumb = ''});
 
   Map<String, dynamic> toJson() =>
-      {'path': path, 'cat': cat, 'added': added};
+      {'path': path, 'cat': cat, 'added': added, 'thumb': thumb};
 
   factory VlVideo.fromJson(Map<String, dynamic> j) => VlVideo(
         path: j['path'] ?? '',
         cat: j['cat'] ?? '其他',
         added: (j['added'] as num?)?.toInt() ?? 0,
+        thumb: j['thumb'] ?? '',
       );
 }
 
-const List<String> kCats = ['日常', '老婆的', '收藏', '其他'];
-
+/// 封面回退渐变色（按分类）
 const Map<String, List<Color>> _catGrad = {
   '日常': [Color(0xFF2F6BFF), Color(0xFF5B3DFF)],
   '老婆的': [Color(0xFFFF3B5C), Color(0xFFFF7A3B)],
@@ -49,6 +56,7 @@ class VideoLibPage extends StatefulWidget {
 class _VideoLibPageState extends State<VideoLibPage> {
   final _pv = PageController();
   List<VlVideo> _vids = [];
+  List<String> _cats = ['日常', '老婆的', '收藏', '其他'];
   String _cat = '全部';
   int _cur = 0;
   bool _loaded = false;
@@ -56,6 +64,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
 
   static const _dbKey = 'vl.db';
   static const _avKey = 'vl.avatar';
+  static const _catsKey = 'vl.cats';
 
   @override
   void initState() {
@@ -71,6 +80,16 @@ class _VideoLibPageState extends State<VideoLibPage> {
 
   Future<void> _load() async {
     final sp = await SharedPreferences.getInstance();
+    // 自定义分类
+    final cj = sp.getString(_catsKey);
+    if (cj != null) {
+      try {
+        final l = jsonDecode(cj) as List;
+        final c = l.cast<String>().toList();
+        if (c.isNotEmpty) _cats = c;
+      } catch (_) {}
+    }
+    // 视频
     final db = sp.getString(_dbKey) ?? '[]';
     try {
       final list = (jsonDecode(db) as List).cast<Map<String, dynamic>>();
@@ -83,6 +102,8 @@ class _VideoLibPageState extends State<VideoLibPage> {
     }
     _avatar = sp.getString(_avKey) ?? '';
     if (mounted) setState(() => _loaded = true);
+    // 旧视频回填缩略图（后台）
+    _backfillThumbs();
   }
 
   Future<void> _save() async {
@@ -91,10 +112,51 @@ class _VideoLibPageState extends State<VideoLibPage> {
         _dbKey, jsonEncode(_vids.map((v) => v.toJson()).toList()));
   }
 
+  Future<void> _saveCats() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_catsKey, jsonEncode(_cats));
+  }
+
   List<VlVideo> get _shown =>
       _cat == '全部' ? _vids : _vids.where((v) => v.cat == _cat).toList();
 
-  /// 从相册选视频 → 复制进 App 文档目录 → 选分类入库
+  /// 生成视频第一帧缩略图（存 App 文档目录 vl/thumbs/）
+  Future<void> _genThumb(VlVideo v) async {
+    try {
+      final bytes = await VideoThumbnail.thumbnailData(
+        video: v.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 640,
+        quality: 82,
+        timeMs: 100,
+      );
+      if (bytes == null || bytes.isEmpty) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final td = Directory('${dir.path}/vl/thumbs');
+      if (!td.existsSync()) td.createSync(recursive: true);
+      final f = File('${td.path}/${v.added}.jpg');
+      await f.writeAsBytes(bytes);
+      if (!mounted) return;
+      setState(() {
+        final idx = _vids.indexWhere((x) => x.path == v.path);
+        if (idx >= 0) {
+          _vids[idx] = VlVideo(
+              path: v.path, cat: v.cat, added: v.added, thumb: f.path);
+        }
+      });
+      await _save();
+    } catch (_) {}
+  }
+
+  Future<void> _backfillThumbs() async {
+    for (final v in _vids) {
+      if (v.thumb.isEmpty || !File(v.thumb).existsSync()) {
+        await _genThumb(v);
+      }
+    }
+  }
+
+  /// 从相册选视频 → 复制进 App 文档目录 → 选分类入库 → 生成缩略图
   Future<void> _addVideo() async {
     final f = await ImagePicker().pickVideo(
         source: ImageSource.gallery, maxDuration: const Duration(minutes: 30));
@@ -110,7 +172,6 @@ class _VideoLibPageState extends State<VideoLibPage> {
     if (!mounted) return;
     final cat = await _pickCat();
     if (cat == null) {
-      // 取消分类 = 不入库，删掉复制的文件
       try {
         File(target).deleteSync();
       } catch (_) {}
@@ -123,6 +184,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
     });
     _pv.jumpToPage(_shown.length - 1);
     await _save();
+    await _genThumb(_vids.last);
   }
 
   Future<String?> _pickCat() {
@@ -139,7 +201,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
                     fontSize: 15,
                     fontWeight: FontWeight.w600)),
           ),
-          for (final cat in kCats)
+          for (final cat in _cats)
             ListTile(
               title: Text(cat, style: const TextStyle(color: Colors.white)),
               onTap: () => Navigator.pop(c, cat),
@@ -193,7 +255,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
           ),
         ),
         Column(children: [
-          // 顶栏：返回 + 标题 + 头像设置入口
+          // 顶栏：返回 + 标题 + 管理分类 + 头像设置入口
           SafeArea(
             bottom: false,
             child: Padding(
@@ -210,6 +272,12 @@ class _VideoLibPageState extends State<VideoLibPage> {
                         fontSize: 18,
                         fontWeight: FontWeight.w700)),
                 const Spacer(),
+                // 管理分类
+                IconButton(
+                  onPressed: _manageCats,
+                  icon: const Icon(Icons.layers_rounded,
+                      color: Colors.white70, size: 21),
+                ),
                 // 头像设置入口
                 GestureDetector(
                   onTap: _pickAvatar,
@@ -240,7 +308,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                for (final cat in ['全部', ...kCats]) _catChip(cat),
+                for (final cat in ['全部', ..._cats]) _catChip(cat),
               ],
             ),
           ),
@@ -272,6 +340,177 @@ class _VideoLibPageState extends State<VideoLibPage> {
           ),
         ),
       ]),
+    );
+  }
+
+  /// 分类管理：增 / 删 / 重命名（StatefulBuilder 弹窗）
+  Future<void> _manageCats() async {
+    final tc = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF17181C),
+      builder: (c) => StatefulBuilder(
+        builder: (c, setSt) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(c).viewInsets.bottom),
+          child: SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Text('管理分类',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
+              ),
+              for (final cat in _cats)
+                ListTile(
+                  dense: true,
+                  title: Text(cat,
+                      style: const TextStyle(color: Colors.white)),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded,
+                          color: Colors.white54, size: 18),
+                      onPressed: () => _renameCat(c, setSt, cat),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.white54, size: 18),
+                      onPressed: () => _delCat(c, setSt, cat),
+                    ),
+                  ]),
+                ),
+              const Divider(color: Colors.white12, height: 4),
+              // 添加分类
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                child: Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: tc,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        hintText: '新分类名',
+                        hintStyle:
+                            TextStyle(color: Colors.white38, fontSize: 14),
+                        isDense: true,
+                        enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white24)),
+                        focusedBorder: UnderlineInputBorder(
+                            borderSide:
+                                BorderSide(color: Color(0xFF2F6BFF))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  IconButton(
+                    onPressed: () {
+                      final name = tc.text.trim();
+                      if (name.isEmpty) return;
+                      if (_cats.contains(name)) return;
+                      setSt(() => _cats.add(name));
+                      _saveCats();
+                      tc.clear();
+                    },
+                    icon: const Icon(Icons.add_circle_rounded,
+                        color: Color(0xFF2F6BFF), size: 26),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _renameCat(BuildContext c, StateSetter setSt, String old) {
+    final tc2 = TextEditingController(text: old);
+    showDialog(
+      context: c,
+      builder: (d) => AlertDialog(
+        backgroundColor: const Color(0xFF20212A),
+        title: const Text('重命名分类',
+            style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: TextField(
+          controller: tc2,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(hintText: '新分类名',
+              hintStyle: TextStyle(color: Colors.white38)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('取消',
+                style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = tc2.text.trim();
+              if (name.isNotEmpty && !_cats.contains(name)) {
+                final i = _cats.indexOf(old);
+                if (i >= 0) {
+                  setSt(() => _cats[i] = name);
+                  for (final v in _vids) {
+                    if (v.cat == old) v.cat = name;
+                  }
+                  _saveCats();
+                  _save();
+                  if (_cat == old) _cat = name;
+                }
+              }
+              Navigator.pop(d);
+            },
+            child: const Text('保存',
+                style: TextStyle(color: Color(0xFF2F6BFF))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _delCat(BuildContext c, StateSetter setSt, String cat) {
+    if (_cats.length <= 1) {
+      ScaffoldMessenger.of(c).showSnackBar(const SnackBar(
+          content: Text('至少保留一个分类'), duration: Duration(seconds: 1)));
+      return;
+    }
+    showDialog(
+      context: c,
+      builder: (d) => AlertDialog(
+        backgroundColor: const Color(0xFF20212A),
+        title: Text('删除分类「$cat」？',
+            style: const TextStyle(color: Colors.white, fontSize: 16)),
+        content: const Text('该分类下的视频会移到「其他」',
+            style: TextStyle(color: Colors.white70, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('取消',
+                style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () {
+              setSt(() {
+                _cats.remove(cat);
+                if (!_cats.contains('其他')) _cats.add('其他');
+                for (final v in _vids) {
+                  if (v.cat == cat) v.cat = '其他';
+                }
+              });
+              _saveCats();
+              _save();
+              if (_cat == cat) _cat = '全部';
+              Navigator.pop(d);
+            },
+            child: const Text('删除',
+                style: TextStyle(color: Color(0xFFFF3B5C))),
+          ),
+        ],
+      ),
     );
   }
 
@@ -332,14 +571,14 @@ class _VideoLibPageState extends State<VideoLibPage> {
             colors: [Color(0xFF7B2FFF), Color(0xFF2F6BFF)]),
       ),
       child: const Center(
-          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20)),
+          child:
+              Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20)),
     );
   }
 
   Widget _buildCoverflow() {
     final list = _shown;
     if (list.isEmpty) return const SizedBox.shrink();
-    // 修正越界（分类切换后）
     final cur = _cur.clamp(0, list.length - 1);
     return PageView.builder(
       controller: _pv,
@@ -367,7 +606,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
   }
 }
 
-/// 封面卡片
+/// 封面卡片：真实视频缩略图 + 底部渐变遮罩
 class _Cover extends StatelessWidget {
   final VlVideo video;
   final bool cur;
@@ -382,15 +621,12 @@ class _Cover extends StatelessWidget {
   Widget build(BuildContext context) {
     final grad = _catGrad[video.cat] ?? _catGrad['其他']!;
     final name = video.path.split('/').last;
+    final hasThumb =
+        video.thumb.isNotEmpty && File(video.thumb).existsSync();
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: grad,
-        ),
         boxShadow: [
           BoxShadow(
             color: grad.last.withOpacity(cur ? 0.45 : 0.18),
@@ -399,52 +635,89 @@ class _Cover extends StatelessWidget {
           ),
         ],
       ),
-      child: Stack(children: [
-        // 大播放图标
-        Center(
-          child: Container(
-            width: 64,
-            height: 64,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(fit: StackFit.expand, children: [
+          // 背景：真实缩略图 / 渐变回退
+          hasThumb
+              ? Image.file(File(video.thumb),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity)
+              : Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: grad,
+                    ),
+                  ),
+                ),
+          // 底部渐变遮罩（保证文字可读）
+          DecoratedBox(
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.16),
-              border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.5),
-            ),
-            child: const Icon(Icons.play_arrow_rounded,
-                color: Colors.white, size: 40),
-          ),
-        ),
-        // 底部信息
-        Positioned(
-          left: 14,
-          right: 14,
-          bottom: 12,
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
-                borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withOpacity(0.65),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.55],
               ),
-              child: Text(video.cat,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
             ),
-            const Spacer(),
-            Text(_fmt(video.added),
+          ),
+          // 大播放图标（中央，半透明）
+          Center(
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withOpacity(0.28),
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.4), width: 1.5),
+              ),
+              child: const Icon(Icons.play_arrow_rounded,
+                  color: Colors.white, size: 38),
+            ),
+          ),
+          // 底部信息
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: Row(children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(video.cat,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600)),
+              ),
+              const Spacer(),
+              Text(_fmt(video.added),
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.9), fontSize: 12)),
+            ]),
+          ),
+          // 顶部分类名（装饰）
+          Positioned(
+            top: 12,
+            left: 14,
+            child: Text(
+                name.length > 18 ? '${name.substring(0, 18)}…' : name,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.85), fontSize: 12)),
-          ]),
-        ),
-        // 顶部分类名（装饰）
-        Positioned(
-          top: 12,
-          left: 14,
-          child: Text(name.length > 18 ? '${name.substring(0, 18)}…' : name,
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.55), fontSize: 11)),
-        ),
-      ]),
+                    color: Colors.white.withOpacity(0.7), fontSize: 11)),
+          ),
+        ]),
+      ),
     );
   }
 }
