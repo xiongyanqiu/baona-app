@@ -99,6 +99,15 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': 0,
                   'unread': 0,
                 },
+                // ★b47：肉便器包娜的视频库 —— 点进去是抖音网页版
+                {
+                  'id': 'videolib',
+                  'name': '肉便器包娜的视频库',
+                  'avatar': '',
+                  'last': '点进来刷会儿视频～',
+                  'lastT': 0,
+                  'unread': 0,
+                },
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
@@ -131,7 +140,9 @@ class _ChatListPageState extends State<ChatListPage> {
     final unread = (c['unread'] as int?) ?? 0;
     return InkWell(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => id == 'douyin' ? const DouyinPage() : const ConversationPage())),
+          builder: (_) => (id == 'douyin' || id == 'videolib')
+              ? const DouyinPage()
+              : const ConversationPage())),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(children: [
@@ -147,6 +158,14 @@ class _ChatListPageState extends State<ChatListPage> {
                   Icon(Icons.music_note, color: Color(0xFF39F2FF), size: 24),
                   Positioned(right: 13, bottom: 12, child: Icon(Icons.music_note, color: Color(0xFFFF3B5C), size: 12)),
                 ]),
+              )
+            else if (id == 'videolib')
+              // 视频库头像：深紫底 + 播放三角
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFF2F6BFF)])),
+                child: const Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26)),
               )
             else if (av.isEmpty)
                 Container(
