@@ -117,8 +117,16 @@ class _VideoLibPageState extends State<VideoLibPage> {
     await sp.setString(_catsKey, jsonEncode(_cats));
   }
 
-  List<VlVideo> get _shown =>
-      _cat == '全部' ? _vids : _vids.where((v) => v.cat == _cat).toList();
+  List<VlVideo> get _shown {
+    final base = _cat == '全部'
+        ? List.of(_vids)
+        : _vids.where((v) => v.cat == _cat).toList();
+    // 分类里视频太少（<3）时，用其它分类的视频补到轮播里，
+    // 保证左右始终有缩小的其它视频可看（主视频仍是当前分类的）
+    if (base.length >= 3 || _vids.length <= base.length) return base;
+    final extra = _vids.where((v) => v.cat != _cat).toList();
+    return [...base, ...extra];
+  }
 
   /// 生成视频第一帧缩略图（存 App 文档目录 vl/thumbs/）
   Future<void> _genThumb(VlVideo v) async {
