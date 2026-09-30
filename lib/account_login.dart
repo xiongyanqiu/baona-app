@@ -38,8 +38,12 @@ class _AccountLoginPageState extends State<AccountLoginPage> {
   Future<void> _submit() async {
     final n = _name.text.trim();
     final p = _pwd.text.trim();
-    if (n.isEmpty || p.isEmpty) {
-      setState(() => _msg = '先填上账号和密码');
+    if (!RegExp(r'^\d{11}$').hasMatch(n)) {
+      setState(() => _msg = '填 11 位手机号');
+      return;
+    }
+    if (p.isEmpty) {
+      setState(() => _msg = '再填个密码（至少 4 位）');
       return;
     }
     setState(() {
@@ -136,15 +140,16 @@ class _AccountLoginPageState extends State<AccountLoginPage> {
               ),
               const SizedBox(height: 6),
               const Center(
-                child: Text('登录你的小世界', style: TextStyle(color: Color(0xFF9AA0B4), fontSize: 13)),
+                child: Text('手机号注册登录 · 一个账号走遍全 App', style: TextStyle(color: Color(0xFF9AA0B4), fontSize: 13)),
               ),
               const SizedBox(height: 34),
 
               // 账号
               _field(
                 controller: _name,
-                hint: '账号（自己起一个名字）',
-                icon: Icons.person_outline_rounded,
+                hint: '手机号（11 位）',
+                icon: Icons.smartphone_rounded,
+                phone: true,
               ),
               const SizedBox(height: 14),
               // 密码
@@ -247,6 +252,7 @@ class _AccountLoginPageState extends State<AccountLoginPage> {
     required String hint,
     required IconData icon,
     bool obscure = false,
+    bool phone = false,
     Widget? trailing,
   }) {
     return Container(
@@ -263,8 +269,11 @@ class _AccountLoginPageState extends State<AccountLoginPage> {
           child: TextField(
             controller: controller,
             obscureText: obscure,
+            keyboardType: phone ? TextInputType.phone : TextInputType.text,
+            maxLength: phone ? 11 : null,
             style: const TextStyle(color: Colors.white, fontSize: 15.5),
             decoration: InputDecoration(
+              counterText: '',
               hintText: hint,
               hintStyle: const TextStyle(color: Color(0xFF6A7085)),
               border: InputBorder.none,

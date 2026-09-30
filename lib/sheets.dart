@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'account_login.dart';
 import 'api.dart';
 import 'main.dart';
 import 'theme.dart';
@@ -129,6 +130,27 @@ class _SettingsState extends State<_Settings> {
 
         const SizedBox(height: 10),
         const _Probe(),
+
+        const Sec('账号中心'),
+        RowTile(
+          label: '当前账号',
+          sub: Store.accountName.isEmpty ? '还没登录（去登录页注册/登录）' : '已登录：${Store.accountName}',
+          hair: false,
+          trail: Chip2('退出登录', ico: Icons.logout, on: () async {
+            await Store.setAccountToken('');
+            await Store.setAccountName('');
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const AccountLoginPage()),
+              (r) => false,
+            );
+          }),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, top: 4),
+          child: Text('账号存在你电脑端（手机号+密码），登录后抖音等所有功能共用这个账号。',
+              style: TextStyle(fontSize: 11.5, color: kSub, height: 1.4)),
+        ),
 
         const Sec('她的脑子（模型）'),
         const _ModelBox(),
