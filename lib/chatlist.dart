@@ -10,6 +10,8 @@ import 'chat.dart';
 import 'msglocal.dart';
 import 'imgsrv.dart';
 import 'main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'theme.dart';
 import 'videolib.dart';
 
@@ -31,6 +33,8 @@ class _ChatListPageState extends State<ChatListPage> {
   @override
   void initState() {
     super.initState();
+    _vlAvatarFuture = SharedPreferences.getInstance()
+        .then((sp) => sp.getString('vl.avatar') ?? '');
     _refresh();
   }
 
