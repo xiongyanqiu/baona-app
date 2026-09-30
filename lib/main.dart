@@ -462,7 +462,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   int _tab = 0;
   bool _navHidden = false;
   double _lastPix = 0;
