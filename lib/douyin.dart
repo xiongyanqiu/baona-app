@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
+import 'account_login.dart';
 import 'api.dart';
 import 'theme.dart';
 
@@ -135,13 +136,13 @@ class _DouyinPageState extends State<DouyinPage> {
               const Text('抖音',
                   style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
               const Spacer(),
-              // ★登录入口（b35 接登录页）
+              // ★b35 统一账号：已登录显示账号名，未登录点击去登录（登录后全局共用）
               TextButton.icon(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('抖音登录页即将上线，先刷着～'))),
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AccountLoginPage())),
                 icon: const Icon(Icons.account_circle_rounded, color: Colors.white, size: 18),
-                label: const Text('登录',
-                    style: TextStyle(color: Colors.white, fontSize: 14)),
+                label: Text(Store.accountName.isEmpty ? '登录' : Store.accountName,
+                    style: const TextStyle(color: Colors.white, fontSize: 14)),
               ),
               const SizedBox(width: 8),
             ]),
