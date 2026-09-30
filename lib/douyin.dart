@@ -23,6 +23,7 @@ class DouyinPage extends StatefulWidget {
 class _DouyinPageState extends State<DouyinPage> {
   final PageController _c = PageController();
   int _cur = 0;
+  int _favRev = 0; // 收藏版本号：从收藏页回来 +1，逐条重读收藏状态
   bool _loading = true;
   String _err = '';
   List<Map<String, dynamic>> _vids = [];
@@ -120,7 +121,7 @@ class _DouyinPageState extends State<DouyinPage> {
               if (i >= _vids.length - 2) _loadFeed(append: true);
             },
             itemCount: _vids.length,
-            itemBuilder: (_, i) => _VideoItem(v: _vids[i], active: i == _cur),
+            itemBuilder: (_, i) => _VideoItem(v: _vids[i], active: i == _cur, favRev: _favRev),
           ),
         // 顶部：返回 + 标题 + 登录入口
         Positioned(
@@ -136,10 +137,22 @@ class _DouyinPageState extends State<DouyinPage> {
               const Text('抖音',
                   style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
               const Spacer(),
-              // ★b35 统一账号：已登录显示账号名，未登录点击去登录（登录后全局共用）
+              // ★b38 账号逻辑理顺：
+              //   未登录 → 显示"登录"，点进去登录；
+              //   已登录 → 显示账号名，点进去是【我的收藏】（你点爱心的视频都在这里）
               TextButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AccountLoginPage())),
+                onPressed: () {
+                  if (Store.accountName.isEmpty) {
+                    Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AccountLoginPage()));
+                  } else {
+                    Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => const DouyinFavPage()))
+                        .then((_) {
+                      if (mounted) setState(() => _favRev++); // 回来刷新红心
+                    });
+                  }
+                },
                 icon: const Icon(Icons.account_circle_rounded, color: Colors.white, size: 18),
                 label: Text(Store.accountName.isEmpty ? '登录' : Store.accountName,
                     style: const TextStyle(color: Colors.white, fontSize: 14)),
@@ -170,9 +183,13 @@ class _DouyinPageState extends State<DouyinPage> {
 
 /// 一条视频（真实源 Map 或保底 Map 均可）
 class _VideoItem extends StatefulWidget {
-  const _VideoItem({required this.v, required this.active});
+  const _VideoItem({required this.v, required this.active, this.favRev = 0, this.onUnfav});
   final Map<String, dynamic> v;
   final bool active;
+  /// 收藏版本号：从收藏页回来+1，让每一条重新读一次收藏状态（不然取消收藏回来红心还是红的）
+  final int favRev;
+  /// 取消收藏时回调（收藏页用它把这条从列表里拿走）
+  final VoidCallback? onUnfav;
   @override
   State<_VideoItem> createState() => _VideoItemState();
 }
@@ -197,8 +214,13 @@ class _VideoItemState extends State<_VideoItem> {
     final s = p.getString(_kFavs) ?? '';
     if (s.isNotEmpty) {
       try {
-        final list = (jsonDecode(s) as List).cast<String>();
-        if (mounted) setState(() => _liked = list.contains(_vid));
+        final raw = jsonDecode(s);
+        if (raw is List) {
+          final key = _vid;
+          final liked = raw.any(
+              (x) => x is Map && '${x['aweme_id'] ?? x['url']}' == key);
+          if (mounted) setState(() => _liked = liked);
+        }
       } catch (_) {}
     }
   }
@@ -207,18 +229,29 @@ class _VideoItemState extends State<_VideoItem> {
     setState(() => _liked = !_liked);
     final p = await SharedPreferences.getInstance();
     final s = p.getString(_kFavs) ?? '';
-    List<String> list = [];
+    List<Map<String, dynamic>> list = [];
     if (s.isNotEmpty) {
       try {
-        list = (jsonDecode(s) as List).cast<String>();
+        final raw = jsonDecode(s);
+        if (raw is List) {
+          for (final x in raw) {
+            if (x is Map) list.add(Map<String, dynamic>.from(x));
+            // 旧格式（只有 id 的字符串）直接丢弃——没有视频信息没法播
+          }
+        }
       } catch (_) {}
     }
+    final v = widget.v;
+    final key = '${v['aweme_id'] ?? v['url']}';
     if (_liked) {
-      if (!list.contains(_vid)) list.add(_vid);
+      if (!list.any((x) => '${x['aweme_id'] ?? x['url']}' == key)) {
+        list.add(Map<String, dynamic>.from(v)); // ★存完整视频信息，收藏页才能播
+      }
     } else {
-      list.remove(_vid);
+      list.removeWhere((x) => '${x['aweme_id'] ?? x['url']}' == key);
     }
     await p.setString(_kFavs, jsonEncode(list));
+    if (!_liked) widget.onUnfav?.call();
   }
 
   Future<void> _init() async {
@@ -237,6 +270,7 @@ class _VideoItemState extends State<_VideoItem> {
   @override
   void didUpdateWidget(_VideoItem old) {
     super.didUpdateWidget(old);
+    if (old.favRev != widget.favRev) _loadFav();
     if (widget.active && !old.active) {
       if (_vc == null) {
         _init();
@@ -355,6 +389,122 @@ class _VideoItemState extends State<_VideoItem> {
         ),
         const SizedBox(height: 3),
         Text(label, style: const TextStyle(color: Colors.white, fontSize: 11.5)),
+      ]),
+    );
+  }
+}
+
+/* ============================ 我的收藏 ============================ */
+/// ★b38 已登录点右上角账号进来：你点过爱心的视频全在这里，竖滑播放
+class DouyinFavPage extends StatefulWidget {
+  const DouyinFavPage({super.key});
+  @override
+  State<DouyinFavPage> createState() => _DouyinFavPageState();
+}
+
+class _DouyinFavPageState extends State<DouyinFavPage> {
+  static const String _kFavs = 'dy.favs';
+  List<Map<String, dynamic>> _favs = [];
+  bool _loaded = false;
+  int _cur = 0;
+  late final PageController _c = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final p = await SharedPreferences.getInstance();
+    final s = p.getString(_kFavs) ?? '';
+    final list = <Map<String, dynamic>>[];
+    if (s.isNotEmpty) {
+      try {
+        final raw = jsonDecode(s);
+        if (raw is List) {
+          for (final x in raw) {
+            if (x is Map) list.add(Map<String, dynamic>.from(x));
+          }
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _favs = list;
+      _loaded = true;
+    });
+  }
+
+  void _remove(Map<String, dynamic> v) {
+    final key = '${v['aweme_id'] ?? v['url']}';
+    setState(() {
+      _favs.removeWhere((x) => '${x['aweme_id'] ?? x['url']}' == key);
+      if (_cur >= _favs.length && _cur > 0) _cur = _favs.length - 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF050505),
+      body: Stack(children: [
+        if (!_loaded)
+          const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        else if (_favs.isEmpty)
+          Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.favorite_border_rounded, color: Colors.white, size: 46),
+              const SizedBox(height: 14),
+              const Text('还没有收藏', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              const Text('刷视频的时候点右边红心，就存到这里了', style: TextStyle(color: Color(0xFF9AA0B4), fontSize: 12.5)),
+              const SizedBox(height: 18),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('回去刷视频'),
+              ),
+            ]),
+          )
+        else
+          PageView.builder(
+            controller: _c,
+            scrollDirection: Axis.vertical,
+            onPageChanged: (i) => setState(() => _cur = i),
+            itemCount: _favs.length,
+            itemBuilder: (_, i) {
+              final v = _favs[i];
+              return _VideoItem(
+                v: v,
+                active: i == _cur,
+                onUnfav: () => _remove(v),
+              );
+            },
+          ),
+        // 顶部：返回 + 标题 + 数量
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Row(children: [
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              ),
+              const Text('我的收藏', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              if (_loaded && _favs.isNotEmpty)
+                Text('${_favs.length} 条', style: const TextStyle(color: Color(0xFF9AA0B4), fontSize: 12.5)),
+              const Spacer(),
+            ]),
+          ),
+        ),
       ]),
     );
   }
