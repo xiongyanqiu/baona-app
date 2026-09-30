@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'chat.dart';
 import 'msglocal.dart';
+import 'imgsrv.dart';
 import 'main.dart';
 import 'theme.dart';
 
@@ -125,16 +126,26 @@ class _ChatListPageState extends State<ChatListPage> {
         child: Row(children: [
           // 头像 + 未读红点
           Stack(clipBehavior: Clip.none, children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
-              ),
-              child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600))) : null,
-            ),
+            av.isEmpty
+                ? Container(
+                    width: 52,
+                    height: 52,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
+                    child: const Center(child: Text('娜', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
+                  )
+                : FutureBuilder<ImageProvider>(
+                    // ★b21 头像磁盘缓存：列表频繁重建不再反复下载
+                    future: ImgCache.provider(av),
+                    builder: (c, s) => Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+                        image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
             if (unread > 0)
               Positioned(
                 right: -4,

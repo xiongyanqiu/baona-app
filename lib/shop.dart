@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'imgsrv.dart';
 import 'main.dart';
 import 'theme.dart';
 
@@ -228,7 +229,7 @@ class _Card extends StatelessWidget {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: kGlass2)),
+              child: CacheImg(url, fit: BoxFit.cover),
             ),
           ),
           Padding(
@@ -262,7 +263,7 @@ class _Det extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-              child: Image.network(url, height: 240, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: kGlass2, child: SizedBox(height: 240))),
+              child: CacheImg(url, height: 240, width: double.infinity, fit: BoxFit.cover),
             ),
             Padding(
               padding: const EdgeInsets.all(14),
@@ -307,7 +308,7 @@ class _BagRow extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(color: kGlass, borderRadius: BorderRadius.circular(12), border: Border.all(color: kLine)),
         child: Row(children: [
-          ClipRRect(borderRadius: BorderRadius.circular(9), child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 56, height: 56))),
+          CacheImg(url, width: 56, height: 56, fit: BoxFit.cover, radius: BorderRadius.circular(9)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

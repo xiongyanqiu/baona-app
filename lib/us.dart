@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'api.dart';
+import 'imgsrv.dart';
 import 'main.dart';
 import 'theme.dart';
 
@@ -357,6 +358,17 @@ Future<void> openAlbum(BuildContext context) async {
 Future<List<AlbGroup>> _loadAlbumWithPin(BuildContext context) async {
   final a = app.api;
   if (a == null) return [];
+  // ★b21 相册秒开：5 分钟内直接读本地缓存，不再每次进相册都全量拉网络
+  try {
+    final raw = Store.albumCache;
+    if (raw.isNotEmpty) {
+      final c = jsonDecode(raw);
+      if (c is Map && c['t'] is int && (DateTime.now().millisecondsSinceEpoch - (c['t'] as int)) < 300000) {
+        final groups = ((c['groups'] as List?) ?? []);
+        if (groups.isNotEmpty) return groups.map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+      }
+    }
+  } catch (_) {/* 缓存坏了就正常走网络 */}
   var j = await a.album();
   if (j['ok'] != true) {
     // ★先拿聊天口令试一下（电脑端相册密码默认就是它）——省得每次都让你输
@@ -372,7 +384,12 @@ Future<List<AlbGroup>> _loadAlbumWithPin(BuildContext context) async {
     j = await a.album();
   }
   if (j['ok'] != true) return [];
-  return ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+  final groups = ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+  // 成功拉到 → 写缓存（含时间戳），下次进相册秒开
+  try {
+    await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j['groups']}));
+  } catch (_) {/* ignore */}
+  return groups;
 }
 
 /// 给设置页"选背景"用：从相册里挑一张，返回它的地址
@@ -390,7 +407,7 @@ Future<String> pickAlbumImage(BuildContext context) async {
       itemCount: all.length,
       itemBuilder: (c, i) => GestureDetector(
         onTap: () => Navigator.pop(c, all[i].url),
-        child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(app.api!.albumPhotoUrl(all[i].url, w: 500), fit: BoxFit.cover)),
+        child: CacheImg(app.api!.albumPhotoUrl(all[i].url, w: 500), fit: BoxFit.cover, radius: BorderRadius.circular(10)),
       ),
     ),
   );
@@ -493,15 +510,12 @@ class _AlbumState extends State<_Album> {
                 onTap: () => _viewPhoto(ph),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
+                  child: CacheImg(
                     // ★2026-09-29 缩略图：网格只下小图（服务端 ?w=500 返回，流量少一大截），点开才看原图
                     app.api!.albumPhotoUrl(ph.url, w: 500),
                     fit: BoxFit.cover,
-                    // 缩略图解码：内存少一大截（网络也走缩略图了）
+                    // ★b21 缩略图解码 + 磁盘缓存：秒开不烫
                     cacheWidth: 420,
-                    loadingBuilder: (c, child, prog) =>
-                        prog == null ? child : Container(color: const Color(0xFF1B1B22)),
-                    errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1B1B22), child: const Center(child: Icon(Icons.broken_image_outlined, size: 18, color: kSub))),
                   ),
                 ),
               );
@@ -575,7 +589,7 @@ class _AlbumState extends State<_Album> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.contain)),
+          CacheImg(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.contain, radius: BorderRadius.circular(14)),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Chip2('♥ ${ph.likes}', on: () async {

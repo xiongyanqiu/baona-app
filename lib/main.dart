@@ -1,4 +1,6 @@
 // 包娜 · 手机端 App 主入口：连电脑 → 登录 → 主界面（聊天/商城/游戏/我们）
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -69,6 +71,23 @@ class AppCtl extends ChangeNotifier {
   Future<void> loadBootstrap() async {
     final a = app.api;
     if (a == null) return;
+    // ★b21 启动秒开：先把上次的缓存立刻渲染出来（名字/状态/头像/表情），网络回来再覆盖
+    try {
+      final raw = Store.bootCache;
+      if (raw.isNotEmpty) {
+        final c = jsonDecode(raw);
+        if (c is Map && (c['t'] is int) && (DateTime.now().millisecondsSinceEpoch - (c['t'] as int)) < 86400000) {
+          nick = '${c['nick'] ?? nick}';
+          status = '${c['status'] ?? status}';
+          voiceEnabled = c['voice'] == true;
+          coupleEnabled = c['couple'] == true;
+          if (c['set'] is Map) herSet = Map<String, dynamic>.from(c['set'] as Map);
+          if (c['emoji'] is List) emoji = (c['emoji'] as List).map((x) => {'name': '$x'}).toList();
+          if (c['mine'] is List) emojiMine = (c['mine'] as List).map((x) => '$x').toSet();
+          notifyListeners();
+        }
+      }
+    } catch (_) {/* 缓存坏了就正常走网络 */}
     // ★2026-09-29：以前这三件事是排队等的（bootstrap → herSettings → emoji），启动慢一截；
     //   现在一起发出去，谁先回来谁先用。
     final rs = await Future.wait<Map<String, dynamic>>([a.bootstrap(), a.herSettings(), a.emojiList()]);
@@ -93,6 +112,19 @@ class AppCtl extends ChangeNotifier {
       emojiMine = ((e['mine'] as List?) ?? []).map((x) => '$x').toSet();
       notifyListeners();
     }
+    // ★b21 网络回来了 → 把最新数据存成缓存，下次启动秒开
+    try {
+      await Store.setBootCache(jsonEncode({
+        't': DateTime.now().millisecondsSinceEpoch,
+        'nick': nick,
+        'status': status,
+        'voice': voiceEnabled,
+        'couple': coupleEnabled,
+        'set': herSet,
+        'emoji': emoji.map((x) => x['name']).toList(),
+        'mine': emojiMine.toList(),
+      }));
+    } catch (_) {/* ignore */}
   }
 
   /// 连上以后的统一初始化

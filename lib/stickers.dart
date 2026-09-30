@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'main.dart';
 import 'theme.dart';
+import 'imgsrv.dart';
 
 class EmojiPanel extends StatefulWidget {
   const EmojiPanel({super.key, required this.onPick, required this.onClose});
@@ -127,11 +128,10 @@ class _EmojiPanelState extends State<EmojiPanel> {
                       borderRadius: BorderRadius.circular(14),
                       child: Stack(children: [
                         Positioned.fill(
-                          child: Image.network(
+                          child: CacheImg(
                             app.api?.emojiUrl(n) ?? '',
                             headers: {'x-wc-token': app.api?.token ?? ''},
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const ColoredBox(color: kGlass),
                           ),
                         ),
                         if (mine) const Positioned(right: 3, top: 3, child: Icon(Icons.more_horiz, size: 13, color: Color(0xCCFFFFFF))),

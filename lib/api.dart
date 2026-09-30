@@ -48,6 +48,13 @@ class Store {
     await _p.remove('token');
     await _p.remove('pwd');
   }
+
+  // ★b21 相册列表缓存（秒开）与启动数据缓存（秒开），内容 + 时间戳
+  static String get albumCache => _p.getString('album.cache') ?? '';
+  static Future<void> setAlbumCache(String v) => _p.setString('album.cache', v);
+
+  static String get bootCache => _p.getString('boot.cache') ?? '';
+  static Future<void> setBootCache(String v) => _p.setString('boot.cache', v);
 }
 
 const Map<String, dynamic> kDefCfg = {

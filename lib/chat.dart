@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'api.dart';
 import 'main.dart';
 import 'msglocal.dart';
+import 'imgsrv.dart';
 import 'theme.dart';
 import 'sheets.dart';
 import 'stickers.dart';
@@ -488,16 +489,14 @@ class _Bubble extends StatelessWidget {
         if (m.sticker != null && m.sticker!.isNotEmpty && !m.content.contains('![表情]'))
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: Image.network(urlOf.emojiUrl(m.sticker!), width: 132, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox(width: 80, height: 60, child: Center(child: Text('表情没了', style: TextStyle(fontSize: 11, color: kSub))))),
+            child: CacheImg(urlOf.emojiUrl(m.sticker!), width: 132, fit: BoxFit.cover),
           ),
         for (final u in imgs)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: Image.network(urlOf.imgUrl(u), width: 210, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox(width: 160, height: 90, child: Center(child: Text('图没加载出来', style: TextStyle(fontSize: 11, color: kSub))))),
+              child: CacheImg(urlOf.imgUrl(u), width: 210, fit: BoxFit.cover),
             ),
           ),
         if (m.voice != null && m.voice!.isNotEmpty)
@@ -559,15 +558,26 @@ class _MiniAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final av = '${app.herSet['herAvatar'] ?? ''}';
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-        image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
+    if (av.isEmpty) {
+      return Container(
+        width: 30,
+        height: 30,
+        decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
+        child: const Center(child: Text('娜', style: TextStyle(fontSize: 13))),
+      );
+    }
+    // ★b21 头像磁盘缓存：不再每次打开对话都重新下载
+    return FutureBuilder<ImageProvider>(
+      future: ImgCache.provider(av),
+      builder: (c, s) => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+          image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
+        ),
       ),
-      child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 13))) : null,
     );
   }
 }
@@ -766,16 +776,25 @@ class _ConvHeader extends StatelessWidget {
             IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19), tooltip: '返回'),
             GestureDetector(
               onTap: onSet,
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                  image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
-                ),
-                child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))) : null,
-              ),
+              child: av.isEmpty
+                  ? Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
+                      child: const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                    )
+                  : FutureBuilder<ImageProvider>(
+                      future: ImgCache.provider(av),
+                      builder: (c, s) => Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+                          image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
+                        ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 10),
             Expanded(
