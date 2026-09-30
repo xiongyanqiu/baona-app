@@ -25,11 +25,6 @@ class Store {
   static Future<void> setToken(String v) => _p.setString('token', v);
   static String get pwd => _p.getString('pwd') ?? '';
   static Future<void> setPwd(String v) => _p.setString('pwd', v);
-  // ★b35 统一账号：整个 App 只登录一次，所有功能共用
-  static String get accountToken => _p.getString('account.token') ?? '';
-  static Future<void> setAccountToken(String v) => _p.setString('account.token', v);
-  static String get accountName => _p.getString('account.name') ?? '';
-  static Future<void> setAccountName(String v) => _p.setString('account.name', v);
   static String get albumPin => _p.getString('albumPin') ?? '';
   static Future<void> setAlbumPin(String v) => _p.setString('albumPin', v);
 

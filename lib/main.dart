@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
-import 'account_login.dart';
 import 'chat.dart';
 import 'chatlist.dart';
 import 'eye.dart';
@@ -265,10 +264,6 @@ class Boot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ★b35 统一账号：没登录账号先去登录（整个 App 只认这一个账号）
-    if (Store.accountToken.isEmpty) {
-      return const AccountLoginPage();
-    }
     final base = Store.baseUrl;
     if (base.isEmpty || Store.token.isEmpty) {
       return ConnectPage(host: base.isEmpty ? kHosts[0]['url']! : base);

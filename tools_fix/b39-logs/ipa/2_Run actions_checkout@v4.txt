@@ -1,0 +1,74 @@
+﻿2026-09-30T16:00:36.6226420Z ##[group]Run actions/checkout@v4
+2026-09-30T16:00:36.6226940Z with:
+2026-09-30T16:00:36.6227330Z   repository: xiongyanqiu/baona-app
+2026-09-30T16:00:36.6230460Z   token: ***
+2026-09-30T16:00:36.6230940Z   ssh-strict: true
+2026-09-30T16:00:36.6231260Z   ssh-user: git
+2026-09-30T16:00:36.6231570Z   persist-credentials: true
+2026-09-30T16:00:36.6231900Z   clean: true
+2026-09-30T16:00:36.6232210Z   sparse-checkout-cone-mode: true
+2026-09-30T16:00:36.6232580Z   fetch-depth: 1
+2026-09-30T16:00:36.6232960Z   fetch-tags: false
+2026-09-30T16:00:36.6233300Z   show-progress: true
+2026-09-30T16:00:36.6233610Z   lfs: false
+2026-09-30T16:00:36.6234000Z   submodules: false
+2026-09-30T16:00:36.6234410Z   set-safe-directory: true
+2026-09-30T16:00:36.6234830Z   allow-unsafe-pr-checkout: false
+2026-09-30T16:00:36.6235490Z ##[endgroup]
+2026-09-30T16:00:36.7808730Z Syncing repository: xiongyanqiu/baona-app
+2026-09-30T16:00:36.7810380Z ##[group]Getting Git version info
+2026-09-30T16:00:36.7810940Z Working directory is '/Users/runner/work/baona-app/baona-app'
+2026-09-30T16:00:36.7811950Z [command]/opt/homebrew/bin/git version
+2026-09-30T16:00:36.8266640Z git version 2.55.0
+2026-09-30T16:00:36.8278160Z ##[endgroup]
+2026-09-30T16:00:36.8286710Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/5f7e7ddd-21b2-4fd1-840e-f30a864c064a/.gitconfig'
+2026-09-30T16:00:36.8293620Z Temporarily overriding HOME='/Users/runner/work/_temp/5f7e7ddd-21b2-4fd1-840e-f30a864c064a' before making global git config changes
+2026-09-30T16:00:36.8295330Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-30T16:00:36.8298060Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/baona-app/baona-app
+2026-09-30T16:00:36.8397530Z Deleting the contents of '/Users/runner/work/baona-app/baona-app'
+2026-09-30T16:00:36.8399360Z ##[group]Initializing the repository
+2026-09-30T16:00:36.8402920Z [command]/opt/homebrew/bin/git init /Users/runner/work/baona-app/baona-app
+2026-09-30T16:00:36.8584370Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-30T16:00:36.8585330Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-30T16:00:36.8587420Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-30T16:00:36.8588110Z hint: call:
+2026-09-30T16:00:36.8588490Z hint:
+2026-09-30T16:00:36.8588980Z hint: 	git config --global init.defaultBranch <name>
+2026-09-30T16:00:36.8600580Z hint:
+2026-09-30T16:00:36.8601070Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-30T16:00:36.8601820Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-30T16:00:36.8602390Z hint:
+2026-09-30T16:00:36.8602810Z hint: 	git branch -m <name>
+2026-09-30T16:00:36.8603190Z hint:
+2026-09-30T16:00:36.8603710Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-30T16:00:36.8604480Z Initialized empty Git repository in /Users/runner/work/baona-app/baona-app/.git/
+2026-09-30T16:00:36.8605870Z [command]/opt/homebrew/bin/git remote add origin https://github.com/xiongyanqiu/baona-app
+2026-09-30T16:00:36.8670180Z ##[endgroup]
+2026-09-30T16:00:36.8671980Z ##[group]Disabling automatic garbage collection
+2026-09-30T16:00:36.8672870Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-09-30T16:00:36.8735740Z ##[endgroup]
+2026-09-30T16:00:36.8736340Z ##[group]Setting up auth
+2026-09-30T16:00:36.8741990Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-30T16:00:36.8803600Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-30T16:00:36.9694010Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-30T16:00:36.9768580Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-30T16:00:37.0620620Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-30T16:00:37.0690470Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-30T16:00:37.1568370Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-30T16:00:37.1645360Z ##[endgroup]
+2026-09-30T16:00:37.1645960Z ##[group]Fetching the repository
+2026-09-30T16:00:37.1654170Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +028ce43010989734a1fdf4104ed4a2dc264e1344:refs/remotes/origin/main
+2026-09-30T16:00:54.9319230Z From https://github.com/xiongyanqiu/baona-app
+2026-09-30T16:00:54.9320330Z  * [new ref]         028ce43010989734a1fdf4104ed4a2dc264e1344 -> origin/main
+2026-09-30T16:00:54.9322830Z ##[endgroup]
+2026-09-30T16:00:54.9323640Z ##[group]Determining the checkout info
+2026-09-30T16:00:54.9324770Z ##[endgroup]
+2026-09-30T16:00:54.9331600Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-09-30T16:00:54.9419760Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-30T16:00:54.9496420Z ##[group]Checking out the ref
+2026-09-30T16:00:54.9497540Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-09-30T16:00:55.1316920Z Switched to a new branch 'main'
+2026-09-30T16:00:55.1319350Z branch 'main' set up to track 'origin/main'.
+2026-09-30T16:00:55.1346240Z ##[endgroup]
+2026-09-30T16:00:55.1484770Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-09-30T16:00:55.1540080Z 028ce43010989734a1fdf4104ed4a2dc264e1344

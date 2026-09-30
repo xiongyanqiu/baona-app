@@ -1,10 +1,9 @@
-// 包娜 App · 抖音页（b39 手机直连版）
-// ★不再走电脑中转：直接内置抖音官方网页版，手机直连抖音服务器刷视频，
-//   不受电脑端 / 蒲公英 2M 限速影响，加载快得多。
-//   官方页面里自带：推荐流（每次不一样）、点赞、收藏、以及真手机号验证码登录抖音。
-//   返回键在左上角浮层，抖音页面本身可全屏播放。
+// 包娜 App · 抖音页（b40 手机直连版）
+// ★不走电脑中转：手机内置抖音官方网页版，直连抖音服务器刷视频，
+//   不受电脑端 / 蒲公英 2M 限速影响。官方页自带：推荐流（每次不一样）、
+//   点赞、收藏、真手机号验证码登录抖音。
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/inappwebview.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class DouyinPage extends StatefulWidget {
   const DouyinPage({super.key});
@@ -13,9 +12,26 @@ class DouyinPage extends StatefulWidget {
 }
 
 class _DouyinPageState extends State<DouyinPage> {
-  InAppWebViewController? _wc;
-  double _prog = 0;
+  late final WebViewController _c;
   bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF050505))
+      ..setNavigationDelegate(NavigationDelegate(
+        // 只有「真断网/找不到服务器」这类才提示重试；子资源（广告等）小错误不打扰
+        onWebResourceError: (e) {
+          const netErrs = {-1009, -1003, -1004, -1001, -1000, -102, -106};
+          if (netErrs.contains(e.errorCode) && mounted) {
+            setState(() => _failed = true);
+          }
+        },
+      ))
+      ..loadRequest(Uri.parse('https://www.douyin.com/'));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,43 +49,15 @@ class _DouyinPageState extends State<DouyinPage> {
                     OutlinedButton(
                       onPressed: () {
                         setState(() => _failed = false);
-                        _wc?.reload();
+                        _c.reload();
                       },
                       child: const Text('重试'),
                     ),
                   ]),
                 )
-              : InAppWebView(
-                  initialUrlRequest: URLRequest(url: WebUri('https://www.douyin.com/')),
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    domStorageEnabled: true,
-                    databaseEnabled: true,
-                    thirdPartyCookiesEnabled: true,
-                    mediaPlaybackRequiresUserGesture: false,
-                    allowsInlineMediaPlayback: true,
-                    supportZoom: false,
-                    // 用 iPhone Safari UA：抖音把它当正常手机浏览器，视频不走桌面版布局
-                    userAgent:
-                        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) '
-                        'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-                  ),
-                  onWebViewCreated: (c) => _wc = c,
-                  onProgressChanged: (c, p) {
-                    if (!mounted) return;
-                    setState(() => _prog = p / 100);
-                  },
-                  onLoadStop: (c, url) {
-                    if (!mounted) return;
-                    setState(() => _prog = 0);
-                  },
-                  onReceivedError: (c, request, error) {
-                    if (!mounted) return;
-                    setState(() => _failed = true);
-                  },
-                ),
+              : WebViewWidget(controller: _c),
         ),
-        // 顶部浮层：返回 + 抖音 + 刷新（半透明，不挡抖音内容操作）
+        // 顶部浮层：返回 + 抖音 + 刷新
         Positioned(
           top: 0, left: 0, right: 0,
           child: Container(
@@ -91,7 +79,7 @@ class _DouyinPageState extends State<DouyinPage> {
                     style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 IconButton(
-                  onPressed: () => _wc?.reload(),
+                  onPressed: () => _c.reload(),
                   icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
                   tooltip: '刷新',
                 ),
@@ -101,17 +89,22 @@ class _DouyinPageState extends State<DouyinPage> {
           ),
         ),
         // 顶部加载进度条
-        if (_prog > 0 && _prog < 1)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 48,
-            left: 0, right: 0,
-            child: LinearProgressIndicator(
-              value: _prog,
-              minHeight: 2,
-              backgroundColor: const Color(0x22FFFFFF),
-              color: Colors.white,
-            ),
-          ),
+        ValueListenableBuilder<double>(
+          valueListenable: _c.onProgress,
+          builder: (c, v, _) {
+            if (v >= 1 || v <= 0) return const SizedBox.shrink();
+            return Positioned(
+              top: MediaQuery.of(c).padding.top + 48,
+              left: 0, right: 0,
+              child: LinearProgressIndicator(
+                value: v,
+                minHeight: 2,
+                backgroundColor: const Color(0x22FFFFFF),
+                color: Colors.white,
+              ),
+            );
+          },
+        ),
       ]),
     );
   }

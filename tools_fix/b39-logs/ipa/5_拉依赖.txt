@@ -1,0 +1,131 @@
+﻿2026-09-30T16:01:22.5121460Z ##[group]Run flutter --version
+2026-09-30T16:01:22.5121700Z [36;1mflutter --version[0m
+2026-09-30T16:01:22.5121870Z [36;1mflutter pub get[0m
+2026-09-30T16:01:22.5155550Z shell: /bin/bash -e {0}
+2026-09-30T16:01:22.5155740Z env:
+2026-09-30T16:01:22.5156010Z   FLUTTER_ROOT: /Users/runner/hostedtoolcache/flutter/stable-3.47.5-arm64/flutter
+2026-09-30T16:01:22.5156350Z   PUB_CACHE: /Users/runner/.pub-cache
+2026-09-30T16:01:22.5156570Z ##[endgroup]
+2026-09-30T16:01:22.7505590Z Flutter 3.47.5 • channel stable • https://github.com/flutter/flutter.git
+2026-09-30T16:01:22.7506280Z Framework • revision 6a19cca564 (13 days ago) • 2026-09-17 14:13:22 -0400
+2026-09-30T16:01:22.7507040Z Engine • hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (14 days ago) • 2026-09-16 18:35:09.000Z
+2026-09-30T16:01:22.7507830Z Tools • Dart 3.13.4 • DevTools 2.60.0
+2026-09-30T16:01:22.9688440Z Resolving dependencies...
+2026-09-30T16:01:23.4859050Z Downloading packages...
+2026-09-30T16:01:25.8562340Z * args 2.7.0 (was 2.7.0)
+2026-09-30T16:01:25.8563010Z * async 2.13.1 (was 2.13.1)
+2026-09-30T16:01:25.8563250Z * audioplayers 6.8.1 (was 6.8.1)
+2026-09-30T16:01:25.8563660Z * audioplayers_android 5.3.0 (was 5.3.0)
+2026-09-30T16:01:25.8563940Z * audioplayers_darwin 6.5.0 (was 6.5.0)
+2026-09-30T16:01:25.8564200Z * audioplayers_linux 4.3.0 (was 4.3.0)
+2026-09-30T16:01:25.8564530Z * audioplayers_platform_interface 7.2.0 (was 7.2.0)
+2026-09-30T16:01:25.8564930Z * audioplayers_web 5.3.0 (was 5.3.0)
+2026-09-30T16:01:25.8565230Z * audioplayers_windows 4.4.1 (was 4.4.1)
+2026-09-30T16:01:25.8565580Z * boolean_selector 2.1.2 (was 2.1.2)
+2026-09-30T16:01:25.8565950Z * camera 0.12.1 (was 0.12.1)
+2026-09-30T16:01:25.8566230Z * camera_android_camerax 0.7.5 (was 0.7.5)
+2026-09-30T16:01:25.8566520Z * camera_avfoundation 0.10.3+1 (was 0.10.3+1) (0.11.0 available)
+2026-09-30T16:01:25.8566880Z * camera_platform_interface 2.14.0 (was 2.14.0)
+2026-09-30T16:01:25.8567160Z * camera_web 0.3.5+6 (was 0.3.5+6)
+2026-09-30T16:01:25.8567340Z * characters 1.4.1 (was 1.4.1)
+2026-09-30T16:01:25.8567580Z * clock 1.1.3 (was 1.1.3)
+2026-09-30T16:01:25.8567800Z * code_assets 2.1.0 (was 2.1.0)
+2026-09-30T16:01:25.8568120Z * collection 1.19.1 (was 1.19.1)
+2026-09-30T16:01:25.8568430Z * cross_file 0.3.5+5 (was 0.3.5+5) (0.4.0 available)
+2026-09-30T16:01:25.8568690Z * crypto 3.0.7 (was 3.0.7)
+2026-09-30T16:01:25.8568920Z + csslib 1.0.2
+2026-09-30T16:01:25.8569160Z * cupertino_icons 1.0.9 (was 1.0.9) (2.0.0 available)
+2026-09-30T16:01:25.8569440Z * dbus 0.7.15 (was 0.7.15) (0.8.0 available)
+2026-09-30T16:01:25.8569730Z * fake_async 1.3.3 (was 1.3.3)
+2026-09-30T16:01:25.8569970Z * ffi 2.2.0 (was 2.2.0)
+2026-09-30T16:01:25.8570290Z * file 7.0.1 (was 7.0.1)
+2026-09-30T16:01:25.8570570Z * file_selector_linux 0.9.4+1 (was 0.9.4+1)
+2026-09-30T16:01:25.8570850Z * file_selector_macos 0.9.5+1 (was 0.9.5+1)
+2026-09-30T16:01:25.8571220Z * file_selector_platform_interface 2.7.0 (was 2.7.0)
+2026-09-30T16:01:25.8571490Z * file_selector_windows 0.9.3+6 (was 0.9.3+6)
+2026-09-30T16:01:25.8571720Z * fixnum 1.1.1 (was 1.1.1)
+2026-09-30T16:01:25.8571930Z + flutter_inappwebview 6.1.5
+2026-09-30T16:01:25.8572170Z + flutter_inappwebview_android 1.1.3
+2026-09-30T16:01:25.8572470Z + flutter_inappwebview_internal_annotations 1.3.0
+2026-09-30T16:01:25.8572740Z + flutter_inappwebview_ios 1.1.2
+2026-09-30T16:01:25.8573000Z + flutter_inappwebview_macos 1.1.2
+2026-09-30T16:01:25.8573300Z + flutter_inappwebview_platform_interface 1.3.0+1
+2026-09-30T16:01:25.8573660Z + flutter_inappwebview_web 1.1.2
+2026-09-30T16:01:25.8573920Z + flutter_inappwebview_windows 0.6.0
+2026-09-30T16:01:25.8574210Z * flutter_lints 6.0.0 (was 6.0.0)
+2026-09-30T16:01:25.8574560Z * flutter_local_notifications 18.0.1 (was 18.0.1) (22.3.1 available)
+2026-09-30T16:01:25.8574940Z * flutter_local_notifications_linux 5.0.0 (was 5.0.0) (8.0.1 available)
+2026-09-30T16:01:25.8575300Z * flutter_local_notifications_platform_interface 8.0.0 (was 8.0.0) (12.2.0 available)
+2026-09-30T16:01:25.8575990Z * flutter_plugin_android_lifecycle 2.0.35 (was 2.0.35)
+2026-09-30T16:01:25.8576670Z * hooks 2.2.0 (was 2.2.0)
+2026-09-30T16:01:25.8576860Z + html 0.15.7
+2026-09-30T16:01:25.8577030Z * http 1.6.0 (was 1.6.0)
+2026-09-30T16:01:25.8577280Z * http_parser 4.1.2 (was 4.1.2)
+2026-09-30T16:01:25.8577470Z * image_picker 1.2.3 (was 1.2.3)
+2026-09-30T16:01:25.8577660Z * image_picker_android 0.8.13+23 (was 0.8.13+23)
+2026-09-30T16:01:25.8577860Z * image_picker_for_web 3.1.1 (was 3.1.1)
+2026-09-30T16:01:25.8578090Z * image_picker_ios 0.8.13+8 (was 0.8.13+8)
+2026-09-30T16:01:25.8578300Z * image_picker_linux 0.2.2 (was 0.2.2)
+2026-09-30T16:01:25.8578550Z * image_picker_macos 0.2.2+1 (was 0.2.2+1)
+2026-09-30T16:01:25.8578960Z * image_picker_platform_interface 2.11.1 (was 2.11.1)
+2026-09-30T16:01:25.8579420Z * image_picker_windows 0.2.2 (was 0.2.2)
+2026-09-30T16:01:25.8579900Z * jni 1.0.3 (was 1.0.3)
+2026-09-30T16:01:25.8588040Z * jni_flutter 1.0.3 (was 1.0.3)
+2026-09-30T16:01:25.8588310Z * jni_util 1.0.0 (was 1.0.0)
+2026-09-30T16:01:25.8588550Z * leak_tracker 11.0.2 (was 11.0.2)
+2026-09-30T16:01:25.8588790Z * leak_tracker_flutter_testing 3.0.10 (was 3.0.10)
+2026-09-30T16:01:25.8589140Z * leak_tracker_testing 3.0.2 (was 3.0.2)
+2026-09-30T16:01:25.8589380Z * lints 6.1.0 (was 6.1.0)
+2026-09-30T16:01:25.8589550Z * logging 1.3.0 (was 1.3.0)
+2026-09-30T16:01:25.8589780Z * matcher 0.12.20 (was 0.12.20)
+2026-09-30T16:01:25.8590250Z * material_color_utilities 0.13.0 (was 0.13.0) (0.13.1 available)
+2026-09-30T16:01:25.8590590Z * meta 1.19.0 (was 1.19.0)
+2026-09-30T16:01:25.8590800Z * mime 2.1.0 (was 2.1.0)
+2026-09-30T16:01:25.8591000Z * objective_c 9.6.1 (was 9.6.1) (retracted)
+2026-09-30T16:01:25.8591190Z * package_config 3.0.0 (was 3.0.0)
+2026-09-30T16:01:25.8591360Z * path 1.9.1 (was 1.9.1)
+2026-09-30T16:01:25.8591630Z * path_provider 2.1.6 (was 2.1.6) (from transitive dependency to direct dependency)
+2026-09-30T16:01:25.8591930Z * path_provider_android 2.3.1 (was 2.3.1)
+2026-09-30T16:01:25.8592140Z * path_provider_foundation 2.6.0 (was 2.6.0)
+2026-09-30T16:01:25.8592330Z * path_provider_linux 2.2.2 (was 2.2.2)
+2026-09-30T16:01:25.8592550Z * path_provider_platform_interface 2.1.3 (was 2.1.3)
+2026-09-30T16:01:25.8592760Z * path_provider_windows 2.3.0 (was 2.3.0)
+2026-09-30T16:01:25.8592950Z * petitparser 7.1.0 (was 7.1.0)
+2026-09-30T16:01:25.8593120Z * platform 3.2.0 (was 3.2.0)
+2026-09-30T16:01:25.8593470Z * plugin_platform_interface 2.1.8 (was 2.1.8)
+2026-09-30T16:01:25.8593730Z * pub_semver 2.2.1 (was 2.2.1)
+2026-09-30T16:01:25.8593920Z * record_use 1.1.1 (was 1.1.1)
+2026-09-30T16:01:25.8594100Z * shared_preferences 2.5.5 (was 2.5.5)
+2026-09-30T16:01:25.8594320Z * shared_preferences_android 2.4.28 (was 2.4.28)
+2026-09-30T16:01:25.8594550Z * shared_preferences_foundation 2.5.7 (was 2.5.7)
+2026-09-30T16:01:25.8594760Z * shared_preferences_linux 2.4.1 (was 2.4.1)
+2026-09-30T16:01:25.8595060Z * shared_preferences_platform_interface 2.4.2 (was 2.4.2)
+2026-09-30T16:01:25.8595360Z * shared_preferences_web 2.4.3 (was 2.4.3)
+2026-09-30T16:01:25.8595570Z * shared_preferences_windows 2.4.1 (was 2.4.1)
+2026-09-30T16:01:25.8595790Z * source_span 1.10.2 (was 1.10.2)
+2026-09-30T16:01:25.8596010Z * stack_trace 1.12.2 (was 1.12.2)
+2026-09-30T16:01:25.8596240Z * stream_channel 2.1.4 (was 2.1.4)
+2026-09-30T16:01:25.8596470Z * stream_transform 2.1.2 (was 2.1.2)
+2026-09-30T16:01:25.8596700Z * string_scanner 1.4.1 (was 1.4.1)
+2026-09-30T16:01:25.8596890Z * synchronized 3.4.2 (was 3.4.2)
+2026-09-30T16:01:25.8597060Z * term_glyph 1.2.2 (was 1.2.2)
+2026-09-30T16:01:25.8597230Z * test_api 0.7.12 (was 0.7.12) (0.7.14 available)
+2026-09-30T16:01:25.8597450Z * timezone 0.10.1 (was 0.10.1) (0.11.1 available)
+2026-09-30T16:01:25.8597650Z * typed_data 1.4.0 (was 1.4.0)
+2026-09-30T16:01:25.8597800Z * uuid 4.6.0 (was 4.6.0)
+2026-09-30T16:01:25.8597980Z * vector_math 2.4.3 (was 2.4.3)
+2026-09-30T16:01:25.8598200Z + video_player 2.14.0
+2026-09-30T16:01:25.8598400Z + video_player_android 2.12.2
+2026-09-30T16:01:25.8598620Z + video_player_avfoundation 2.12.0
+2026-09-30T16:01:25.8599090Z + video_player_platform_interface 6.9.0
+2026-09-30T16:01:25.8599400Z + video_player_web 2.4.0
+2026-09-30T16:01:25.8599610Z * vm_service 15.3.0 (was 15.3.0)
+2026-09-30T16:01:25.8599820Z * web 1.1.1 (was 1.1.1)
+2026-09-30T16:01:25.8599980Z * web_socket 1.0.1 (was 1.0.1)
+2026-09-30T16:01:25.8600140Z * web_socket_channel 3.0.3 (was 3.0.3)
+2026-09-30T16:01:25.8600330Z * xdg_directories 1.1.0 (was 1.1.0)
+2026-09-30T16:01:25.8600500Z * xml 7.1.0 (was 7.1.0)
+2026-09-30T16:01:25.8600640Z * yaml 3.1.4 (was 3.1.4)
+2026-09-30T16:01:25.8600830Z Changed 114 dependencies!
+2026-09-30T16:01:25.8601070Z 10 packages have newer versions incompatible with dependency constraints.
+2026-09-30T16:01:25.8601370Z Try `flutter pub outdated` for more information.
