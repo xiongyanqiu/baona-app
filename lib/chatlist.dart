@@ -11,6 +11,7 @@ import 'msglocal.dart';
 import 'imgsrv.dart';
 import 'main.dart';
 import 'theme.dart';
+import 'videolib.dart';
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -140,9 +141,11 @@ class _ChatListPageState extends State<ChatListPage> {
     final unread = (c['unread'] as int?) ?? 0;
     return InkWell(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => (id == 'douyin' || id == 'videolib')
+          builder: (_) => id == 'douyin'
               ? const DouyinPage()
-              : const ConversationPage())),
+              : id == 'videolib'
+                  ? const VideoLibPage()
+                  : const ConversationPage())),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(children: [
