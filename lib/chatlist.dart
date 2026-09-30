@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'chat.dart';
+import 'msglocal.dart';
 import 'main.dart';
 import 'theme.dart';
 
@@ -33,11 +34,24 @@ class _ChatListPageState extends State<ChatListPage> {
   Future<void> _refresh() async {
     final a = app.api;
     if (a != null) {
-      final j = await a.history(limit: 3);
-      if (mounted && j['ok'] != false) {
-        final list = ((j['messages'] as List?) ?? []);
-        if (list.isNotEmpty) {
-          final m = Msg.fromJson(Map<String, dynamic>.from(list.last));
+      // ★2026-09-30 断网也能显示最后一条：优先网络，失败退回本地缓存
+      try {
+        final j = await a.history(limit: 3);
+        if (mounted && j['ok'] != false) {
+          final list = ((j['messages'] as List?) ?? []);
+          if (list.isNotEmpty) {
+            final m = Msg.fromJson(Map<String, dynamic>.from(list.last));
+            _last = m.content.isNotEmpty
+                ? m.content
+                : (m.sticker != null && m.sticker!.isNotEmpty ? '[表情]' : (m.voice != null && m.voice!.isNotEmpty ? '[语音]' : ''));
+            _lastT = m.time ?? 0;
+          }
+        }
+      } catch (_) {
+        // 断网 → 读本地缓存最后一条（不弹错）
+        final cached = await MsgsLocal.load('baona');
+        if (mounted && cached.isNotEmpty) {
+          final m = cached.last;
           _last = m.content.isNotEmpty
               ? m.content
               : (m.sticker != null && m.sticker!.isNotEmpty ? '[表情]' : (m.voice != null && m.voice!.isNotEmpty ? '[语音]' : ''));

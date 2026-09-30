@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'api.dart';
 import 'main.dart';
+import 'msglocal.dart';
 import 'theme.dart';
 import 'sheets.dart';
 import 'stickers.dart';
@@ -80,23 +81,47 @@ class _ChatPageState extends State<ConversationPage> {
 
   Future<void> _load({bool more = false}) async {
     final a = app.api;
-    if (a == null) return;
+    // ★2026-09-30 本地缓存：打开先读本地秒开 —— 断网也能看历史
+    if (!more && _msgs.isEmpty) {
+      final cached = await MsgsLocal.load('baona');
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _msgs
+            ..clear()
+            ..addAll(cached);
+          _loading = false;
+          _hasMore = false; // 离线时先不显示"加载更多"
+        });
+        _toBottom();
+      }
+    }
+    if (a == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     // ★2026-09-30 加载更多：记下"当前第一条"和"当前滚动位置"，
     //   回来后在头部插新消息，并把位置补偿回原位（以前 clear+addAll → 列表整个重建 → 乱跳）
     final oldFirstKey = _msgs.isNotEmpty ? (_msgs.first.cid ?? 'i${_msgs.first.idx}') : null;
     final oldOffset = _sc.hasClients ? _sc.position.pixels : 0.0;
     final oldCount = _msgs.length;
     if (more) _limit += 30;
-    final j = await a.history(limit: _limit);
+    Map<String, dynamic>? j;
+    try {
+      j = await a.history(limit: _limit);
+    } catch (_) {
+      // 断网：本地缓存已经显示了，安静地停在这里（不弹错、不打断）
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     if (!mounted) return;
     final list = ((j['messages'] as List?) ?? []).map((e) => Msg.fromJson(Map.from(e))).toList();
     setState(() {
-      _msgs
-        ..clear()
-        ..addAll(list);
+      _msgs = MsgsLocal.merge(list, _msgs);
       _hasMore = j['hasMore'] == true;
       _loading = false;
     });
+    // ★同步成功 → 落盘，下次打开/断网直接看本地
+    MsgsLocal.save('baona', _msgs);
     if (more && _sc.hasClients) {
       // 新消息插在头部 → 旧列表第一条下移了 → 按"新增条数 × 平均行高"把位置补回去
       final added = _msgs.length - oldCount;
@@ -137,6 +162,8 @@ class _ChatPageState extends State<ConversationPage> {
         _typing = false;
       });
       _toBottom();
+      // ★本地缓存跟上（不然缓存停在旧位置，下次打开少几条）
+      MsgsLocal.save('baona', _msgs);
     } else if (t == 'msg-patch') {
       // ★电脑端这条的形状是 {type:'msg-patch', cid, patch:{voice:...}}，以前按 idx 找 → 永远找不到
       final cid = e['cid']?.toString();
@@ -170,6 +197,7 @@ class _ChatPageState extends State<ConversationPage> {
       if (_typing) _toBottom();
     } else if (t == 'cleared') {
       setState(() => _msgs.clear());
+      MsgsLocal.clear('baona');
     }
   }
 
@@ -205,6 +233,7 @@ class _ChatPageState extends State<ConversationPage> {
       _emojiPanel = false;
       _funPanel = false;
     });
+    MsgsLocal.save('baona', _msgs); // ★本地先存，万一没发出去/断网也留着
     _toBottom(force: true);
     final r = await a.send(payload);
     if (!mounted) return;
