@@ -1,0 +1,27 @@
+workflows:
+  ios-unsigned-ipa:
+    name: iOS Unsigned IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install deps
+        script: |
+          flutter pub get
+      - name: Build unsigned IPA
+        script: |
+          flutter build ios --release --no-codesign
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/iphoneos/*.app
+    publishing:
+      email:
+        recipients:
+          - build@example.com
+      scripts:
+        - name: Post-build cleanup (no publish)
+          script: |
+            echo "IPA built; download from artifacts tab"
