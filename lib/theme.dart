@@ -31,7 +31,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.3.0 (27)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.3.0 (28)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -51,17 +51,26 @@ bool kbUp(BuildContext c) => MediaQuery.of(c).viewInsets.bottom > 0;
 
 /// 头像/背景可能是两种东西：https 地址，或者手机上传后的 data:image/...（电脑端存的就是 dataURL）
 /// ★iOS 上 NetworkImage 读 data URL 会直接报错 → 必须走 MemoryImage，头像才显示得出来
+/// ★★2026-09-30：加 provider 缓存 —— 同一个 URL 永远返回同一个 ImageProvider，
+///   否则每次 rebuild 都会新建 provider → 图片重新解码 → 头像闪回"娜"字占位
+final Map<String, ImageProvider> _avCache = {};
 ImageProvider? avatarOf(String s) {
   if (s.isEmpty) return null;
+  final hit = _avCache[s];
+  if (hit != null) return hit;
+  ImageProvider? p;
   if (s.startsWith('data:')) {
     final i = s.indexOf(',');
     try {
-      return MemoryImage(base64Decode(i >= 0 ? s.substring(i + 1) : s));
+      p = MemoryImage(base64Decode(i >= 0 ? s.substring(i + 1) : s));
     } catch (_) {
       return null;
     }
+  } else {
+    p = NetworkImage(s);
   }
-  return NetworkImage(s);
+  _avCache[s] = p;
+  return p;
 }
 const Color kHair = Color(0x1FFFFFFF); // 发丝分隔线
 const Color kSpecTop = Color(0x5CFFFFFF); // 上缘高光

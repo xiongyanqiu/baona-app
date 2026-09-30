@@ -71,7 +71,9 @@ class ImgCache {
 }
 
 /// 带磁盘缓存的图片组件，用法跟 Image.network 一样
-class CacheImg extends StatelessWidget {
+/// ★★2026-09-30：改成 StatefulWidget，future 在 initState 取一次存住——
+///   之前每次 rebuild 都新建 Future，FutureBuilder 重置 → 图片闪回占位再显示（对话界面"闪"的元凶）
+class CacheImg extends StatefulWidget {
   const CacheImg(this.url,
       {super.key,
       this.width,
@@ -89,10 +91,27 @@ class CacheImg extends StatelessWidget {
   final Map<String, String>? headers;
 
   @override
+  State<CacheImg> createState() => _CacheImgState();
+}
+
+class _CacheImgState extends State<CacheImg> {
+  late Future<ImageProvider> _f = ImgCache.provider(widget.url, headers: widget.headers);
+
+  @override
+  void didUpdateWidget(CacheImg old) {
+    super.didUpdateWidget(old);
+    if (old.url != widget.url) {
+      _f = ImgCache.provider(widget.url, headers: widget.headers);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final url = widget.url, width = widget.width, height = widget.height,
+        fit = widget.fit, radius = widget.radius, cacheWidth = widget.cacheWidth;
     if (url.isEmpty) return _ph;
     return FutureBuilder<ImageProvider>(
-      future: ImgCache.provider(url, headers: headers),
+      future: _f,
       builder: (c, s) {
         Widget w;
         if (s.connectionState != ConnectionState.done || s.hasError || s.data == null) {
@@ -114,5 +133,5 @@ class CacheImg extends StatelessWidget {
     );
   }
 
-  Widget get _ph => Container(width: width, height: height, color: const Color(0x14FFFFFF));
+  Widget get _ph => Container(width: widget.width, height: widget.height, color: const Color(0x14FFFFFF));
 }
