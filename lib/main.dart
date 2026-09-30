@@ -466,6 +466,15 @@ class _HomePageState extends State<HomePage> {
   int _tab = 0;
   bool _navHidden = false;
   double _lastPix = 0;
+  // ★2.0 第一波：切 tab 淡入（保持各页状态，只是透明度过渡）
+  late final AnimationController _fadeCtrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 170), value: 1);
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
 
   /// ★下滑收起底栏：**聊天页不参与**（聊天时底栏要一直钉在那儿），只有商城/游戏/我们才收
   bool _onScroll(ScrollNotification n) {
@@ -512,12 +521,13 @@ class _HomePageState extends State<HomePage> {
                 child: Column(children: [
                   _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
                   Expanded(
-                    child: IndexedStack(index: _tab, children: const [
+                    // ★2.0 第一波：切 tab 淡入
+                    child: FadeTransition(opacity: _fadeCtrl, child: IndexedStack(index: _tab, children: const [
                       ChatListPage(),
                       ShopPage(),
                       GamePage(),
                       UsPage(),
-                    ]),
+                    ])),
                   ),
                 ]),
               ),
@@ -531,6 +541,7 @@ class _HomePageState extends State<HomePage> {
                 unread: app.unread > 0,
                 onTap: (i) => setState(() {
                   HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
+                  if (i != _tab) _fadeCtrl.forward(from: 0); // 切页淡入
                   _tab = i;
                   _navHidden = false;
                   if (i == 0) app.unread = 0; // 进了聊天就没有小红点了

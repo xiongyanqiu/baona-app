@@ -31,7 +31,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.2.2 (21)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.3.0 (22)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -481,10 +481,23 @@ class GlassNav extends StatelessWidget {
                         ),
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
                           Stack(clipBehavior: Clip.none, children: [
-                            Icon(
-                              (index == i ? items[i]['on'] : items[i]['off']) as IconData,
-                              size: 20,
-                              color: index == i ? Colors.white : kSub,
+                            // ★2.0 第一波：图标 filled/outline 切换平滑过渡 + 选中项微放大（iOS 标签栏手感）
+                            AnimatedScale(
+                              scale: index == i ? 1.18 : 1.0,
+                              duration: const Duration(milliseconds: 190),
+                              curve: Curves.easeOutCubic,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 190),
+                                switchInCurve: Curves.easeOut,
+                                switchOutCurve: Curves.easeIn,
+                                transitionBuilder: (c, anim) => FadeTransition(opacity: anim, child: c),
+                                child: Icon(
+                                  (index == i ? items[i]['on'] : items[i]['off']) as IconData,
+                                  key: ValueKey<bool>(index == i),
+                                  size: 20,
+                                  color: index == i ? Colors.white : kSub,
+                                ),
+                              ),
                             ),
                             // ★2026-09-29：她来消息时聊天 tab 上的小红点（他在别的页也一眼知道）
                             if (items[i]['badge'] == true)

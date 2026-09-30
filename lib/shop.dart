@@ -1,5 +1,6 @@
 // 包娜 App · 商城：商城 / 背包 / 钱包（双钱包 + 真的买东西，她知道）
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'imgsrv.dart';
@@ -42,6 +43,7 @@ class _ShopPageState extends State<ShopPage> {
   }
 
   Future<void> _buy(ShopItem it, bool forHer) async {
+    HapticFeedback.mediumImpact(); // ★2.0 第一波：购买确认触感
     final a = app.api;
     if (a == null) return;
     final r = await a.shopBuy(it.code, forHer);
