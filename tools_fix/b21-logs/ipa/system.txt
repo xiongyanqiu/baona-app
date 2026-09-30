@@ -1,0 +1,8 @@
+2026-09-30T05:52:29.4780000Z Requested labels: macos-latest
+2026-09-30T05:52:29.4780000Z Job defined at: xiongyanqiu/baona-app/.github/workflows/ios-ipa.yml@refs/heads/main
+2026-09-30T05:52:29.4780000Z Waiting for a runner to pick up this job...
+2026-09-30T05:52:29.4790000Z Job is waiting for a hosted runner to come online.
+2026-09-30T05:52:29.4770000Z Evaluating ipa.if
+2026-09-30T05:52:29.4770000Z Evaluating: success()
+2026-09-30T05:52:29.4770000Z Result: true
+2026-09-30T05:52:29.4790000Z Job is about to start running on the hosted runner: GitHub Actions 1000000054

@@ -1,0 +1,90 @@
+﻿2026-09-30T05:52:38.0064210Z ##[group]Run subosito/flutter-action@v2
+2026-09-30T05:52:38.0065090Z with:
+2026-09-30T05:52:38.0065800Z   flutter-version: 3.47.5
+2026-09-30T05:52:38.0066500Z   channel: stable
+2026-09-30T05:52:38.0067100Z   cache: true
+2026-09-30T05:52:38.0067680Z   architecture: ARM64
+2026-09-30T05:52:38.0068440Z   pub-cache-path: default
+2026-09-30T05:52:38.0069280Z   dry-run: false
+2026-09-30T05:52:38.0070020Z   git-source: https://github.com/flutter/flutter.git
+2026-09-30T05:52:38.0070980Z ##[endgroup]
+2026-09-30T05:52:38.0132900Z ##[start-action display=Make yq tool available on Windows runners;id=__subosito_flutter-action.__run]
+2026-09-30T05:52:38.0156840Z ##[end-action id=__subosito_flutter-action.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-09-30T05:52:38.0171060Z ##[start-action display=Make setup script executable;id=__subosito_flutter-action.__run_2]
+2026-09-30T05:52:38.0209960Z ##[group]Run chmod +x "$GITHUB_ACTION_PATH/setup.sh"
+2026-09-30T05:52:38.0211060Z [36;1mchmod +x "$GITHUB_ACTION_PATH/setup.sh"[0m
+2026-09-30T05:52:38.0246950Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-30T05:52:38.0247950Z ##[endgroup]
+2026-09-30T05:52:38.0613000Z ##[end-action id=__subosito_flutter-action.__run_2;outcome=success;conclusion=success;duration_ms=43]
+2026-09-30T05:52:38.0618960Z ##[start-action display=Set action inputs;id=__subosito_flutter-action.flutter-action]
+2026-09-30T05:52:38.0674220Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh -p \
+2026-09-30T05:52:38.0675140Z [36;1m$GITHUB_ACTION_PATH/setup.sh -p \[0m
+2026-09-30T05:52:38.0675910Z [36;1m  -n '3.47.5' \[0m
+2026-09-30T05:52:38.0676670Z [36;1m  -f '' \[0m
+2026-09-30T05:52:38.0677300Z [36;1m  -a 'ARM64' \[0m
+2026-09-30T05:52:38.0678160Z [36;1m  -k '' \[0m
+2026-09-30T05:52:38.0678880Z [36;1m  -c '' \[0m
+2026-09-30T05:52:38.0679480Z [36;1m  -l '' \[0m
+2026-09-30T05:52:38.0680160Z [36;1m  -d 'default' \[0m
+2026-09-30T05:52:38.0681000Z [36;1m  -g 'https://github.com/flutter/flutter.git' \[0m
+2026-09-30T05:52:38.0681970Z [36;1m  stable[0m
+2026-09-30T05:52:38.0714180Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-30T05:52:38.0715160Z ##[endgroup]
+2026-09-30T05:52:38.3361320Z ##[end-action id=__subosito_flutter-action.flutter-action;outcome=success;conclusion=success;duration_ms=273]
+2026-09-30T05:52:38.3367130Z ##[start-action display=Cache Flutter;id=__subosito_flutter-action.cache-flutter]
+2026-09-30T05:52:38.3445930Z ##[group]Run actions/cache@v5
+2026-09-30T05:52:38.3446550Z with:
+2026-09-30T05:52:38.3447200Z   path: /Users/runner/hostedtoolcache/flutter/stable-3.47.5-arm64
+2026-09-30T05:52:38.3448410Z   key: flutter-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1
+2026-09-30T05:52:38.3449430Z   enableCrossOsArchive: false
+2026-09-30T05:52:38.3450070Z   fail-on-cache-miss: false
+2026-09-30T05:52:38.3450640Z   lookup-only: false
+2026-09-30T05:52:38.3451170Z   save-always: false
+2026-09-30T05:52:38.3451810Z ##[endgroup]
+2026-09-30T05:52:38.6141160Z Cache hit for: flutter-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1
+2026-09-30T05:52:39.7283420Z Received 117440512 of 2221319022 (5.3%), 111.8 MBs/sec
+2026-09-30T05:52:40.7287030Z Received 306184192 of 2221319022 (13.8%), 145.9 MBs/sec
+2026-09-30T05:52:41.7320020Z Received 490733568 of 2221319022 (22.1%), 155.7 MBs/sec
+2026-09-30T05:52:42.7326660Z Received 700448768 of 2221319022 (31.5%), 166.7 MBs/sec
+2026-09-30T05:52:43.7369720Z Received 872415232 of 2221319022 (39.3%), 166.2 MBs/sec
+2026-09-30T05:52:44.7350860Z Received 1069547520 of 2221319022 (48.1%), 169.8 MBs/sec
+2026-09-30T05:52:45.7378740Z Received 1241513984 of 2221319022 (55.9%), 168.9 MBs/sec
+2026-09-30T05:52:46.7412720Z Received 1447034880 of 2221319022 (65.1%), 172.2 MBs/sec
+2026-09-30T05:52:47.7401080Z Received 1610612736 of 2221319022 (72.5%), 170.4 MBs/sec
+2026-09-30T05:52:48.7430070Z Received 1803550720 of 2221319022 (81.2%), 171.7 MBs/sec
+2026-09-30T05:52:49.7431660Z Received 2009071616 of 2221319022 (90.4%), 173.9 MBs/sec
+2026-09-30T05:52:50.7464830Z Received 2185232384 of 2221319022 (98.4%), 173.4 MBs/sec
+2026-09-30T05:52:50.8801700Z Received 2221319022 of 2221319022 (100.0%), 174.3 MBs/sec
+2026-09-30T05:52:50.8803910Z Cache Size: ~2118 MB (2221319022 B)
+2026-09-30T05:52:50.8855380Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/2511274f-8e45-4bc3-a4ae-4ef5bf0c178a/cache.tzst -P -C /Users/runner/work/baona-app/baona-app --delay-directory-restore --use-compress-program unzstd
+2026-09-30T05:53:00.7276900Z Cache restored successfully
+2026-09-30T05:53:00.9989420Z Cache restored from key: flutter-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1
+2026-09-30T05:53:01.0164560Z ##[end-action id=__subosito_flutter-action.cache-flutter;outcome=success;conclusion=success;duration_ms=22668]
+2026-09-30T05:53:01.0169090Z ##[start-action display=Cache pub dependencies;id=__subosito_flutter-action.cache-pub]
+2026-09-30T05:53:01.2560880Z ##[group]Run actions/cache@v5
+2026-09-30T05:53:01.2561160Z with:
+2026-09-30T05:53:01.2561310Z   path: /Users/runner/.pub-cache
+2026-09-30T05:53:01.2562030Z   key: flutter-pub-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1-4d9febc2433debe5b57e2dc887f93f27f350ac092ea75fee185c5f0e83147942
+2026-09-30T05:53:01.2562970Z   enableCrossOsArchive: false
+2026-09-30T05:53:01.2563210Z   fail-on-cache-miss: false
+2026-09-30T05:53:01.2563460Z   lookup-only: false
+2026-09-30T05:53:01.2563640Z   save-always: false
+2026-09-30T05:53:01.2572160Z ##[endgroup]
+2026-09-30T05:53:01.5615000Z Cache hit for: flutter-pub-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1-4d9febc2433debe5b57e2dc887f93f27f350ac092ea75fee185c5f0e83147942
+2026-09-30T05:53:02.4515750Z Received 68946872 of 68946872 (100.0%), 87.0 MBs/sec
+2026-09-30T05:53:02.4517240Z Cache Size: ~66 MB (68946872 B)
+2026-09-30T05:53:02.4569080Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/00a76185-7a1a-4517-a782-302084d1f620/cache.tzst -P -C /Users/runner/work/baona-app/baona-app --delay-directory-restore --use-compress-program unzstd
+2026-09-30T05:53:04.8403190Z Cache restored successfully
+2026-09-30T05:53:04.8513670Z Cache restored from key: flutter-pub-macos-stable-3.47.5-arm64-6a19cca56475dbfba1478ee68d7bd0c2ef891da1-4d9febc2433debe5b57e2dc887f93f27f350ac092ea75fee185c5f0e83147942
+2026-09-30T05:53:04.8576230Z ##[end-action id=__subosito_flutter-action.cache-pub;outcome=success;conclusion=success;duration_ms=3838]
+2026-09-30T05:53:04.8578990Z ##[start-action display=Run setup script;id=__subosito_flutter-action.__run_3]
+2026-09-30T05:53:04.8622070Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh \
+2026-09-30T05:53:04.8622440Z [36;1m$GITHUB_ACTION_PATH/setup.sh \[0m
+2026-09-30T05:53:04.8622640Z [36;1m  -n '3.47.5' \[0m
+2026-09-30T05:53:04.8622810Z [36;1m  -a 'arm64' \[0m
+2026-09-30T05:53:04.8623060Z [36;1m  -c '/Users/runner/hostedtoolcache/flutter/stable-3.47.5-arm64' \[0m
+2026-09-30T05:53:04.8623380Z [36;1m  -d '/Users/runner/.pub-cache' \[0m
+2026-09-30T05:53:04.8623570Z [36;1m  stable[0m
+2026-09-30T05:53:04.8659850Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-30T05:53:04.8660120Z ##[endgroup]
+2026-09-30T05:53:05.5159020Z ##[end-action id=__subosito_flutter-action.__run_3;outcome=success;conclusion=success;duration_ms=657]

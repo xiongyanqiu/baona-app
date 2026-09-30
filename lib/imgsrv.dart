@@ -79,14 +79,13 @@ class CacheImg extends StatelessWidget {
       this.fit = BoxFit.cover,
       this.radius,
       this.cacheWidth,
-      this.cacheHeight,
       this.headers});
 
   final String url;
   final double? width, height;
   final BoxFit fit;
   final BorderRadius? radius;
-  final int? cacheWidth, cacheHeight;
+  final int? cacheWidth;
   final Map<String, String>? headers;
 
   @override
@@ -99,13 +98,13 @@ class CacheImg extends StatelessWidget {
         if (s.connectionState != ConnectionState.done || s.hasError || s.data == null) {
           w = _ph;
         } else {
+          // ★Image 构造器没有 cacheWidth，缩略图用 ResizeImage 省内存
+          final ip = cacheWidth != null ? ResizeImage(s.data!, width: cacheWidth) : s.data!;
           w = Image(
-            image: s.data!,
+            image: ip,
             width: width,
             height: height,
             fit: fit,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
             errorBuilder: (_, __, ___) => _ph,
           );
         }
