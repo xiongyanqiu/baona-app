@@ -771,10 +771,18 @@ class _SearchState extends State<_Search> {
   Widget build(BuildContext context) {
     final ql = q.trim().toLowerCase();
     final hits = ql.isEmpty ? <Msg>[] : _all.where((m) => m.content.toLowerCase().contains(ql)).toList().reversed.take(60).toList();
+    // ★2026-09-30：键盘弹起时弹窗被顶到屏幕顶 → 搜索栏贴/撞状态栏。
+    //   修：SafeArea 保护顶部安全区 + 键盘弹起时高度自适应（刚好停在键盘上方）
+    final mq = MediaQuery.of(context);
+    final kb = mq.viewInsets.bottom;
+    final sheetH = kb > 0 ? (mq.size.height - kb - 8) : mq.size.height * 0.8;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.8,
+      padding: EdgeInsets.only(bottom: kb),
+      child: SafeArea(
+        top: true,
+        bottom: false,
+        child: SizedBox(
+        height: sheetH,
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 10, 6),
@@ -793,6 +801,7 @@ class _SearchState extends State<_Search> {
                   ]),
           ),
         ]),
+        ),
       ),
     );
   }
