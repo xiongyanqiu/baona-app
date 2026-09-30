@@ -39,8 +39,11 @@ class _DouyinPageState extends State<DouyinPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
       body: Stack(children: [
-        // 全屏网页
-        Positioned.fill(child: WebViewWidget(controller: _wv)),
+        // 全屏网页（从状态栏下面开始，网页顶部导航不被刘海挡住/可点）
+        Positioned.fill(
+          top: MediaQuery.of(context).padding.top,
+          child: WebViewWidget(controller: _wv),
+        ),
         // 左上角小返回按钮（不遮挡网页顶部导航）
         Positioned(
           top: MediaQuery.of(context).padding.top + 4,
