@@ -462,18 +462,30 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> {
   int _tab = 0;
   bool _navHidden = false;
   double _lastPix = 0;
-  // ★2.0 第一波：切 tab 淡入（保持各页状态，只是透明度过渡）
-  late final AnimationController _fadeCtrl =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 230), value: 1);
+  // ★2.0 第四波：页面换成 PageView —— 手指左右滑页面跟手走（iOS 26 Liquid Glass 标签栏规范）
+  final PageController _pageCtrl = PageController();
 
   @override
   void dispose() {
-    _fadeCtrl.dispose();
+    _pageCtrl.dispose();
     super.dispose();
+  }
+
+  /// 底栏点击 / 顶栏"我"：动画滑到目标页（页面滑动动画 + 底栏立即高亮）
+  void _switchTab(int i) {
+    if (i == _tab) return;
+    setState(() {
+      _tab = i;
+      _navHidden = false;
+      if (i == 0) app.unread = 0; // 进了聊天就没有小红点了
+      app.chatVisible = (i == 0);
+    });
+    _pageCtrl.animateToPage(i,
+        duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
   }
 
   /// ★下滑收起底栏：**聊天页不参与**（聊天时底栏要一直钉在那儿），只有商城/游戏/我们才收
@@ -519,21 +531,28 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 context: context,
                 removeBottom: true,
                 child: Column(children: [
-                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
+                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => _switchTab(3)),
                   Expanded(
-                    // ★2.0 第二波：切 tab 淡入 + 轻微上滑（更明显）
-                    child: FadeTransition(
-                      opacity: _fadeCtrl,
-                      child: SlideTransition(
-                        position: Tween(begin: const Offset(0, 0.02), end: Offset.zero)
-                            .animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic)),
-                        child: IndexedStack(index: _tab, children: const [
-                          ChatListPage(),
-                          ShopPage(),
-                          GamePage(),
-                          UsPage(),
-                        ]),
-                      ),
+                    // ★2.0 第四波：PageView 左右滑动切换 —— 页面跟手走，才是 iOS 26 的标签栏
+                    child: PageView(
+                      controller: _pageCtrl,
+                      physics: const BouncingScrollPhysics(),
+                      onPageChanged: (i) {
+                        if (i == _tab) return;
+                        HapticFeedback.selectionClick(); // 翻页轻震
+                        setState(() {
+                          _tab = i;
+                          _navHidden = false;
+                          if (i == 0) app.unread = 0;
+                          app.chatVisible = (i == 0);
+                        });
+                      },
+                      children: const [
+                        KeepAliveWrapper(child: ChatListPage()),
+                        KeepAliveWrapper(child: ShopPage()),
+                        KeepAliveWrapper(child: GamePage()),
+                        KeepAliveWrapper(child: UsPage()),
+                      ],
                     ),
                   ),
                 ]),
@@ -546,14 +565,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               child: _Nav(
                 tab: _tab,
                 unread: app.unread > 0,
-                onTap: (i) => setState(() {
+                onTap: (i) {
                   HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
-                  if (i != _tab) _fadeCtrl.forward(from: 0); // 切页淡入
-                  _tab = i;
-                  _navHidden = false;
-                  if (i == 0) app.unread = 0; // 进了聊天就没有小红点了
-                  app.chatVisible = (i == 0);
-                }),
+                  _switchTab(i);
+                },
               ),
             ),
           ),
@@ -630,4 +645,25 @@ class _Nav extends StatelessWidget {
           {'off': Icons.favorite_border, 'on': Icons.favorite, 't': '我们'},
         ],
       );
+}
+
+/// ★2.0 第四波：PageView 里的页面保活（切走不销毁，回来还是原来的状态）
+class KeepAliveWrapper extends StatefulWidget {
+  const KeepAliveWrapper({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<KeepAliveWrapper> createState() => _KeepAliveWrapperState();
+}
+
+class _KeepAliveWrapperState extends State<KeepAliveWrapper>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
 }
