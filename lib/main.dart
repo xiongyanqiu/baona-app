@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
-import 'eye.dart';
 import 'chat.dart';
+import 'chatlist.dart';
+import 'eye.dart';
 import 'game.dart';
 import 'notify.dart';
 import 'pet.dart';
@@ -480,7 +481,7 @@ class _HomePageState extends State<HomePage> {
                   _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => setState(() => _tab = 3)),
                   Expanded(
                     child: IndexedStack(index: _tab, children: const [
-                      ChatPage(),
+                      ChatListPage(),
                       ShopPage(),
                       GamePage(),
                       UsPage(),

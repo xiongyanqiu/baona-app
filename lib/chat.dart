@@ -10,16 +10,17 @@ import 'package:image_picker/image_picker.dart';
 import 'api.dart';
 import 'main.dart';
 import 'theme.dart';
+import 'sheets.dart';
 import 'stickers.dart';
 
-class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+class ConversationPage extends StatefulWidget {
+  const ConversationPage({super.key});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ConversationPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ConversationPage> {
   final List<Msg> _msgs = [];
   final TextEditingController _inp = TextEditingController();
   final FocusNode _focus = FocusNode(); // ★管键盘（弹出来就收面板 / 点空白就收键盘）
@@ -318,7 +319,20 @@ class _ChatPageState extends State<ChatPage> {
         } catch (_) {}
       });
     }
-    return Column(children: [
+    // ★2026-09-30 微信式改造：这是点进会话后的全屏对话页 —— 没有底栏，只有返回+消息+输入框
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: Column(children: [
+      _ConvHeader(
+        onBack: () => Navigator.of(context).maybePop(),
+        onSearch: () => openSearch(context),
+        onSet: () => openSettings(context),
+        onCtrl: () => openCtrl(context),
+      ),
       Expanded(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -329,7 +343,7 @@ class _ChatPageState extends State<ChatPage> {
                 child: ListView.builder(
                 controller: _sc,
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.fromLTRB(14, 8, 14, kbUp(context) ? 16 : navSpace(context) + 16),
+                padding: EdgeInsets.fromLTRB(14, 8, 14, kbUp(context) ? 16 : MediaQuery.of(context).padding.bottom + 16),
                 itemCount: _msgs.length + (_typing ? 1 : 0) + (_hasMore ? 1 : 0),
                 itemBuilder: (c, i) {
                   if (_hasMore && i == 0) {
@@ -357,7 +371,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       // ★底栏是悬浮玻璃 → 聊天这半截整块往上抬，输入栏跟底栏保持同一条线（老公 2026-09-29）
       Padding(
-        padding: EdgeInsets.only(bottom: kbUp(context) ? 6 : navSpace(context)),
+        padding: EdgeInsets.only(bottom: kbUp(context) ? 6 : MediaQuery.of(context).padding.bottom + 10),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
       if (_emojiPanel) EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
       _Composer(
@@ -403,7 +417,9 @@ class _ChatPageState extends State<ChatPage> {
         ),
         ]),
       ),
-    ]);
+        ]),
+      ),
+    );
   }
 }
 
@@ -695,6 +711,61 @@ class _FunPanel extends StatelessWidget {
             ),
           ]),
         ]),
+      ),
+    );
+  }
+}
+
+
+/* ------------------- 对话页头部（微信式：返回 + 头像 + 在线 + 快捷按钮） ------------------- */
+class _ConvHeader extends StatelessWidget {
+  const _ConvHeader({required this.onBack, required this.onSearch, required this.onSet, required this.onCtrl});
+  final VoidCallback onBack, onSearch, onSet, onCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final av = '${app.herSet['herAvatar'] ?? ''}';
+    return GlassBar(
+      top: true,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 8, 8, 8),
+          child: Row(children: [
+            IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19), tooltip: '返回'),
+            GestureDetector(
+              onTap: onSet,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+                  image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
+                ),
+                child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))) : null,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(app.nick, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Row(children: [
+                    Container(width: 6, height: 6, decoration: BoxDecoration(color: app.online ? const Color(0xFF57D9A3) : kSub, shape: BoxShape.circle)),
+                    const SizedBox(width: 5),
+                    Flexible(child: Text(app.status, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kSub))),
+                  ]),
+                ],
+              ),
+            ),
+            IconButton(onPressed: onSearch, icon: const Icon(Icons.search, size: 20), tooltip: '搜聊天'),
+            IconButton(onPressed: onCtrl, icon: const Icon(Icons.tune, size: 20), tooltip: '控制器'),
+            IconButton(onPressed: onSet, icon: const Icon(Icons.settings_outlined, size: 20), tooltip: '设置'),
+          ]),
+        ),
       ),
     );
   }
