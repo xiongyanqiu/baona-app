@@ -31,7 +31,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '1.3.0 (22)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '1.3.0 (24)'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -459,7 +459,16 @@ class GlassNav extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-          child: GlassSurface(
+          // ★2.0 第三波：iOS 26 Liquid Glass 标签栏 —— 在底栏上左右滑动直接切 tab
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v.abs() < 200) return; // 太轻不算
+              final next = v < 0 ? index + 1 : index - 1; // 左滑下一个 / 右滑上一个
+              if (next >= 0 && next < items.length) onTap(next);
+            },
+            child: GlassSurface(
             radius: kRCapsule,
             blur: kBlur,
             pad: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -541,6 +550,7 @@ class GlassNav extends StatelessWidget {
                     ),
                   ),
               ],
+            ),
             ),
           ),
         ),
