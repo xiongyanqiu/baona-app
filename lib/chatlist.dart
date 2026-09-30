@@ -2,6 +2,8 @@
 // ★2026-09-30 新结构：
 //   聊天 tab = 这个列表页（有底栏），点某个会话 → push 全屏对话页（ConversationPage，无底栏）
 //   会话数据模型做成可扩展的 List，以后加好友/多角色就是往 _chats 里加一项
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'api.dart';
@@ -29,6 +31,7 @@ class _ChatListPageState extends State<ChatListPage> {
   bool _loaded = false;
   String _last = '';
   int _lastT = 0;
+  late Future<String> _vlAvatarFuture = Future.value('');
 
   @override
   void initState() {
@@ -167,12 +170,33 @@ class _ChatListPageState extends State<ChatListPage> {
                 ]),
               )
             else if (id == 'videolib')
-              // 视频库头像：深紫底 + 播放三角
-              Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFF2F6BFF)])),
-                child: const Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26)),
+              // 视频库头像：本地设置的头像（dataURL）或默认紫底播放三角
+              FutureBuilder<String>(
+                future: _vlAvatarFuture,
+                builder: (c, s) {
+                  final av = s.data ?? '';
+                  if (av.startsWith('data:image/')) {
+                    try {
+                      final b64 = av.substring(av.indexOf(',') + 1);
+                      return Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          image: DecorationImage(
+                              image: MemoryImage(base64Decode(b64)),
+                              fit: BoxFit.cover),
+                        ),
+                      );
+                    } catch (_) {}
+                  }
+                  return Container(
+                    width: 52,
+                    height: 52,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFF2F6BFF)])),
+                    child: const Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26)),
+                  );
+                },
               )
             else if (av.isEmpty)
                 Container(

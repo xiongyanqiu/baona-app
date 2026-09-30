@@ -111,7 +111,9 @@ class _VideoLibPageState extends State<VideoLibPage> {
     final cat = await _pickCat();
     if (cat == null) {
       // 取消分类 = 不入库，删掉复制的文件
-      File(target).deleteSync(ignoreMissing: true);
+      try {
+        File(target).deleteSync();
+      } catch (_) {}
       return;
     }
     setState(() {
