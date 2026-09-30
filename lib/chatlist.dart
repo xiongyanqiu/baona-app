@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'douyin.dart';
 import 'chat.dart';
 import 'msglocal.dart';
 import 'imgsrv.dart';
@@ -89,6 +90,15 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': _lastT,
                   'unread': app.unread,
                 },
+                // ★2026-09-30：抖音入口 —— 点进去是全屏抖音风格短视频页（模拟源）
+                {
+                  'id': 'douyin',
+                  'name': '抖音',
+                  'avatar': '',
+                  'last': '点进来刷会儿视频～',
+                  'lastT': 0,
+                  'unread': 0,
+                },
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
@@ -116,24 +126,36 @@ class _ChatListPageState extends State<ChatListPage> {
   }
 
   Widget _row(Map<String, dynamic> c) {
+    final id = '${c['id'] ?? 'baona'}';
     final av = '${c['avatar'] ?? ''}';
     final unread = (c['unread'] as int?) ?? 0;
     return InkWell(
-      onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => const ConversationPage())),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => id == 'douyin' ? const DouyinPage() : const ConversationPage())),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(children: [
           // 头像 + 未读红点
           Stack(clipBehavior: Clip.none, children: [
-            av.isEmpty
-                ? Container(
+            if (id == 'douyin')
+              // 抖音头像：黑底 + 音符（近似 logo）
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF111318)),
+                child: const Stack(alignment: Alignment.center, children: [
+                  Icon(Icons.music_note, color: Color(0xFF39F2FF), size: 24),
+                  Positioned(right: 13, bottom: 12, child: Icon(Icons.music_note, color: Color(0xFFFF3B5C), size: 12)),
+                ]),
+              )
+            else if (av.isEmpty)
+                Container(
                     width: 52,
                     height: 52,
                     decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
                     child: const Center(child: Text('娜', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
                   )
-                : FutureBuilder<ImageProvider>(
+                else FutureBuilder<ImageProvider>(
                     // ★b21 头像磁盘缓存：列表频繁重建不再反复下载
                     future: ImgCache.provider(av),
                     builder: (c, s) => Container(
