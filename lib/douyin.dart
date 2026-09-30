@@ -30,7 +30,7 @@ class _DouyinPageState extends State<DouyinPage> {
           }
         },
       ))
-      ..loadRequest(Uri.parse('https://www.douyin.com/'));
+      ..loadRequest(Uri.parse('https://m.douyin.com/')); // ★m 站=手机网页版，直接刷视频；www 站会引导下载App
   }
 
   @override
