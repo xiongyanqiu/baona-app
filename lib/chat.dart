@@ -541,10 +541,15 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!me) ...[
-            const _MiniAvatar(),
+            const _MiniAvatar(me: false),
             const SizedBox(width: 7),
           ],
           Flexible(child: body),
+          // ★b37 我的消息右侧也有头像（微信式左右各一个）
+          if (me) ...[
+            const SizedBox(width: 7),
+            const _MiniAvatar(me: true),
+          ],
         ],
       ),
       ),
@@ -553,17 +558,18 @@ class _Bubble extends StatelessWidget {
 }
 
 class _MiniAvatar extends StatelessWidget {
-  const _MiniAvatar();
+  const _MiniAvatar({this.me = false});
+  final bool me;
 
   @override
   Widget build(BuildContext context) {
-    final av = '${app.herSet['herAvatar'] ?? ''}';
+    final av = '${me ? app.herSet['myAvatar'] ?? '' : app.herSet['herAvatar'] ?? ''}';
     if (av.isEmpty) {
       return Container(
         width: 30,
         height: 30,
         decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-        child: const Center(child: Text('娜', style: TextStyle(fontSize: 13))),
+        child: Center(child: Text(me ? '我' : '娜', style: const TextStyle(fontSize: 13))),
       );
     }
     // ★b21 头像磁盘缓存：不再每次打开对话都重新下载
