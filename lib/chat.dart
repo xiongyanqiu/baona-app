@@ -456,7 +456,7 @@ class _ChatPageState extends State<ConversationPage> {
 }
 
 /* ------------------------------- 一条消息 ------------------------------- */
-class _Bubble extends StatelessWidget {
+class _Bubble extends StatefulWidget {
   _Bubble({required this.m, required this.onResend, required this.onPlay, required this.playing, required this.urlOf});
   final Msg m;
   final VoidCallback onResend;
@@ -464,10 +464,19 @@ class _Bubble extends StatelessWidget {
   final String? playing;
   final Api urlOf;
 
+  @override
+  State<_Bubble> createState() => _BubbleState();
+}
+
+class _BubbleState extends State<_Bubble> {
+  // ★2026-10-01：她的【细节】（动作/表情/心里）默认展开显示，点箭头收起
+  bool _detailOn = true;
+
   static final RegExp _imgRe = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
 
   @override
   Widget build(BuildContext context) {
+    final m = widget.m;
     final me = m.role == 'me' || m.role == 'user';
     final fs = app.fontSize;
 
@@ -489,14 +498,14 @@ class _Bubble extends StatelessWidget {
         if (m.sticker != null && m.sticker!.isNotEmpty && !m.content.contains('![表情]'))
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: CacheImg(urlOf.emojiUrl(m.sticker!), width: 132, fit: BoxFit.cover),
+            child: CacheImg(widget.urlOf.emojiUrl(m.sticker!), width: 132, fit: BoxFit.cover),
           ),
         for (final u in imgs)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: CacheImg(urlOf.imgUrl(u), width: 210, fit: BoxFit.cover),
+              child: CacheImg(widget.urlOf.imgUrl(u), width: 210, fit: BoxFit.cover),
             ),
           ),
         if (m.voice != null && m.voice!.isNotEmpty)
@@ -506,10 +515,10 @@ class _Bubble extends StatelessWidget {
               radius: kRCapsule,
               blur: 12,
               tint: me ? app.myColor : app.herColor,
-              onTap: () => onPlay(urlOf.voiceUrl(m.voice!)),
+              onTap: () => widget.onPlay(widget.urlOf.voiceUrl(m.voice!)),
               pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(playing == urlOf.voiceUrl(m.voice!) ? Icons.graphic_eq : Icons.play_arrow, size: 16),
+                Icon(widget.playing == widget.urlOf.voiceUrl(m.voice!) ? Icons.graphic_eq : Icons.play_arrow, size: 16),
                 const SizedBox(width: 6),
                 const Text('语音条 · 点开听', style: TextStyle(fontSize: 12.5)),
               ]),
@@ -526,8 +535,30 @@ class _Bubble extends StatelessWidget {
               child: SelectableText(text, style: TextStyle(fontSize: fs, height: 1.45)),
             ),
           ),
+        // ★2026-10-01：她的【细节】（动作/表情/心里）—— 默认展开显示，点箭头收起
+        if (!me && m.detail != null && m.detail!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _detailOn = !_detailOn),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(_detailOn ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
+                      size: 15, color: kSub),
+                  if (_detailOn)
+                    Flexible(
+                      child: Text(m.detail!,
+                          style: TextStyle(fontSize: fs - 2.5, height: 1.35, color: kSub, fontStyle: FontStyle.italic)),
+                    ),
+                ],
+              ),
+            ),
+          ),
         if (m.st == 'failed')
-          TextButton(onPressed: onResend, child: const Text('没发出去 · 点我重发', style: TextStyle(fontSize: 11.5, color: Color(0xFFFF9A9A)))),
+          TextButton(onPressed: widget.onResend, child: const Text('没发出去 · 点我重发', style: TextStyle(fontSize: 11.5, color: Color(0xFFFF9A9A)))),
       ],
     );
 

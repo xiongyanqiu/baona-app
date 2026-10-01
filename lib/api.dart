@@ -72,7 +72,7 @@ const Map<String, dynamic> kDefCfg = {
 
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
-  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid});
+  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail});
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
@@ -82,6 +82,7 @@ class Msg {
   String st;            // ok / pending / failed
   String? imgUrl;       // 本地乐观显示用
   String? cid;          // ★服务端给这条消息的编号（用于就地更新，比如语音条后到）
+  String? detail;        // ★2026-10-01 她的【细节】（动作/表情/心里），折叠显示
 
   factory Msg.fromJson(Map m) => Msg(
         role: '${m['role'] ?? 'assistant'}',
@@ -91,6 +92,7 @@ class Msg {
         idx: _i(m['idx']),
         time: _i(m['time']),
         cid: _s(m['cid']),
+        detail: _s(m['detail']),
       );
 
   static String? _s(dynamic v) {
@@ -113,6 +115,7 @@ class Msg {
         if (time != null) 'time': time,
         'st': st,
         if (cid != null) 'cid': cid,
+        if (detail != null) 'detail': detail,
       };
 }
 
