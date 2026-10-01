@@ -25,7 +25,7 @@ class _DouyinPageState extends State<DouyinPage> {
   void initState() {
     super.initState();
     // ★关键：iOS 允许网页内联播放视频，不再拉起系统全屏播放器
-    final params = const WebKitWebViewControllerCreationParams(
+    final params = WebKitWebViewControllerCreationParams(
       allowsInlineMediaPlayback: true,
     );
     _wv = WebViewController.fromPlatformCreationParams(params)
