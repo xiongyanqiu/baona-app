@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme.dart';
 import 'videolib.dart';
+import 'audiolib.dart';
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -116,6 +117,15 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': 0,
                   'unread': 0,
                 },
+                // ★2026-10-01 v26.2.11：包娜的音频库 —— 手机本地音频，本地播放
+                {
+                  'id': 'audiolib',
+                  'name': '包娜的音频库',
+                  'avatar': '',
+                  'last': '点进来听会儿～',
+                  'lastT': 0,
+                  'unread': 0,
+                },
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
@@ -152,7 +162,9 @@ class _ChatListPageState extends State<ChatListPage> {
               ? const DouyinPage()
               : id == 'videolib'
                   ? const VideoLibPage()
-                  : const ConversationPage())),
+                  : id == 'audiolib'
+                      ? const AudioLibPage()
+                      : const ConversationPage())),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(children: [
@@ -197,6 +209,14 @@ class _ChatListPageState extends State<ChatListPage> {
                     child: const Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26)),
                   );
                 },
+              )
+            else if (id == 'audiolib')
+              // 音频库头像：默认紫底音符
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFFC95BFF)])),
+                child: const Center(child: Icon(Icons.music_note_rounded, color: Colors.white, size: 26)),
               )
             else if (av.isEmpty)
                 Container(
