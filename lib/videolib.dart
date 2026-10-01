@@ -7,6 +7,7 @@
 // - 右上角头像设置入口：相册选图存本地，对话列表头像同步
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
