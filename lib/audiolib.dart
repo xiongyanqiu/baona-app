@@ -41,7 +41,7 @@ class _AudioLibPageState extends State<AudioLibPage> {
   List<AlAudio> _tracks = [];
   bool _loaded = false;
   int? _playing; // 正在播放的 added
-  final AudioPlayer _player = AudioPlayer();
+  late final AudioPlayer _player; // ★2026-10-02 改晚创建：先设好全局 AudioContext（iOS 播放类别），player 才会继承它
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
   bool _playingNow = false;
@@ -52,6 +52,14 @@ class _AudioLibPageState extends State<AudioLibPage> {
   @override
   void initState() {
     super.initState();
+    // ★2026-10-02 修"音频播放不了"：iOS 默认走"静音开关"（soloAmbient），
+    //   手机静音键一开就没声音。这里设成 playback 类别：无视静音键 + 支持后台继续放。
+    try {
+      AudioPlayer.global.setAudioContext(AudioContextConfig(
+        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
+      ).build());
+    } catch (_) {/* 低版本没有这个配置就跳过 */}
+    _player = AudioPlayer();
     _load();
     // 播放进度/状态
     _player.onPositionChanged.listen((p) => setState(() => _pos = p));
@@ -152,7 +160,8 @@ class _AudioLibPageState extends State<AudioLibPage> {
     try {
       final res = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'amr', 'wma', 'opus', 'caf'],
+        // ★2026-10-02 加 aiff/aif：苹果的 AIFF 音频（Core Audio 原生支持，之前列表没有它所以根本选不了）
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'amr', 'wma', 'opus', 'caf', 'aiff', 'aif'],
         allowMultiple: false,
       );
       if (res == null || res.files.isEmpty) return;
@@ -192,8 +201,9 @@ class _AudioLibPageState extends State<AudioLibPage> {
       try {
         await _player.play(DeviceFileSource(t.path));
       } catch (_) {
-        // 文件坏了就跳过
+        // 文件坏了或格式 iOS 播不了（比如 ogg/opus/wma）→ 给个明确提示，别无声无息
         setState(() => _playing = null);
+        if (mounted) toast(context, '这个格式苹果播不了，换个 mp3/wav/aiff 试试');
       }
     } else {
       await _player.resume();
