@@ -691,12 +691,13 @@ class _VideoLibPageState extends State<VideoLibPage>
     _anim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
     );
-    final t = Tween<double>(begin: from, end: to);
+    final t = Tween<double>(begin: from, end: to).animate(
+      CurvedAnimation(parent: _anim!, curve: Curves.easeOutCubic),
+    );
     _anim!.addListener(() {
       if (!mounted) return;
-      setState(() => _dragOff = t.transform(_anim!.value));
+      setState(() => _dragOff = t.value);
     });
     _anim!.forward().whenComplete(() {
       if (!mounted) return;
