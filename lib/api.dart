@@ -298,6 +298,17 @@ class Api {
   }
 
   /* ---------- 实时通道（她的新消息/打字中/控制器/游戏/商城） ---------- */
+  /// ★2026-10-02 修"切后台再回来就断、要手动重连"：
+  ///   iOS 后台挂起会把 WebSocket 杀掉、Dart 定时器也冻结，onDone 里的延迟重连在后台根本不会跑。
+  ///   所以回前台必须主动重连：先探活（通 = 电脑端活着），通就重建 WebSocket。
+  void reconnect() {
+    wsClose();
+    if (token.isEmpty) return;
+    ping().then((m) {
+      if (m.startsWith('通了')) wsOpen();
+    });
+  }
+
   void wsOpen() {
     wsClose();
     if (token.isEmpty) return;
@@ -307,17 +318,26 @@ class Api {
       _ws = ch;
       ch.stream.listen((data) {
         try {
+          _retry = 0;   // ★收到消息 = 通道活着，清零重试计数
           final j = jsonDecode('$data');
           if (j is Map) _ev.add(Map<String, dynamic>.from(j));
         } catch (_) {}
       }, onDone: () {
         _ws = null;
+        // ★重连条件放宽：只要还有 token 就重试（以前还要求 hasListener，后台冻结后容易满足不了）。
+        //   同时限制 3 次连续失败就停手，避免电脑端没开时无限刷。
+        _retry = (_retry ?? 0) + 1;
+        if (_retry > 3) { _retry = 0; return; }
         Future.delayed(const Duration(seconds: 4), () {
-          if (_ev.hasListener && token.isNotEmpty) wsOpen();
+          if (token.isNotEmpty) wsOpen();
         });
       }, onError: (_) {});
     } catch (_) {}
   }
+
+  int? _retry;   // ★2026-10-02 断线重连续计数（防电脑端没开时无限重试）
+
+  void wsOpenOk() { _retry = 0; }   // ★连上/收到过消息就清零重试计数
 
   void wsClose() {
     try {
