@@ -33,12 +33,25 @@ class _ChatListPageState extends State<ChatListPage> {
   String _last = '';
   int _lastT = 0;
   late Future<String> _vlAvatarFuture = Future.value('');
+  String _alName = '包娜的音频库';
+  String _alAvatar = ''; // ★26.2.12：音频库自定义头像（dataURL）
 
   @override
   void initState() {
     super.initState();
     _vlAvatarFuture = SharedPreferences.getInstance()
         .then((sp) => sp.getString('vl.avatar') ?? '');
+    // ★26.2.12：音频库头像/名字本地同步（在音频库页改了，列表立刻显示）
+    SharedPreferences.getInstance().then((sp) {
+      final n = sp.getString('al.name') ?? '';
+      final a = sp.getString('al.avatar') ?? '';
+      if (mounted && (n != _alName || a != _alAvatar)) {
+        setState(() {
+          if (n.isNotEmpty) _alName = n;
+          _alAvatar = a;
+        });
+      }
+    });
     _refresh();
   }
 
@@ -120,8 +133,8 @@ class _ChatListPageState extends State<ChatListPage> {
                 // ★2026-10-01 v26.2.11：包娜的音频库 —— 手机本地音频，本地播放
                 {
                   'id': 'audiolib',
-                  'name': '包娜的音频库',
-                  'avatar': '',
+                  'name': _alName,
+                  'avatar': _alAvatar,
                   'last': '点进来听会儿～',
                   'lastT': 0,
                   'unread': 0,
@@ -149,6 +162,29 @@ class _ChatListPageState extends State<ChatListPage> {
       ),
         ]);
       },
+    );
+  }
+
+  /// ★26.2.12：音频库头像——本地 dataURL 有图就显示，没图显示默认图标
+  Widget _avatarOf(String dataUrl, {required Widget child}) {
+    if (dataUrl.startsWith('data:image/')) {
+      try {
+        final b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+        return Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            image: DecorationImage(image: MemoryImage(base64Decode(b64)), fit: BoxFit.cover),
+          ),
+        );
+      } catch (_) {}
+    }
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFFC95BFF)])),
+      child: Center(child: child),
     );
   }
 
@@ -211,13 +247,9 @@ class _ChatListPageState extends State<ChatListPage> {
                 },
               )
             else if (id == 'audiolib')
-              // 音频库头像：默认紫底音符
-              Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFFC95BFF)])),
-                child: const Center(child: Icon(Icons.music_note_rounded, color: Colors.white, size: 26)),
-              )
+              // 音频库头像：本地设置的头像（dataURL）或默认紫底音符
+              _avatarOf(_alAvatar,
+                  child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 26))
             else if (av.isEmpty)
                 Container(
                     width: 52,
