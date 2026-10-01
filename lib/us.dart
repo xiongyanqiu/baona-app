@@ -344,31 +344,46 @@ Future<void> openMood(BuildContext context) async {
 
 /* -------------------------------- 相册 -------------------------------- */
 Future<void> openAlbum(BuildContext context) async {
-  final groups = await _loadAlbumWithPin(context);
+  // ★2026-10-01 相册本地缓存：有持久化列表就立即打开（秒开、离线可看），进页后再静默刷新；
+  //   没缓存才走网络（可能要相册密码）。
+  final cached = _albumFromCache();
+  List<AlbGroup> groups;
+  bool stale = false;
+  if (cached != null && cached.isNotEmpty) {
+    groups = cached;
+    stale = true;
+  } else {
+    groups = await _loadAlbumNetwork(context);
+  }
   if (!context.mounted) return;
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: const Color(0x8A000000),
-    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => GlassSheet(child: _Album(scroll: s, groups: groups))),
+    builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => GlassSheet(child: _Album(scroll: s, groups: groups, stale: stale))),
   );
 }
 
-Future<List<AlbGroup>> _loadAlbumWithPin(BuildContext context) async {
-  final a = app.api;
-  if (a == null) return [];
-  // ★b21 相册秒开：5 分钟内直接读本地缓存，不再每次进相册都全量拉网络
+/// 读持久化相册列表（无视缓存时间，用于立即渲染）
+List<AlbGroup>? _albumFromCache() {
   try {
     final raw = Store.albumCache;
-    if (raw.isNotEmpty) {
-      final c = jsonDecode(raw);
-      if (c is Map && c['t'] is int && (DateTime.now().millisecondsSinceEpoch - (c['t'] as int)) < 300000) {
-        final groups = ((c['groups'] as List?) ?? []);
-        if (groups.isNotEmpty) return groups.map((e) => AlbGroup.fromJson(Map.from(e))).toList();
-      }
+    if (raw.isEmpty) return null;
+    final c = jsonDecode(raw);
+    if (c is Map) {
+      final groups = ((c['groups'] as List?) ?? []);
+      final list = groups.map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+      if (list.isNotEmpty) return list;
     }
-  } catch (_) {/* 缓存坏了就正常走网络 */}
+  } catch (_) {/* 缓存坏了就走网络 */}
+  return null;
+}
+
+/// 首次（无缓存）走网络拉相册，含相册密码兜底；成功写持久化缓存
+Future<List<AlbGroup>> _loadAlbumNetwork(BuildContext context) async {
+  final a = app.api;
+  if (a == null) return [];
   var j = await a.album();
   if (j['ok'] != true) {
     // ★先拿聊天口令试一下（电脑端相册密码默认就是它）——省得每次都让你输
@@ -385,7 +400,7 @@ Future<List<AlbGroup>> _loadAlbumWithPin(BuildContext context) async {
   }
   if (j['ok'] != true) return [];
   final groups = ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
-  // 成功拉到 → 写缓存（含时间戳），下次进相册秒开
+  // 成功拉到 → 写持久化缓存
   try {
     await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j['groups']}));
   } catch (_) {/* ignore */}
@@ -415,9 +430,10 @@ Future<String> pickAlbumImage(BuildContext context) async {
 }
 
 class _Album extends StatefulWidget {
-  const _Album({required this.scroll, required this.groups});
+  const _Album({required this.scroll, required this.groups, this.stale = false});
   final ScrollController scroll;
   final List<AlbGroup> groups;
+  final bool stale; // ★2026-10-01：true=读的是本地缓存，进页后静默刷新（不转圈、不挡手）
   @override
   State<_Album> createState() => _AlbumState();
 }
@@ -433,6 +449,18 @@ class _AlbumState extends State<_Album> {
     // ★2026-09-29：默认要选【有照片的那个分组】——以前默认是第一个，他那个第一组"日常"是空的，
     //   点开相册看着就像"没有内容"（实测 App 连一张照片都没去请求）
     _cur = _firstWithPhotos();
+    // ★2026-10-01：读的是本地缓存 → 后台静默拉最新，拉到就替换并更新缓存
+    if (widget.stale) {
+      Future.microtask(() async {
+        final fresh = await _loadAlbumNetwork(context);
+        if (!mounted || fresh.isEmpty) return;
+        setState(() {
+          _g = fresh;
+          if (_cur >= _g.length) _cur = 0;
+          if (_g.isNotEmpty && _g[_cur].photos.isEmpty) _cur = _firstWithPhotos();
+        });
+      });
+    }
   }
 
   int _firstWithPhotos() {
@@ -450,6 +478,10 @@ class _AlbumState extends State<_Album> {
       if (_cur >= _g.length) _cur = 0;
       if (_g.isNotEmpty && _g[_cur].photos.isEmpty) _cur = _firstWithPhotos(); // 当前这组空了就换有图的
     });
+    // ★2026-10-01：刷新成功同步更新本地缓存
+    try {
+      await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j['groups']}));
+    } catch (_) {/* ignore */}
   }
 
   @override
