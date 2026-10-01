@@ -9,6 +9,7 @@ import 'chat.dart';
 import 'chatlist.dart';
 import 'eye.dart';
 import 'game.dart';
+import 'wishes.dart';
 import 'notify.dart';
 import 'pet.dart';
 import 'sheets.dart';
@@ -541,7 +542,7 @@ class _HomePageState extends State<HomePage> {
                 context: context,
                 removeBottom: true,
                 child: Column(children: [
-                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => _switchTab(3)),
+                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => _switchTab(4)),
                   Expanded(
                     // ★2.0 第四波：PageView 左右滑动切换 —— 页面跟手走，才是 iOS 26 的标签栏
                     child: PageView(
@@ -562,6 +563,7 @@ class _HomePageState extends State<HomePage> {
                         KeepAliveWrapper(child: ChatListPage()),
                         KeepAliveWrapper(child: ShopPage()),
                         KeepAliveWrapper(child: GamePage()),
+                        KeepAliveWrapper(child: WishesPage()),
                         KeepAliveWrapper(child: UsPage()),
                       ],
                     ),
@@ -653,6 +655,7 @@ class _Nav extends StatelessWidget {
           {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '聊天', 'badge': unread},
           {'off': Icons.shopping_bag_outlined, 'on': Icons.shopping_bag, 't': '商城'},
           {'off': Icons.casino_outlined, 'on': Icons.casino, 't': '游戏'},
+          {'off': Icons.auto_awesome_outlined, 'on': Icons.auto_awesome, 't': '愿望'},
           {'off': Icons.favorite_border, 'on': Icons.favorite, 't': '我们'},
         ],
       );

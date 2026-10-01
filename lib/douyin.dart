@@ -1,9 +1,10 @@
-// 包娜 · 抖音网页版（b44）
-// 抖音把手机 UA / WebView 全封（下载引导页），但桌面 UA 打开 www.douyin.com
-// 是完整网页版（精选推荐流、可看视频）。
-// 本页用 WebView + 桌面 UA 直连抖音官网：手机直连官方，不走电脑中转。
+// 包娜 · 抖音网页版
+// 桌面 UA 打开 www.douyin.com 是完整网页版。iOS WKWebView 默认会把视频
+// 拉进【系统全屏播放器】（不能上下滑换视频）→ 这里开内联播放 + 注入 JS
+// 强制 playsinline，让视频在网页内播放，上下滑动可切换/滚动。
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 class DouyinPage extends StatefulWidget {
   const DouyinPage({super.key});
@@ -23,15 +24,56 @@ class _DouyinPageState extends State<DouyinPage> {
   @override
   void initState() {
     super.initState();
-    _wv = WebViewController()
+    // ★关键：iOS 允许网页内联播放视频，不再拉起系统全屏播放器
+    final params = const WebKitWebViewControllerCreationParams(
+      allowsInlineMediaPlayback: true,
+    );
+    _wv = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(_desktopUA)
       ..setBackgroundColor(const Color(0xFF050505))
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) => setState(() => _loading = true),
-        onPageFinished: (_) => setState(() => _loading = false),
+        onPageFinished: (_) {
+          setState(() => _loading = false);
+          _injectJs();
+        },
       ))
       ..loadRequest(Uri.parse('https://www.douyin.com/'));
+  }
+
+  /// 强制所有 <video> 内联、禁止 webkit 全屏；上下滑 → 模拟滚轮切换/滚动
+  Future<void> _injectJs() async {
+    const js = '''
+(function(){
+  try{
+    var fix=function(){
+      document.querySelectorAll('video').forEach(function(v){
+        v.setAttribute('playsinline','');
+        v.setAttribute('webkit-playsinline','');
+        v.addEventListener('webkitbeginfullscreen',function(e){
+          e.preventDefault();
+          try{ if(v.webkitExitFullscreen) v.webkitExitFullscreen(); }catch(_){}
+        });
+      });
+    };
+    fix();
+    document.addEventListener('DOMNodeInserted',fix,false);
+    var sy=0;
+    document.addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});
+    document.addEventListener('touchend',function(e){
+      var dy=e.changedTouches[0].clientY-sy;
+      if(Math.abs(dy)>40){
+        var wd=dy<0?-160:160;
+        var ev=new WheelEvent('wheel',{deltaY:wd,bubbles:true,cancelable:true});
+        var t=document.querySelector('.video-player-base,.swiper,[data-e2e="feed-active-video"]')||document.elementFromPoint(e.changedTouches[0].clientX,e.changedTouches[0].clientY)||document;
+        try{ t.dispatchEvent(ev); }catch(_){ window.dispatchEvent(new WheelEvent('wheel',{deltaY:wd,bubbles:true})); }
+      }
+    },{passive:true});
+  }catch(e){}
+})();
+''';
+    try { await _wv.runJavaScript(js); } catch (e) { /* ignore */ }
   }
 
   @override
@@ -39,12 +81,10 @@ class _DouyinPageState extends State<DouyinPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
       body: Stack(children: [
-        // 全屏网页（从状态栏下面开始，网页顶部导航不被刘海挡住/可点）
         Positioned.fill(
           top: MediaQuery.of(context).padding.top,
           child: WebViewWidget(controller: _wv),
         ),
-        // 左上角小返回按钮（不遮挡网页顶部导航）
         Positioned(
           top: MediaQuery.of(context).padding.top + 4,
           left: 8,
@@ -61,7 +101,6 @@ class _DouyinPageState extends State<DouyinPage> {
             ),
           ),
         ),
-        // 加载指示
         if (_loading)
           const Positioned(
             top: 100, left: 0, right: 0,
