@@ -17,9 +17,9 @@ class _W {
   final int t, grantedAt, doneAt;
   _W({required this.id, required this.text, required this.status, required this.t, required this.grantedAt, required this.doneAt});
   factory _W.fromJson(Map e) => _W(
-        id: String(e['id'] ?? ''),
-        text: String(e['text'] ?? ''),
-        status: String(e['status'] ?? 'pending'),
+        id: (e['id'] ?? '').toString(),
+        text: (e['text'] ?? '').toString(),
+        status: (e['status'] ?? 'pending').toString(),
         t: (e['t'] as num?)?.toInt() ?? 0,
         grantedAt: (e['grantedAt'] as num?)?.toInt() ?? 0,
         doneAt: (e['doneAt'] as num?)?.toInt() ?? 0,
