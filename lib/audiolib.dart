@@ -2,10 +2,12 @@
 // ★2026-10-01 v26.2.11 新增：音频只存手机本地（App 文档目录 al/），不走网络
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,6 +36,8 @@ class AudioLibPage extends StatefulWidget {
 
 class _AudioLibPageState extends State<AudioLibPage> {
   static const _dbKey = 'al.db';
+  static const _avKey = 'al.avatar';
+  static const _nameKey = 'al.name';
   List<AlAudio> _tracks = [];
   bool _loaded = false;
   int? _playing; // 正在播放的 added
@@ -41,6 +45,9 @@ class _AudioLibPageState extends State<AudioLibPage> {
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
   bool _playingNow = false;
+  String _name = '包娜的音频库';
+  String _avatar = '';
+  Uint8List? _avatarBytes; // 头像解码缓存（防滑动重建闪烁）
 
   @override
   void initState() {
@@ -75,7 +82,64 @@ class _AudioLibPageState extends State<AudioLibPage> {
     } catch (_) {
       _tracks = [];
     }
+    _avatar = sp.getString(_avKey) ?? '';
+    _avatarBytes = _decodeAvatar(_avatar);
+    _name = sp.getString(_nameKey) ?? '包娜的音频库';
     if (mounted) setState(() => _loaded = true);
+  }
+
+  Uint8List? _decodeAvatar(String dataUrl) {
+    if (!dataUrl.startsWith('data:image/')) return null;
+    try {
+      final b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 换头像：相册选图 → dataURL 存本地（对话列表头像同步）
+  Future<void> _pickAvatar() async {
+    final f = await ImagePicker().pickImage(
+        source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
+    if (f == null) return;
+    final bytes = await f.readAsBytes();
+    final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_avKey, dataUrl);
+    if (mounted) {
+      setState(() {
+        _avatar = dataUrl;
+        _avatarBytes = _decodeAvatar(dataUrl);
+      });
+    }
+  }
+
+  /// 改名字：弹输入框 → 存本地（对话列表名字同步）
+  Future<void> _rename() async {
+    final ctl = TextEditingController(text: _name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kBg2,
+        title: const Text('给音频库起个名字', style: TextStyle(color: kText)),
+        content: TextField(
+          controller: ctl,
+          maxLength: 14,
+          autofocus: true,
+          style: const TextStyle(color: kText),
+          decoration: const InputDecoration(hintText: '包娜的音频库', hintStyle: TextStyle(color: kSub)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('取消', style: TextStyle(color: kSub))),
+          TextButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('保存', style: TextStyle(color: kAccent2))),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty) return;
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_nameKey, newName);
+    if (mounted) setState(() => _name = newName);
   }
 
   Future<void> _save() async {
@@ -178,12 +242,45 @@ class _AudioLibPageState extends State<AudioLibPage> {
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 头：标题 + 添加按钮
+          // 头：头像设置入口 + 标题（点一下改名） + 添加按钮
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Row(children: [
-              const Text('包娜的音频库', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kText)),
-              const Spacer(),
+              // 头像设置入口（点一下换头像）
+              GestureDetector(
+                onTap: _pickAvatar,
+                child: Stack(clipBehavior: Clip.none, children: [
+                  _avatarCircle(30),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF2F6BFF),
+                      ),
+                      child: const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 11),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _rename,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Flexible(
+                        child: Text(_name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kText)),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.edit_rounded, size: 14, color: kSub),
+                    ]),
+                    const Text('点名字可改名 · 点头像可换', style: TextStyle(fontSize: 11, color: kSub)),
+                  ]),
+                ),
+              ),
               GestureDetector(
                 onTap: _addAudio,
                 child: Container(
@@ -257,6 +354,24 @@ class _AudioLibPageState extends State<AudioLibPage> {
         const SizedBox(height: 6),
         const Text('点右上角「添加音频」\n把想听的音乐/语音放进来', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: kSub, height: 1.5)),
       ]),
+    );
+  }
+
+  Widget _avatarCircle(double size) {
+    final bytes = _avatarBytes;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(colors: [Color(0xFF7B2FFF), Color(0xFFC95BFF)]),
+        image: bytes == null
+            ? null
+            : DecorationImage(image: MemoryImage(bytes), fit: BoxFit.cover),
+      ),
+      child: bytes == null
+          ? const Icon(Icons.music_note_rounded, color: Colors.white, size: 16)
+          : null,
     );
   }
 
