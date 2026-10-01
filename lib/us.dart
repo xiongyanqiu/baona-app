@@ -409,7 +409,7 @@ Future<List<AlbGroup>> _loadAlbumNetwork(BuildContext context) async {
 
 /// 给设置页"选背景"用：从相册里挑一张，返回它的地址
 Future<String> pickAlbumImage(BuildContext context) async {
-  final groups = await _loadAlbumWithPin(context);
+  final groups = await _loadAlbumNetwork(context);
   if (!context.mounted || groups.isEmpty) return '';
   final all = groups.expand((g) => g.photos).toList();
   if (all.isEmpty) return '';
@@ -480,7 +480,7 @@ class _AlbumState extends State<_Album> {
     });
     // ★2026-10-01：刷新成功同步更新本地缓存
     try {
-      await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j['groups']}));
+      await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j!['groups']}));
     } catch (_) {/* ignore */}
   }
 
