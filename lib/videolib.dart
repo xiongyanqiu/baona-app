@@ -615,8 +615,8 @@ class _VideoLibPageState extends State<VideoLibPage>
     return LayoutBuilder(builder: (c, cons) {
       final cw = cons.maxWidth;
       final ch = cons.maxHeight;
-      final w = cw * 0.50; // 16:9 矩形卡片：与截图红框框住的主卡一模一样大小
-      final h = w * 9 / 16;
+      final w = cw * 0.70; // 9:16 竖屏矩形卡片：宽度70%屏宽，用户确认
+      final h = w * 16 / 9;
       final topBase = (ch - h) / 2; // 垂直居中
       final gap = w * 0.60; // 中心距：左右视频完整可见，内侧被主视频压住一部分
       _cardW = w;
