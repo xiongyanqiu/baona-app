@@ -248,6 +248,12 @@ class _BaonaAppState extends State<BaonaApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
     Notify.i.background(s != AppLifecycleState.resumed);
+    // ★2026-10-02 修"切后台再回来就断、要手动重连"：iOS 后台挂起会杀掉 WebSocket 且冻结定时器，
+    //   回前台必须主动重建连接（onDone 的延迟重连在后台不跑，所以以前回来就是断的）。
+    if (s == AppLifecycleState.resumed) {
+      final a = app.api;
+      if (a != null) a.reconnect();
+    }
   }
 
   @override
