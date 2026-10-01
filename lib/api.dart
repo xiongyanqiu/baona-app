@@ -327,7 +327,7 @@ class Api {
         // ★重连条件放宽：只要还有 token 就重试（以前还要求 hasListener，后台冻结后容易满足不了）。
         //   同时限制 3 次连续失败就停手，避免电脑端没开时无限刷。
         _retry = (_retry ?? 0) + 1;
-        if (_retry > 3) { _retry = 0; return; }
+        if ((_retry ?? 0) > 3) { _retry = 0; return; }
         Future.delayed(const Duration(seconds: 4), () {
           if (token.isNotEmpty) wsOpen();
         });
