@@ -35,21 +35,32 @@ class _ChatListPageState extends State<ChatListPage> {
   late Future<String> _vlAvatarFuture = Future.value('');
   String _alName = '包娜的音频库';
   String _alAvatar = ''; // ★26.2.12：音频库自定义头像（dataURL）
-  // ★26.2.14：独立角色「刘紫灵」自定义备注/头像（本地存储，角色页改了立刻同步）
-  String _lzlName = '刘紫灵';
-  String _lzlAvatar = '';
+  // ★26.2.14：独立角色自定义备注/头像（本地存储，角色页改了立刻同步）——所有角色通用
+  final Map<String, String> _roleNames = {};
+  final Map<String, String> _roleAvatars = {};
 
-  /// ★通用：读某个角色的本地备注/头像（以后新增角色都用这套）
-  Future<void> _loadRolePrefs(String role) async {
+  /// ★通用：读全部角色的本地备注/头像（以后新增角色自动进来）
+  Future<void> _loadRolePrefs() async {
     final sp = await SharedPreferences.getInstance();
-    final n = sp.getString('role.$role.name') ?? '';
-    final a = sp.getString('role.$role.avatar') ?? '';
-    if (mounted && (n != _lzlName || a != _lzlAvatar)) {
-      setState(() {
-        if (n.trim().isNotEmpty) _lzlName = n;
-        _lzlAvatar = a;
-      });
+    bool changed = false;
+    for (final rid in roleIds()) {
+      final n = sp.getString('role.$rid.name') ?? '';
+      final a = sp.getString('role.$rid.avatar') ?? '';
+      if ((_roleNames[rid] ?? '') != n || (_roleAvatars[rid] ?? '') != a) {
+        if (n.trim().isNotEmpty) {
+          _roleNames[rid] = n;
+        } else {
+          _roleNames.remove(rid);
+        }
+        if (a.isNotEmpty) {
+          _roleAvatars[rid] = a;
+        } else {
+          _roleAvatars.remove(rid);
+        }
+        changed = true;
+      }
     }
+    if (mounted && changed) setState(() {});
   }
 
   @override
@@ -68,7 +79,7 @@ class _ChatListPageState extends State<ChatListPage> {
         });
       }
     });
-    _loadRolePrefs('liuziling');
+    _loadRolePrefs();
     _refresh();
   }
 
@@ -156,15 +167,16 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': 0,
                   'unread': 0,
                 },
-                // ★独立角色：刘紫灵（包娜闺蜜）—— 人设/上下文/记忆和包娜完全隔离；备注头像可自定义
-                {
-                  'id': 'liuziling',
-                  'name': _lzlName,
-                  'avatar': _lzlAvatar,
-                  'last': '包娜的闺蜜，来找你唠嗑的',
+                // ★独立角色们（刘紫灵 + 女娲/后土/西王母/美杜莎/云韵/萧薰儿/比比东/千仞雪/小舞/古月娜/狠人大帝/安妙依/姬紫月/颜如玉/火灵儿）
+                //   人设/上下文/记忆完全隔离；备注头像可自定义
+                ...roleIds().map((rid) => {
+                  'id': rid,
+                  'name': _roleNames[rid] ?? roleNameOf(rid),
+                  'avatar': _roleAvatars[rid] ?? '',
+                  'last': '来找我聊聊',
                   'lastT': 0,
                   'unread': 0,
-                },
+                }),
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
@@ -244,6 +256,7 @@ class _ChatListPageState extends State<ChatListPage> {
     final unread = (c['unread'] as int?) ?? 0;
     return InkWell(
       onTap: () {
+        final isRole = roleIds().contains(id);
         final f = Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => id == 'douyin'
                 ? const DouyinPage()
@@ -251,13 +264,11 @@ class _ChatListPageState extends State<ChatListPage> {
                     ? const VideoLibPage()
                     : id == 'audiolib'
                         ? const AudioLibPage()
-                        : id == 'liuziling'
-                            ? const ConversationPage(roleId: 'liuziling') // ★独立角色会话
+                        : isRole
+                            ? ConversationPage(roleId: id) // ★独立角色会话
                             : const ConversationPage()));
         // ★角色页改了备注/头像，返回列表立刻同步
-        if (id == 'liuziling') {
-          f.then((_) => _loadRolePrefs('liuziling'));
-        }
+        if (isRole) f.then((_) => _loadRolePrefs());
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -308,9 +319,9 @@ class _ChatListPageState extends State<ChatListPage> {
               // 音频库头像：本地设置的头像（dataURL）或默认紫底音符
               _avatarOf(_alAvatar,
                   child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 26))
-            else if (id == 'liuziling')
+            else if (roleIds().contains(id))
               // ★独立角色头像：自定义（dataURL）优先，没有就用默认紫青渐变 + 角色字
-              _roleAvatarOf(_lzlAvatar, '灵')
+              _roleAvatarOf(_roleAvatars[id] ?? '', roleLetterOf(id))
             else if (av.isEmpty)
                 Container(
                     width: 52,
