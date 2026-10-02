@@ -14,6 +14,7 @@ import 'imgsrv.dart';
 import 'theme.dart';
 import 'sheets.dart';
 import 'stickers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage({super.key, this.roleId});
@@ -27,6 +28,9 @@ class _ChatPageState extends State<ConversationPage> {
   // ★独立角色会话：完全独立的上下文/缓存（包娜的『baona』缓存不碰）
   String get _role => widget.roleId ?? '';
   String get _cacheKey => _role.isEmpty ? 'baona' : 'role_$_role';
+  // ★角色自定义备注/头像（本地存储，改完立刻同步到列表）
+  String _roleName = '';
+  String _roleAvatar = '';
   final List<Msg> _msgs = [];
   final TextEditingController _inp = TextEditingController();
   final FocusNode _focus = FocusNode(); // ★管键盘（弹出来就收面板 / 点空白就收键盘）
@@ -49,6 +53,19 @@ class _ChatPageState extends State<ConversationPage> {
   void initState() {
     super.initState();
     _load();
+    // ★角色备注/头像：从本地读（自定义了就显示自定义，没有就用默认）
+    if (_role.isNotEmpty) {
+      SharedPreferences.getInstance().then((sp) {
+        final n = sp.getString('role.$_role.name') ?? '';
+        final a = sp.getString('role.$_role.avatar') ?? '';
+        if (mounted && (n != _roleName || a != _roleAvatar)) {
+          setState(() {
+            _roleName = n;
+            _roleAvatar = a;
+          });
+        }
+      });
+    }
     _sub = app.api?.events.listen(_onEvent);
     _sc.addListener(() {
       if (!_sc.hasClients) return;
@@ -268,6 +285,74 @@ class _ChatPageState extends State<ConversationPage> {
     _send({'text': t});
   }
 
+  /// ★角色设置：点头像/名字 → 改备注 / 改头像（只影响这个角色，和包娜互不相干）
+  Future<void> _openRoleSettings() async {
+    if (_role.isEmpty) return;
+    final sp = await SharedPreferences.getInstance();
+    final act = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF232329),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 14, bottom: 10),
+            child: Text('角色设置', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: const Text('改备注'),
+            subtitle: const Text('列表和聊天页显示的名字'),
+            onTap: () => Navigator.pop(c, 'name'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.face_retouching_natural),
+            title: const Text('改头像'),
+            subtitle: const Text('从相册选一张，只存在手机本地'),
+            onTap: () => Navigator.pop(c, 'avatar'),
+          ),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+    if (act == null || !mounted) return;
+    if (act == 'name') {
+      final ctl = TextEditingController(text: _roleName.isEmpty ? roleNameOf(_role) : _roleName);
+      final v = await showDialog<String>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('改备注'),
+          content: TextField(controller: ctl, maxLength: 12, autofocus: true, decoration: const InputDecoration(hintText: '输入想显示的名字')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('算了')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, ctl.text.trim()),
+                child: const Text('保存')),
+          ],
+        ),
+      );
+      if (v != null && v.isNotEmpty && mounted) {
+        await sp.setString('role.$_role.name', v);
+        setState(() => _roleName = v);
+        toast(context, '备注已改 ✓');
+      }
+    } else if (act == 'avatar') {
+      try {
+        final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 720, imageQuality: 82);
+        if (f == null) return;
+        final bytes = await f.readAsBytes();
+        final data = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        await sp.setString('role.$_role.avatar', data);
+        if (mounted) {
+          setState(() => _roleAvatar = data);
+          toast(context, '头像已换 ✓');
+        }
+      } catch (e) {
+        if (mounted) toast(context, '选图失败：$e');
+      }
+    }
+  }
+
   /// ★2026-09-29：用手机摄像头给她看一眼 —— 拍一张传上去，电脑端会让她真看到（她的眼睛）
   Future<void> _eyeFromCamera() async {
     final a = app.api;
@@ -381,10 +466,11 @@ class _ChatPageState extends State<ConversationPage> {
         onSearch: () => openSearch(context),
         onSet: () => openSettings(context),
         onCtrl: () => openCtrl(context),
-        // ★独立角色：标题/头像显示角色自己的，不显示包娜的
-        title: _role.isNotEmpty ? roleNameOf(_role) : app.nick,
-        avatar: _role.isNotEmpty ? '' : '${app.herSet['herAvatar'] ?? ''}',
+        // ★独立角色：标题/头像显示角色自己的，不显示包娜的；点头像/名字可改备注和头像
+        title: _role.isNotEmpty ? (_roleName.isNotEmpty ? _roleName : roleNameOf(_role)) : app.nick,
+        avatar: _role.isNotEmpty ? _roleAvatar : '${app.herSet['herAvatar'] ?? ''}',
         letter: _role.isNotEmpty ? _roleLetter(_role) : '娜',
+        onRoleTap: _role.isNotEmpty ? _openRoleSettings : null,
       ),
       Expanded(
         child: _loading
@@ -829,10 +915,12 @@ class _ConvHeader extends StatelessWidget {
       this.title = '',
       this.avatar = '',
       this.letter = '娜',
-      this.simple = false});
+      this.simple = false,
+      this.onRoleTap});
   final VoidCallback onBack, onSearch, onSet, onCtrl;
   final String title, avatar, letter;
   final bool simple;   // ★独立角色：只留返回+标题，不显示包娜专属按钮
+  final VoidCallback? onRoleTap;   // ★角色模式：点头像/名字改备注和头像
 
   @override
   Widget build(BuildContext context) {
@@ -846,26 +934,38 @@ class _ConvHeader extends StatelessWidget {
           child: Row(children: [
             IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19), tooltip: '返回'),
             GestureDetector(
-              onTap: simple ? null : onSet,
-              child: av.isEmpty
+              onTap: onRoleTap ?? onSet,
+              child: av.startsWith('data:image/')
+                  // ★角色自定义头像（本地 dataURL）
                   ? Container(
                       width: 38,
                       height: 38,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-                      child: Center(child: Text(letter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-                    )
-                  : FutureBuilder<ImageProvider>(
-                      future: ImgCache.provider(av),
-                      builder: (c, s) => Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                          image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
-                        ),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        image: DecorationImage(
+                            image: MemoryImage(base64Decode(av.substring(av.indexOf(',') + 1))),
+                            fit: BoxFit.cover),
                       ),
-                    ),
+                    )
+                  : av.isNotEmpty && !simple
+                      ? FutureBuilder<ImageProvider>(
+                          future: ImgCache.provider(av),
+                          builder: (c, s) => Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+                              image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
+                          child: Center(child: Text(letter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                        ),
             ),
             const SizedBox(width: 10),
             Expanded(
