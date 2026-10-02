@@ -52,6 +52,8 @@ class _ChatPageState extends State<ConversationPage> {
   @override
   void initState() {
     super.initState();
+    // ★2026-10-02 角色会话打开就清该会话未读（不进主对话红点）
+    if (_role.isNotEmpty) app.sideClear(_role);
     _load();
     // ★角色备注/头像：从本地读（自定义了就显示自定义，没有就用默认）
     if (_role.isNotEmpty) {
@@ -494,7 +496,8 @@ class _ChatPageState extends State<ConversationPage> {
                   final prev = k > 0 ? _msgs[k - 1] : null;
                   // ★2026-09-29：隔得久（>30 分钟）或跨天时插一行时间，翻记录一眼知道"这是啥时候说的"
                   final gap = prev == null || (m.time != null && prev.time != null && (m.time! - prev.time!) > 30 * 60 * 1000);
-                  final bubble = _Bubble(m: m, onResend: () => _send({'text': m.content}), onPlay: _play, playing: _playingUrl, urlOf: a);
+                  final bubble = _Bubble(m: m, onResend: () => _send({'text': m.content}), onPlay: _play, playing: _playingUrl, urlOf: a,
+                      roleSrc: _role.isNotEmpty ? _roleAvatar : '', roleLetter: _role.isNotEmpty ? roleLetterOf(_role) : '');
                   if (!gap) return bubble;
                   return Column(children: [
                     if (m.time != null)
@@ -566,12 +569,14 @@ class _ChatPageState extends State<ConversationPage> {
 
 /* ------------------------------- 一条消息 ------------------------------- */
 class _Bubble extends StatefulWidget {
-  _Bubble({required this.m, required this.onResend, required this.onPlay, required this.playing, required this.urlOf});
+  _Bubble({required this.m, required this.onResend, required this.onPlay, required this.playing, required this.urlOf, this.roleSrc = '', this.roleLetter = ''});
   final Msg m;
   final VoidCallback onResend;
   final void Function(String) onPlay;
   final String? playing;
   final Api urlOf;
+  final String roleSrc;    // ★2026-10-02 角色会话：她消息行的头像
+  final String roleLetter; // ★角色字
 
   @override
   State<_Bubble> createState() => _BubbleState();
@@ -681,7 +686,7 @@ class _BubbleState extends State<_Bubble> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!me) ...[
-            const _MiniAvatar(me: false),
+            _MiniAvatar(me: false, src: widget.roleSrc, letter: widget.roleLetter),
             const SizedBox(width: 7),
           ],
           Flexible(child: body),
@@ -698,8 +703,10 @@ class _BubbleState extends State<_Bubble> {
 }
 
 class _MiniAvatar extends StatefulWidget {
-  const _MiniAvatar({super.key, this.me = false});
+  const _MiniAvatar({super.key, this.me = false, this.src = '', this.letter = ''});
   final bool me;
+  final String src;    // ★2026-10-02 角色会话：她的消息头像用角色自定义头像（列表换了，消息行也要跟着换）
+  final String letter; // ★角色字（没头像时显示，不再错显示成"娜"）
 
   @override
   State<_MiniAvatar> createState() => _MiniAvatarState();
@@ -710,13 +717,16 @@ class _MiniAvatarState extends State<_MiniAvatar> {
   //   之前每次 build 都新建 Future，FutureBuilder 重置 → 消息头像闪回占位再显示
   late Future<ImageProvider> _f = ImgCache.provider(_av());
 
-  String _av() =>
-      '${widget.me ? app.herSet['myAvatar'] ?? '' : app.herSet['herAvatar'] ?? ''}';
+  String _av() {
+    if (widget.me) return '${app.herSet['myAvatar'] ?? ''}';
+    if (widget.src.isNotEmpty) return widget.src;   // ★角色自定义头像优先
+    return '${app.herSet['herAvatar'] ?? ''}';
+  }
 
   @override
   void didUpdateWidget(_MiniAvatar old) {
     super.didUpdateWidget(old);
-    if (old.me != widget.me) _f = ImgCache.provider(_av());
+    if (old.me != widget.me || old.src != widget.src) _f = ImgCache.provider(_av());
   }
 
   @override
@@ -727,7 +737,9 @@ class _MiniAvatarState extends State<_MiniAvatar> {
         width: 30,
         height: 30,
         decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-        child: Center(child: Text(widget.me ? '我' : '娜', style: const TextStyle(fontSize: 13))),
+        child: Center(
+            child: Text(widget.me ? '我' : (widget.letter.isNotEmpty ? widget.letter : '娜'),
+                style: const TextStyle(fontSize: 13))),
       );
     }
     // ★b21 头像磁盘缓存：不再每次打开对话都重新下载
