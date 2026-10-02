@@ -697,24 +697,42 @@ class _BubbleState extends State<_Bubble> {
   }
 }
 
-class _MiniAvatar extends StatelessWidget {
-  const _MiniAvatar({this.me = false});
+class _MiniAvatar extends StatefulWidget {
+  const _MiniAvatar({super.key, this.me = false});
   final bool me;
 
   @override
+  State<_MiniAvatar> createState() => _MiniAvatarState();
+}
+
+class _MiniAvatarState extends State<_MiniAvatar> {
+  // ★2026-10-02 闪屏修复：future 只在 initState / me 变化时取一次 ——
+  //   之前每次 build 都新建 Future，FutureBuilder 重置 → 消息头像闪回占位再显示
+  late Future<ImageProvider> _f = ImgCache.provider(_av());
+
+  String _av() =>
+      '${widget.me ? app.herSet['myAvatar'] ?? '' : app.herSet['herAvatar'] ?? ''}';
+
+  @override
+  void didUpdateWidget(_MiniAvatar old) {
+    super.didUpdateWidget(old);
+    if (old.me != widget.me) _f = ImgCache.provider(_av());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final av = '${me ? app.herSet['myAvatar'] ?? '' : app.herSet['herAvatar'] ?? ''}';
+    final av = _av();
     if (av.isEmpty) {
       return Container(
         width: 30,
         height: 30,
         decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-        child: Center(child: Text(me ? '我' : '娜', style: const TextStyle(fontSize: 13))),
+        child: Center(child: Text(widget.me ? '我' : '娜', style: const TextStyle(fontSize: 13))),
       );
     }
     // ★b21 头像磁盘缓存：不再每次打开对话都重新下载
     return FutureBuilder<ImageProvider>(
-      future: ImgCache.provider(av),
+      future: _f,
       builder: (c, s) => Container(
         width: 30,
         height: 30,
@@ -935,22 +953,24 @@ class _ConvHeader extends StatelessWidget {
             IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19), tooltip: '返回'),
             GestureDetector(
               onTap: onRoleTap ?? onSet,
-              child: av.startsWith('data:image/')
-                  // ★角色自定义头像（本地 dataURL）
-                  ? Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        image: DecorationImage(
-                            image: MemoryImage(base64Decode(av.substring(av.indexOf(',') + 1))),
-                            fit: BoxFit.cover),
-                      ),
-                    )
-                  : av.isNotEmpty && !simple
-                      ? FutureBuilder<ImageProvider>(
-                          future: ImgCache.provider(av),
-                          builder: (c, s) => Container(
+              // ★2026-10-02 闪屏修复：dataURL 头像改走 avatarOf 的 provider 缓存 ——
+              //   之前每次 build 都重新 base64Decode 新建 MemoryImage → 缓存 miss → 头像闪
+              child: (() {
+                final p = av.startsWith('data:image/') ? avatarOf(av) : null;
+                if (p != null) {
+                  return Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(image: p, fit: BoxFit.cover),
+                    ),
+                  );
+                }
+                if (av.isNotEmpty && !simple) {
+                  return FutureBuilder<ImageProvider>(
+                      future: ImgCache.provider(av),
+                      builder: (c, s) => Container(
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
@@ -958,14 +978,14 @@ class _ConvHeader extends StatelessWidget {
                               gradient: const LinearGradient(colors: [kAccent, kAccent2]),
                               image: s.data == null ? null : DecorationImage(image: s.data!, fit: BoxFit.cover),
                             ),
-                          ),
-                        )
-                      : Container(
-                          width: 38,
-                          height: 38,
-                          decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-                          child: Center(child: Text(letter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-                        ),
+                          ));
+                }
+                return Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
+                    child: Center(child: Text(letter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))));
+              })(),
             ),
             const SizedBox(width: 10),
             Expanded(
