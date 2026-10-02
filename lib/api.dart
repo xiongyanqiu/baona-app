@@ -72,7 +72,7 @@ const Map<String, dynamic> kDefCfg = {
 
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
-  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail});
+  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId});
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
@@ -83,6 +83,7 @@ class Msg {
   String? imgUrl;       // 本地乐观显示用
   String? cid;          // ★服务端给这条消息的编号（用于就地更新，比如语音条后到）
   String? detail;        // ★2026-10-01 她的【细节】（动作/表情/心里），折叠显示
+  String? roleId;        // ★独立角色会话标识（空 = 包娜主对话）
 
   factory Msg.fromJson(Map m) => Msg(
         role: '${m['role'] ?? 'assistant'}',
@@ -93,6 +94,7 @@ class Msg {
         time: _i(m['time']),
         cid: _s(m['cid']),
         detail: _s(m['detail']),
+        roleId: _s(m['roleId']),
       );
 
   static String? _s(dynamic v) {
@@ -116,6 +118,7 @@ class Msg {
         'st': st,
         if (cid != null) 'cid': cid,
         if (detail != null) 'detail': detail,
+        if (roleId != null) 'roleId': roleId,
       };
 }
 
@@ -429,6 +432,21 @@ class Api {
     if (b['cid'] == null) b['cid'] = 'c${DateTime.now().millisecondsSinceEpoch}';
     return post('/api/send', b);
   }
+
+  /* ---------- ★独立角色（刘紫灵等）：人设/上下文/记忆完全隔离 ---------- */
+  /// 角色列表：[{id, name, chatCount, memCount}]
+  Future<Map<String, dynamic>> roleList() => get('/api/roles');
+  /// 角色历史（独立上下文）
+  Future<Map<String, dynamic>> roleHistory(String role, {int limit = 30}) =>
+      get('/api/role/history', q: {'role': role, 'limit': '$limit'});
+  /// 发消息给角色
+  Future<Map<String, dynamic>> roleSend(String role, String text) =>
+      post('/api/role/send', {'role': role, 'text': text});
+  /// 清空角色上下文
+  Future<Map<String, dynamic>> roleClear(String role) => post('/api/role/clear', {'role': role});
+  /// 教角色记住一件事
+  Future<Map<String, dynamic>> roleRemember(String role, String text) =>
+      post('/api/role/remember', {'role': role, 'text': text});
 
   /// 图片地址补全（emoji / 商城图 / 聊天图）
   String imgUrl(String path) {
