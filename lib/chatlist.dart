@@ -173,9 +173,11 @@ class _ChatListPageState extends State<ChatListPage> {
                   'id': 'group.nvg',
                   'name': '姐妹聊天群',
                   'avatar': '',
-                  'last': '包娜和刘紫灵在群里等你',
+                  'last': app.sideLastOf('group.nvg').isNotEmpty
+                      ? app.sideLastOf('group.nvg')
+                      : '包娜和刘紫灵在群里等你',
                   'lastT': 0,
-                  'unread': 0,
+                  'unread': app.sideUnreadOf('group.nvg'),
                 },
                 // ★独立角色们（刘紫灵 + 女娲/后土/西王母/美杜莎/云韵/萧薰儿/比比东/千仞雪/小舞/古月娜/狠人大帝/安妙依/姬紫月/颜如玉/火灵儿）
                 //   人设/上下文/记忆完全隔离；备注头像可自定义
@@ -183,9 +185,9 @@ class _ChatListPageState extends State<ChatListPage> {
                   'id': rid,
                   'name': _roleNames[rid] ?? roleNameOf(rid),
                   'avatar': _roleAvatars[rid] ?? '',
-                  'last': '来找我聊聊',
+                  'last': app.sideLastOf(rid).isNotEmpty ? app.sideLastOf(rid) : '来找我聊聊',
                   'lastT': 0,
-                  'unread': 0,
+                  'unread': app.sideUnreadOf(rid),
                 }),
               ]
             : <Map<String, dynamic>>[];
@@ -281,6 +283,8 @@ class _ChatListPageState extends State<ChatListPage> {
                                 : const ConversationPage()));
         // ★角色页改了备注/头像，返回列表立刻同步
         if (isRole) f.then((_) => _loadRolePrefs());
+        // ★2026-10-02 点进角色/群聊会话就清它的未读（不占主对话红点）
+        if (isRole || isGroup) app.sideClear(id);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
