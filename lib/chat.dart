@@ -469,7 +469,7 @@ class _ChatPageState extends State<ConversationPage> {
         // ★独立角色：标题/头像显示角色自己的，不显示包娜的；点头像/名字可改备注和头像
         title: _role.isNotEmpty ? (_roleName.isNotEmpty ? _roleName : roleNameOf(_role)) : app.nick,
         avatar: _role.isNotEmpty ? _roleAvatar : '${app.herSet['herAvatar'] ?? ''}',
-        letter: _role.isNotEmpty ? _roleLetter(_role) : '娜',
+        letter: _role.isNotEmpty ? roleLetterOf(_role) : '娜',
         onRoleTap: _role.isNotEmpty ? _openRoleSettings : null,
       ),
       Expanded(
@@ -993,21 +993,88 @@ class _ConvHeader extends StatelessWidget {
 }
 
 /* ------------------------- ★独立角色辅助（和主对话完全隔离） ------------------------- */
-/// 角色 id → 显示名（以后加角色在这里补一行）
+/// 全部角色 id（新增角色在这里补一行，桌宠端建好目录后手机端自动出现）
+List<String> roleIds() => [
+      'liuziling', 'nvwa', 'houtu', 'xiwangmu', 'medusa',
+      'yunyun', 'xiaoxuaner', 'bibidong', 'qianrenxue', 'xiaowu',
+      'guyuena', 'henrendadi', 'anmiaoyi', 'jiziyue', 'yanrudan', 'huolinger',
+    ];
+
+/// 角色 id → 显示名（自定义备注优先，没备注用这个默认名）
 String roleNameOf(String role) {
   switch (role) {
     case 'liuziling':
       return '刘紫灵';
+    case 'nvwa':
+      return '女娲';
+    case 'houtu':
+      return '后土';
+    case 'xiwangmu':
+      return '西王母';
+    case 'medusa':
+      return '美杜莎';
+    case 'yunyun':
+      return '云韵';
+    case 'xiaoxuaner':
+      return '萧薰儿';
+    case 'bibidong':
+      return '比比东';
+    case 'qianrenxue':
+      return '千仞雪';
+    case 'xiaowu':
+      return '小舞';
+    case 'guyuena':
+      return '古月娜';
+    case 'henrendadi':
+      return '狠人大帝';
+    case 'anmiaoyi':
+      return '安妙依';
+    case 'jiziyue':
+      return '姬紫月';
+    case 'yanrudan':
+      return '颜如玉';
+    case 'huolinger':
+      return '火灵儿';
     default:
       return '角色';
   }
 }
 
 /// 角色 id → 默认头像字
-String _roleLetter(String role) {
+String roleLetterOf(String role) {
   switch (role) {
     case 'liuziling':
       return '灵';
+    case 'nvwa':
+      return '娲';
+    case 'houtu':
+      return '后';
+    case 'xiwangmu':
+      return '母';
+    case 'medusa':
+      return '美';
+    case 'yunyun':
+      return '韵';
+    case 'xiaoxuaner':
+      return '薰';
+    case 'bibidong':
+      return '比';
+    case 'qianrenxue':
+      return '雪';
+    case 'xiaowu':
+      return '舞';
+    case 'guyuena':
+      return '娜';
+    case 'henrendadi':
+      return '狠';
+    case 'anmiaoyi':
+      return '安';
+    case 'jiziyue':
+      return '紫';
+    case 'yanrudan':
+      return '颜';
+    case 'huolinger':
+      return '火';
     default:
       return '角';
   }
