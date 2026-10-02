@@ -377,7 +377,23 @@ class LocalBrain {
   Future<Map<String, dynamic>> roleDel(String role) async {
     _roles.removeWhere((r) => '${r['id']}' == role);
     _saveRoles();
+    // ★26.2.20 删除角色要清干净：记忆 + 对话 + 备注头像 + 群成员，一样都不能留
+    _roleMems.remove(role);
+    _saveRoleMems();
     await MsgsLocal.clear('role_$role');
+    for (final g in _groups) {
+      final ms = (g['members'] as List?) ?? [];
+      if (ms.contains(role)) {
+        g['members'] = ms.where((x) => x != role).toList();
+        _saveGroups();
+      }
+    }
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.remove('role.$role.name');
+      await sp.remove('role.$role.avatar');
+      await sp.remove('role.$role.letter');
+    } catch (_) {}
     return {'ok': true};
   }
 

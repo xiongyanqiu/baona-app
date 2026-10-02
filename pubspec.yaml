@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 26.2.19+72
+version: 26.2.20+73
 environment:
   sdk: ^3.13.4
 
@@ -71,6 +71,7 @@ flutter:
   assets:
     - assets/silence.wav   # 后台保活的静音（不播这个，切后台她就收不到消息了）
     - assets/pet.png       # ★26.2.18 全本地：桌宠立绘（左滑看她）
+    - assets/pet_frames/   # ★26.2.20 桌宠动作帧：3 套服装 × 7 动作 = 217 帧 WebP
 
   # To add assets to your application, add an assets section, like this:
   # assets:

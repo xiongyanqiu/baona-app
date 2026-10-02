@@ -340,7 +340,13 @@ class _ChatListPageState extends State<ChatListPage> {
     final av = '${c['avatar'] ?? ''}';
     final unread = (c['unread'] as int?) ?? 0;
     final isGroup = id.startsWith('group.');
-    return InkWell(
+    // ★26.2.20 自建角色（id 以 u 开头）长按可删除：人设/对话/记忆/备注头像/群成员一起清
+    final isCustom = id.startsWith('u');
+    return GestureDetector(
+      onLongPress: isCustom
+          ? () => _delRole(id, '${c['name'] ?? ''}')
+          : null,
+      child: InkWell(
       onTap: () {
         final isRole = roleIds().contains(id);
         final isGroup = id.startsWith('group.');
@@ -482,6 +488,36 @@ class _ChatListPageState extends State<ChatListPage> {
           const Icon(Icons.chevron_right_rounded, size: 20, color: kSub),
         ]),
       ),
+    ),
     );
+  }
+
+  /// ★26.2.20 长按删除自建角色：确认后清人设/对话/记忆/备注头像/群成员
+  Future<void> _delRole(String id, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1D1D23),
+        title: Text('删除角色「$name」？'),
+        content: const Text('会一起清掉：对话记录、记忆、备注头像；如果她在群里也会被移出群。删了就找不回来了。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF4D4F)),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final r = await app.brain?.roleDel(id);
+    if (r?['ok'] == true) {
+      if (mounted) toast(context, '已删除「$name」');
+      await _loadRolePrefs();
+      if (mounted) setState(() {});
+    } else if (mounted) {
+      toast(context, '删除失败：${r?['error'] ?? ''}');
+    }
   }
 }
