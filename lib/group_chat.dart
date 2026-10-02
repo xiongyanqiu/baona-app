@@ -38,6 +38,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
   void initState() {
     super.initState();
     _cacheKey = 'group.$_gid';
+    // ★2026-10-02 群聊页打开就清该群未读（不进主对话红点）
+    app.sideClear('group.$_gid');
     // 成员显示名/头像：本地优先（改过备注/头像就显示改过的）
     SharedPreferences.getInstance().then((sp) {
       final n = sp.getString('group.$_gid.name') ?? '';
