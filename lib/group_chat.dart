@@ -20,7 +20,7 @@ class GroupChatPage extends StatefulWidget {
 
 class _GroupChatPageState extends State<GroupChatPage> {
   String get _gid => widget.gid ?? 'nvg';
-  String _cacheKey = 'group.$_gid';
+  late String _cacheKey;
   String _gname = '姐妹聊天群';
   final List<Msg> _msgs = [];
   final Map<String, Map<String, String>> _mPrefs = {}; // roleId -> {name, avatar}
@@ -37,6 +37,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   @override
   void initState() {
     super.initState();
+    _cacheKey = 'group.$_gid';
     // 成员显示名/头像：本地优先（改过备注/头像就显示改过的）
     SharedPreferences.getInstance().then((sp) {
       final n = sp.getString('group.$_gid.name') ?? '';
@@ -181,15 +182,15 @@ class _GroupChatPageState extends State<GroupChatPage> {
       } else if (replies.isNotEmpty) {
         final now = DateTime.now().millisecondsSinceEpoch;
         final add = <Msg>[];
-        replies.forEach((r) {
+        for (final r in replies) {
           final rid = '${r['roleId'] ?? ''}';
           final nm = '${r['name'] ?? ''}';
           final c = '${r['content'] ?? ''}';
           final parts = c.split('\n').where((x) => x.trim().isNotEmpty).toList();
-          parts.forEach((txt, i) {
-            add.add(Msg(role: 'assistant', content: txt.trim(), time: now + i, roleId: rid, name: nm));
-          });
-        });
+          for (var i = 0; i < parts.length; i++) {
+            add.add(Msg(role: 'assistant', content: parts[i].trim(), time: now + i, roleId: rid, name: nm));
+          }
+        }
         setState(() {
           for (final m in add) {
             final dup = _msgs.any((x) => x.roleId == m.roleId && x.content == m.content && x.role == m.role);
