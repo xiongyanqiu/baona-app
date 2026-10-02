@@ -84,7 +84,7 @@ class LocalBrain {
       // 默认姐妹群：包娜 + 刘紫灵（成员可自己改）
       _groups.add({'id': 'nvg', 'name': '姐妹聊天群', 'members': ['baona', 'liuziling']});
     }
-    if ((_wishes['granted'] as num?)?.toInt() ?? 0 == 0) {
+    if (((_wishes['granted'] as num?)?.toInt() ?? 0) == 0) {
       // ★从桌宠迁移：她答应老公 100 次愿望（可无限满足）
       _wishes = {'granted': 100, 'used': 0, 'done': 0, 'wishes': []};
     }
