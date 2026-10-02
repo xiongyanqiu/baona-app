@@ -139,6 +139,15 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': 0,
                   'unread': 0,
                 },
+                // ★独立角色：刘紫灵（包娜闺蜜）—— 人设/上下文/记忆和包娜完全隔离
+                {
+                  'id': 'liuziling',
+                  'name': '刘紫灵',
+                  'avatar': '',
+                  'last': '包娜的闺蜜，来找你唠嗑的',
+                  'lastT': 0,
+                  'unread': 0,
+                },
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
@@ -200,7 +209,9 @@ class _ChatListPageState extends State<ChatListPage> {
                   ? const VideoLibPage()
                   : id == 'audiolib'
                       ? const AudioLibPage()
-                      : const ConversationPage())),
+                      : id == 'liuziling'
+                          ? const ConversationPage(roleId: 'liuziling') // ★独立角色会话
+                          : const ConversationPage())),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(children: [
@@ -250,6 +261,14 @@ class _ChatListPageState extends State<ChatListPage> {
               // 音频库头像：本地设置的头像（dataURL）或默认紫底音符
               _avatarOf(_alAvatar,
                   child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 26))
+            else if (id == 'liuziling')
+              // ★独立角色头像：默认紫青渐变 + 角色字（和包娜的"娜"区分开）
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF2F6BFF), Color(0xFF7B2FFF)])),
+                child: const Center(child: Text('灵', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white))),
+              )
             else if (av.isEmpty)
                 Container(
                     width: 52,
