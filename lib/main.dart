@@ -32,6 +32,22 @@ class AppCtl extends ChangeNotifier {
   Set<String> emojiMine = {}; // ★哪些是「我加的」（可以长按删）
   int unread = 0;              // ★她来消息时底栏聊天图标上的小红点
   bool chatVisible = true;     // 他现在是不是就待在聊天页（不在就攒小红点）
+  // ★2026-10-02 角色/群聊消息的会话级未读与最后一条（不进主对话红点、不弹主对话通知）
+  final Map<String, int> _sideUnread = {};
+  final Map<String, String> _sideLast = {};
+  int sideUnreadOf(String id) => _sideUnread[id] ?? 0;
+  String sideLastOf(String id) => _sideLast[id] ?? '';
+  void sideBump(String id, String content, int t) {
+    _sideUnread[id] = (_sideUnread[id] ?? 0) + 1;
+    if (content.trim().isNotEmpty) _sideLast[id] = content;
+    notifyListeners();
+  }
+  void sideClear(String id) {
+    if ((_sideUnread[id] ?? 0) != 0) {
+      _sideUnread[id] = 0;
+      notifyListeners();
+    }
+  }
   bool eyeOn = false;          // ★她在用手机前置看你（拍的那一下，聊天里会显示"她在看你…"）
   Map<String, dynamic> herSet = {};
   Map<String, dynamic> cfg = Map<String, dynamic>.from(kDefCfg);
@@ -165,18 +181,28 @@ class AppCtl extends ChangeNotifier {
         final body = raw is Map ? Map<String, dynamic>.from(raw) : e;
         final role = '${body['role'] ?? ''}';
         final mine = (role == 'me' || role == 'user');
-        // ★2026-09-29：她的消息 + 他没待在聊天页 → 底栏聊天图标上冒小红点（顺手震一下）
-        if (!mine && !chatVisible) {
-          unread += 1;
-          notifyListeners();
-        }
-        if (!mine) {
-          try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有，忽略 */ }
-        }
-        if (!mine && !Notify.i.foreground && cfg['notify'] != false) {
-          final txt = '${body['content'] ?? ''}';
-          if (txt.trim().isNotEmpty) {
-            Notify.i.show(nick, txt, vibrate: cfg['vibrate'] != false);
+        // ★2026-10-02 角色/群聊消息分流：不进主对话红点、不弹主对话通知，
+        //   只更新对应会话（chatlist）的未读和最后一条 —— 之前全部当主对话消息，群聊/角色话全混进包娜主对话
+        final gid = '${body['groupId'] ?? ''}';
+        final rid = '${body['roleId'] ?? ''}';
+        final sideId = gid.isNotEmpty ? 'group.$gid' : (rid.isNotEmpty ? rid : '');
+        final sideMsg = !mine && sideId.isNotEmpty;
+        if (sideMsg) {
+          sideBump(sideId, '${body['content'] ?? ''}', (body['time'] as num?)?.toInt() ?? 0);
+        } else {
+          // ★2026-09-29：她的消息 + 他没待在聊天页 → 底栏聊天图标上冒小红点（顺手震一下）
+          if (!mine && !chatVisible) {
+            unread += 1;
+            notifyListeners();
+          }
+          if (!mine) {
+            try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有，忽略 */ }
+          }
+          if (!mine && !Notify.i.foreground && cfg['notify'] != false) {
+            final txt = '${body['content'] ?? ''}';
+            if (txt.trim().isNotEmpty) {
+              Notify.i.show(nick, txt, vibrate: cfg['vibrate'] != false);
+            }
           }
         }
       }
