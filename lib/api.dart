@@ -452,6 +452,7 @@ class Api {
   Future<Map<String, dynamic>> roleClear(String role) => post('/api/role/clear', {'role': role});
   /// 教角色记住一件事
   Future<Map<String, dynamic>> roleRemember(String role, String text) =>
+      post('/api/role/remember', {'role': role, 'text': text});
 
   /* ---------- ★群聊（姐妹聊天群）：第三个完全隔离的分支 ---------- */
   /// 群列表：[{id, name, members:[{id,name}], chatCount}]
@@ -464,7 +465,6 @@ class Api {
       post('/api/group/send', {'gid': gid, 'text': text});
   /// 清空群聊上下文
   Future<Map<String, dynamic>> groupClear(String gid) => post('/api/group/clear', {'gid': gid});
-      post('/api/role/remember', {'role': role, 'text': text});
 
   /// 图片地址补全（emoji / 商城图 / 聊天图）
   String imgUrl(String path) {
