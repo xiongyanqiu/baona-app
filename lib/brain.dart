@@ -597,12 +597,12 @@ class LocalBrain {
 
   Future<Map<String, dynamic>> wishesAction(String act, String val, [String content = '']) async {
     final ws = (_wishes['wishes'] as List?) ?? [];
-    final num = int.tryParse(val) ?? 0;
+    final n = int.tryParse(val) ?? 0;
     if (act == 'grant') {
-      _wishes['granted'] = ((_wishes['granted'] as num?)?.toInt() ?? 0) + (num > 0 ? num : 1);
+      _wishes['granted'] = ((_wishes['granted'] as num?)?.toInt() ?? 0) + (n > 0 ? n : 1);
     } else if (act == 'use') {
       final granted = (_wishes['granted'] as num?)?.toInt() ?? 0;
-      _wishes['used'] = (((_wishes['used'] as num?)?.toInt() ?? 0) + (num > 0 ? num : 1)).clamp(0, granted);
+      _wishes['used'] = (((_wishes['used'] as num?)?.toInt() ?? 0) + (n > 0 ? n : 1)).clamp(0, granted);
     } else if (act == 'done') {
       for (final w in ws) {
         if ('${w['id']}' == val && '${w['status'] ?? ''}' != 'done') {

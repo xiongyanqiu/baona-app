@@ -173,7 +173,7 @@ class AppCtl extends ChangeNotifier {
         // ★2026-09-29 老公要的：她自己看你 —— 电脑端喊一嗓子，我们立刻用【前置】拍一张回过去。
         //   iOS 后台不给开摄像头 → 只在前台拍；不在前台就跳过，电脑端退回那两台固定摄像头。
         final life = WidgetsBinding.instance.lifecycleState;
-        if (life == AppLifecycleState.resumed && !PhoneEye.busy) {
+        if (life == AppLifecycleState.resumed && !PhoneEye.busy && a != null) {
           eyeOn = true;
           notifyListeners();
           PhoneEye.shootAndSend(a, why: '${e['why'] ?? ''}').then((_) {
