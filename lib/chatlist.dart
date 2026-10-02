@@ -213,20 +213,20 @@ class _ChatListPageState extends State<ChatListPage> {
     );
   }
 
-  /// ★26.2.12：音频库头像——本地 dataURL 有图就显示，没图显示默认图标
+  /// ★26.2.12：音频库头像——有图就显示，没有就默认图标
+  /// ★2026-10-02 闪屏修复：改走 avatarOf 的 provider 缓存 —— 之前每次 build 都重新
+  ///   base64Decode + 新建 MemoryImage → 新 provider = 缓存 miss → 头像反复解码闪
   Widget _avatarOf(String dataUrl, {required Widget child}) {
-    if (dataUrl.startsWith('data:image/')) {
-      try {
-        final b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
-        return Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            image: DecorationImage(image: MemoryImage(base64Decode(b64)), fit: BoxFit.cover),
-          ),
-        );
-      } catch (_) {}
+    final p = avatarOf(dataUrl);
+    if (p != null) {
+      return Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          image: DecorationImage(image: p, fit: BoxFit.cover),
+        ),
+      );
     }
     return Container(
       width: 52,
@@ -238,18 +238,16 @@ class _ChatListPageState extends State<ChatListPage> {
 
   /// ★26.2.14：独立角色头像——自定义（dataURL）优先，没有就默认紫青渐变 + 角色字
   Widget _roleAvatarOf(String dataUrl, String letter) {
-    if (dataUrl.startsWith('data:image/')) {
-      try {
-        final b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
-        return Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            image: DecorationImage(image: MemoryImage(base64Decode(b64)), fit: BoxFit.cover),
-          ),
-        );
-      } catch (_) {}
+    final p = avatarOf(dataUrl);
+    if (p != null) {
+      return Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          image: DecorationImage(image: p, fit: BoxFit.cover),
+        ),
+      );
     }
     return Container(
       width: 52,
@@ -306,20 +304,17 @@ class _ChatListPageState extends State<ChatListPage> {
                 future: _vlAvatarFuture,
                 builder: (c, s) {
                   final av = s.data ?? '';
-                  if (av.startsWith('data:image/')) {
-                    try {
-                      final b64 = av.substring(av.indexOf(',') + 1);
-                      return Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          image: DecorationImage(
-                              image: MemoryImage(base64Decode(b64)),
-                              fit: BoxFit.cover),
-                        ),
-                      );
-                    } catch (_) {}
+                  // ★2026-10-02 闪屏修复：走 avatarOf 缓存 provider，不再每次 build 重新解码
+                  final p = av.startsWith('data:image/') ? avatarOf(av) : null;
+                  if (p != null) {
+                    return Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        image: DecorationImage(image: p, fit: BoxFit.cover),
+                      ),
+                    );
                   }
                   return Container(
                     width: 52,
