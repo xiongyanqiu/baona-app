@@ -41,7 +41,7 @@ class _AudioLibPageState extends State<AudioLibPage> {
   List<AlAudio> _tracks = [];
   bool _loaded = false;
   int? _playing; // 正在播放的 added
-  late final AudioPlayer _player; // ★2026-10-02 改晚创建：先设好全局 AudioContext（iOS 播放类别），player 才会继承它
+  final AudioPlayer _player = AudioPlayer();
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
   bool _playingNow = false;
@@ -52,14 +52,6 @@ class _AudioLibPageState extends State<AudioLibPage> {
   @override
   void initState() {
     super.initState();
-    // ★2026-10-02 修"音频播放不了"：iOS 默认走"静音开关"（soloAmbient），
-    //   手机静音键一开就没声音。这里设成 playback 类别：无视静音键 + 支持后台继续放。
-    try {
-      AudioPlayer.global.setAudioContext(AudioContextConfig(
-        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
-      ).build());
-    } catch (_) {/* 低版本没有这个配置就跳过 */}
-    _player = AudioPlayer();
     _load();
     // 播放进度/状态
     _player.onPositionChanged.listen((p) => setState(() => _pos = p));
@@ -199,7 +191,10 @@ class _AudioLibPageState extends State<AudioLibPage> {
       _dur = Duration.zero;
       setState(() => _playing = t.added);
       try {
-        await _player.play(DeviceFileSource(t.path));
+        // ★2026-10-02 修"音频播放不了"：play 时带 iOS 播放上下文（audioplayers 6.x 写法）——
+        //   respectSilence=false = 静音键不吞声音；stayAwake=true = 锁屏继续放
+        final _ctx = AudioContextConfig(respectSilence: false, stayAwake: true).build();
+        await _player.play(DeviceFileSource(t.path), ctx: _ctx);
       } catch (_) {
         // 文件坏了或格式 iOS 播不了（比如 ogg/opus/wma）→ 给个明确提示，别无声无息
         setState(() => _playing = null);
