@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
 import 'videolib.dart';
 import 'audiolib.dart';
+import 'group_chat.dart';
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -167,6 +168,15 @@ class _ChatListPageState extends State<ChatListPage> {
                   'lastT': 0,
                   'unread': 0,
                 },
+                // ★v26.2.16：姐妹聊天群 —— 包娜+刘紫灵，你说话她们依次接（完全隔离的第三个分支）
+                {
+                  'id': 'group.nvg',
+                  'name': '姐妹聊天群',
+                  'avatar': '',
+                  'last': '包娜和刘紫灵在群里等你',
+                  'lastT': 0,
+                  'unread': 0,
+                },
                 // ★独立角色们（刘紫灵 + 女娲/后土/西王母/美杜莎/云韵/萧薰儿/比比东/千仞雪/小舞/古月娜/狠人大帝/安妙依/姬紫月/颜如玉/火灵儿）
                 //   人设/上下文/记忆完全隔离；备注头像可自定义
                 ...roleIds().map((rid) => {
@@ -257,6 +267,7 @@ class _ChatListPageState extends State<ChatListPage> {
     return InkWell(
       onTap: () {
         final isRole = roleIds().contains(id);
+        final isGroup = id.startsWith('group.');
         final f = Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => id == 'douyin'
                 ? const DouyinPage()
@@ -264,9 +275,11 @@ class _ChatListPageState extends State<ChatListPage> {
                     ? const VideoLibPage()
                     : id == 'audiolib'
                         ? const AudioLibPage()
-                        : isRole
-                            ? ConversationPage(roleId: id) // ★独立角色会话
-                            : const ConversationPage()));
+                        : isGroup
+                            ? GroupChatPage(gid: id.substring(6)) // ★群聊会话
+                            : isRole
+                                ? ConversationPage(roleId: id) // ★独立角色会话
+                                : const ConversationPage()));
         // ★角色页改了备注/头像，返回列表立刻同步
         if (isRole) f.then((_) => _loadRolePrefs());
       },
@@ -322,6 +335,17 @@ class _ChatListPageState extends State<ChatListPage> {
             else if (roleIds().contains(id))
               // ★独立角色头像：自定义（dataURL）优先，没有就用默认紫青渐变 + 角色字
               _roleAvatarOf(_roleAvatars[id] ?? '', roleLetterOf(id))
+            else if (isGroup)
+              // ★群聊头像：双人头像叠层（微信群像风格）
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFF2F6BFF)])),
+                child: const Stack(alignment: Alignment.center, children: [
+                  Icon(Icons.people_alt_rounded, color: Colors.white, size: 26),
+                  Positioned(right: 11, bottom: 8, child: Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 12)),
+                ]),
+              )
             else if (av.isEmpty)
                 Container(
                     width: 52,
