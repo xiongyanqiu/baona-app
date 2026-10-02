@@ -649,7 +649,9 @@ class Wall extends StatelessWidget {
         if (p != null)
           Opacity(
             opacity: opacity.clamp(0.0, 1.0),
-            child: Image(image: p, fit: BoxFit.cover, errorBuilder: (_, __, ___) => base),
+            // ★2026-10-02 闪屏修复：gaplessPlayback —— 切页/全局 rebuild 时背景保留上一帧，
+            //   新帧就绪前不闪回空白/渐变（之前每次 rebuild 都先清空再绘制 → 画面闪）
+            child: Image(image: p, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => base),
           ),
         // 透明的地方露出底下的深色底；再压一点点暗角（★2026-09-29 老公说照片看不清 → 从 0.30 降到 0.14）
         Opacity(opacity: (1 - opacity.clamp(0.0, 1.0)) * 0.9, child: base),
