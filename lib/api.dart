@@ -72,7 +72,7 @@ const Map<String, dynamic> kDefCfg = {
 
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
-  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId});
+  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId, this.groupId, this.name});
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
@@ -84,6 +84,8 @@ class Msg {
   String? cid;          // ★服务端给这条消息的编号（用于就地更新，比如语音条后到）
   String? detail;        // ★2026-10-01 她的【细节】（动作/表情/心里），折叠显示
   String? roleId;        // ★独立角色会话标识（空 = 包娜主对话）
+  String? groupId;       // ★群聊会话标识（空 = 单聊）
+  String? name;         // ★群聊成员显示名（群消息才带）
 
   factory Msg.fromJson(Map m) => Msg(
         role: '${m['role'] ?? 'assistant'}',
@@ -95,6 +97,8 @@ class Msg {
         cid: _s(m['cid']),
         detail: _s(m['detail']),
         roleId: _s(m['roleId']),
+        groupId: _s(m['groupId']),
+        name: _s(m['name']),
       );
 
   static String? _s(dynamic v) {
@@ -119,6 +123,8 @@ class Msg {
         if (cid != null) 'cid': cid,
         if (detail != null) 'detail': detail,
         if (roleId != null) 'roleId': roleId,
+        if (groupId != null) 'groupId': groupId,
+        if (name != null) 'name': name,
       };
 }
 
@@ -446,6 +452,18 @@ class Api {
   Future<Map<String, dynamic>> roleClear(String role) => post('/api/role/clear', {'role': role});
   /// 教角色记住一件事
   Future<Map<String, dynamic>> roleRemember(String role, String text) =>
+
+  /* ---------- ★群聊（姐妹聊天群）：第三个完全隔离的分支 ---------- */
+  /// 群列表：[{id, name, members:[{id,name}], chatCount}]
+  Future<Map<String, dynamic>> groupList() => get('/api/groups');
+  /// 群聊历史：[{role, roleId, name, content, time}]
+  Future<Map<String, dynamic>> groupHistory(String gid, {int limit = 100}) =>
+      get('/api/group/history', q: {'gid': gid, 'limit': '$limit'});
+  /// 群聊发言 → 群成员依次回复：{ok, replies:[{roleId,name,content}]}
+  Future<Map<String, dynamic>> groupSend(String gid, String text) =>
+      post('/api/group/send', {'gid': gid, 'text': text});
+  /// 清空群聊上下文
+  Future<Map<String, dynamic>> groupClear(String gid) => post('/api/group/clear', {'gid': gid});
       post('/api/role/remember', {'role': role, 'text': text});
 
   /// 图片地址补全（emoji / 商城图 / 聊天图）
