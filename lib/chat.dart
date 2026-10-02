@@ -16,13 +16,17 @@ import 'sheets.dart';
 import 'stickers.dart';
 
 class ConversationPage extends StatefulWidget {
-  const ConversationPage({super.key});
+  const ConversationPage({super.key, this.roleId});
+  final String? roleId;   // ★独立角色会话（null/空 = 包娜主对话）
 
   @override
   State<ConversationPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ConversationPage> {
+  // ★独立角色会话：完全独立的上下文/缓存（包娜的『baona』缓存不碰）
+  String get _role => widget.roleId ?? '';
+  String get _cacheKey => _role.isEmpty ? 'baona' : 'role_$_role';
   final List<Msg> _msgs = [];
   final TextEditingController _inp = TextEditingController();
   final FocusNode _focus = FocusNode(); // ★管键盘（弹出来就收面板 / 点空白就收键盘）
@@ -84,7 +88,7 @@ class _ChatPageState extends State<ConversationPage> {
     final a = app.api;
     // ★2026-09-30 本地缓存：打开先读本地秒开 —— 断网也能看历史
     if (!more && _msgs.isEmpty) {
-      final cached = await MsgsLocal.load('baona');
+      final cached = await MsgsLocal.load(_cacheKey);
       if (cached.isNotEmpty && mounted) {
         setState(() {
           _msgs
@@ -108,14 +112,17 @@ class _ChatPageState extends State<ConversationPage> {
     if (more) _limit += 30;
     Map<String, dynamic>? j;
     try {
-      j = await a.history(limit: _limit);
+      // ★独立角色：走独立历史接口（人设/上下文/记忆和包娜完全隔离）
+      j = _role.isNotEmpty ? await a.roleHistory(_role, limit: _limit) : await a.history(limit: _limit);
     } catch (_) {
       // 断网：本地缓存已经显示了，安静地停在这里（不弹错、不打断）
       if (mounted) setState(() => _loading = false);
       return;
     }
     if (!mounted) return;
-    final list = ((j?['messages'] as List?) ?? []).map((e) => Msg.fromJson(Map.from(e))).toList();
+    final list = ((_role.isNotEmpty ? (j?['history'] as List?) : (j?['messages'] as List?)) ?? [])
+        .map((e) => Msg.fromJson(Map.from(e)))
+        .toList();
     setState(() {
       _msgs
         ..clear()
@@ -124,7 +131,7 @@ class _ChatPageState extends State<ConversationPage> {
       _loading = false;
     });
     // ★同步成功 → 落盘，下次打开/断网直接看本地
-    MsgsLocal.save('baona', _msgs);
+    MsgsLocal.save(_cacheKey, _msgs);
     if (more && _sc.hasClients) {
       // 新消息插在头部 → 旧列表第一条下移了 → 按"新增条数 × 平均行高"把位置补回去
       final added = _msgs.length - oldCount;
@@ -147,6 +154,9 @@ class _ChatPageState extends State<ConversationPage> {
       //   现在先拆信封。
       final raw = e['msg'];
       final body = raw is Map ? Map<String, dynamic>.from(raw) : e;
+      // ★独立角色分流：角色消息带 roleId —— 包娜会话不收角色消息，角色会话只收自己的
+      final rid = '${body['roleId'] ?? ''}';
+      if (rid != _role) return;
       final m = Msg.fromJson(body);
       if (m.role == 'user' || m.role == 'me') m.role = 'me';
       // 防御：正文/表情/语音/图全空的，一律不画（宁可少一条，也不出空泡泡）
@@ -166,8 +176,10 @@ class _ChatPageState extends State<ConversationPage> {
       });
       _toBottom();
       // ★本地缓存跟上（不然缓存停在旧位置，下次打开少几条）
-      MsgsLocal.save('baona', _msgs);
+      MsgsLocal.save(_cacheKey, _msgs);
     } else if (t == 'msg-patch') {
+      // ★角色会话暂不支持语音条补推（角色回复是纯文本），直接忽略
+      if (_role.isNotEmpty) return;
       // ★电脑端这条的形状是 {type:'msg-patch', cid, patch:{voice:...}}，以前按 idx 找 → 永远找不到
       final cid = e['cid']?.toString();
       final patch = e['patch'];
@@ -196,11 +208,15 @@ class _ChatPageState extends State<ConversationPage> {
         }
       }
     } else if (t == 'typing') {
+      // ★角色会话：桌宠端角色不推打字状态，忽略
+      if (_role.isNotEmpty) return;
       setState(() => _typing = e['on'] != false);
       if (_typing) _toBottom();
     } else if (t == 'cleared') {
+      // ★角色会话：清空消息广播只对包娜主对话生效，别误清角色历史
+      if (_role.isNotEmpty) return;
       setState(() => _msgs.clear());
-      MsgsLocal.clear('baona');
+      MsgsLocal.clear(_cacheKey);
     }
   }
 
@@ -236,9 +252,10 @@ class _ChatPageState extends State<ConversationPage> {
       _emojiPanel = false;
       _funPanel = false;
     });
-    MsgsLocal.save('baona', _msgs); // ★本地先存，万一没发出去/断网也留着
+    MsgsLocal.save(_cacheKey, _msgs); // ★本地先存，万一没发出去/断网也留着
     _toBottom(force: true);
-    final r = await a.send(payload);
+    // ★独立角色：走独立发送接口（只发文字）；包娜走原来的 send（表情/骰子/红包等 payload）
+    final r = _role.isNotEmpty ? await a.roleSend(_role, text) : await a.send(payload);
     if (!mounted) return;
     setState(() => m.st = r['ok'] == true ? 'ok' : 'failed');
   }
@@ -364,6 +381,10 @@ class _ChatPageState extends State<ConversationPage> {
         onSearch: () => openSearch(context),
         onSet: () => openSettings(context),
         onCtrl: () => openCtrl(context),
+        // ★独立角色：标题/头像显示角色自己的，不显示包娜的
+        title: _role.isNotEmpty ? roleNameOf(_role) : app.nick,
+        avatar: _role.isNotEmpty ? '' : '${app.herSet['herAvatar'] ?? ''}',
+        letter: _role.isNotEmpty ? _roleLetter(_role) : '娜',
       ),
       Expanded(
         child: _loading
@@ -405,21 +426,23 @@ class _ChatPageState extends State<ConversationPage> {
       Padding(
         padding: EdgeInsets.only(bottom: kbUp(context) ? 6 : MediaQuery.of(context).padding.bottom + 10),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-      if (_emojiPanel) EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
+      if (_emojiPanel && _role.isEmpty) EmojiPanel(onPick: (n) => _send({'text': '[表情]', 'sticker': n}), onClose: () => setState(() => _emojiPanel = false)),
       _Composer(
         ctl: _inp,
         focus: _focus,
         onSend: _sendText,
-        onPlus: () => setState(() {
+        // ★独立角色：不显示表情/加号（角色接口只认文字），点按无反应
+        onPlus: _role.isEmpty ? () => setState(() {
           _funPanel = !_funPanel;
           _emojiPanel = false;
-        }),
-        onSticker: () => setState(() {
+        }) : () {},
+        onSticker: _role.isEmpty ? () => setState(() {
           _emojiPanel = !_emojiPanel;
           _funPanel = false;
-        }),
+        }) : () {},
+        simple: _role.isNotEmpty,
       ),
-      if (_funPanel)
+      if (_funPanel && _role.isEmpty)
         _FunPanel(
           onPhoto: _sendPhoto,
           onSticker: () => setState(() {
@@ -664,10 +687,11 @@ class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderS
 
 /* ------------------------------- 输入区 ------------------------------- */
 class _Composer extends StatelessWidget {
-  _Composer({required this.ctl, required this.focus, required this.onSend, required this.onPlus, required this.onSticker});
+  _Composer({required this.ctl, required this.focus, required this.onSend, required this.onPlus, required this.onSticker, this.simple = false});
   final TextEditingController ctl;
   final FocusNode focus;
   final VoidCallback onSend, onPlus, onSticker;
+  final bool simple;   // ★独立角色：只留输入框+发送
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -678,7 +702,7 @@ class _Composer extends StatelessWidget {
           blur: kBlur,
           pad: const EdgeInsets.fromLTRB(6, 5, 6, 5),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _RoundBtn(icon: Icons.add, on: onPlus),
+            if (!simple) _RoundBtn(icon: Icons.add, on: onPlus),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -690,19 +714,19 @@ class _Composer extends StatelessWidget {
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => onSend(),
                   style: const TextStyle(fontSize: 15.5, height: 1.35),
-                  decoration: const InputDecoration(
-                    hintText: '跟她说点什么…',
+                  decoration: InputDecoration(
+                    hintText: simple ? '跟刘紫灵说点什么…' : '跟她说点什么…',
                     filled: false,
                     isDense: true,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
                   ),
                 ),
               ),
             ),
-            _RoundBtn(icon: Icons.emoji_emotions_outlined, on: onSticker),
+            if (!simple) _RoundBtn(icon: Icons.emoji_emotions_outlined, on: onSticker),
             const SizedBox(width: 2),
             PressScale(
               onTap: onSend,
@@ -797,12 +821,22 @@ class _FunPanel extends StatelessWidget {
 
 /* ------------------- 对话页头部（微信式：返回 + 头像 + 在线 + 快捷按钮） ------------------- */
 class _ConvHeader extends StatelessWidget {
-  const _ConvHeader({required this.onBack, required this.onSearch, required this.onSet, required this.onCtrl});
+  const _ConvHeader(
+      {required this.onBack,
+      required this.onSearch,
+      required this.onSet,
+      required this.onCtrl,
+      this.title = '',
+      this.avatar = '',
+      this.letter = '娜',
+      this.simple = false});
   final VoidCallback onBack, onSearch, onSet, onCtrl;
+  final String title, avatar, letter;
+  final bool simple;   // ★独立角色：只留返回+标题，不显示包娜专属按钮
 
   @override
   Widget build(BuildContext context) {
-    final av = '${app.herSet['herAvatar'] ?? ''}';
+    final av = avatar;
     return GlassBar(
       top: true,
       child: SafeArea(
@@ -812,13 +846,13 @@ class _ConvHeader extends StatelessWidget {
           child: Row(children: [
             IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19), tooltip: '返回'),
             GestureDetector(
-              onTap: onSet,
+              onTap: simple ? null : onSet,
               child: av.isEmpty
                   ? Container(
                       width: 38,
                       height: 38,
                       decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kAccent, kAccent2])),
-                      child: const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                      child: Center(child: Text(letter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
                     )
                   : FutureBuilder<ImageProvider>(
                       future: ImgCache.provider(av),
@@ -839,21 +873,42 @@ class _ConvHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(app.nick, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(title.isEmpty ? app.nick : title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                   Row(children: [
                     Container(width: 6, height: 6, decoration: BoxDecoration(color: app.online ? const Color(0xFF57D9A3) : kSub, shape: BoxShape.circle)),
                     const SizedBox(width: 5),
-                    Flexible(child: Text(app.status, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kSub))),
+                    Flexible(child: Text(simple ? '独立角色 · 和包娜完全隔离' : app.status, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kSub))),
                   ]),
                 ],
               ),
             ),
-            IconButton(onPressed: onSearch, icon: const Icon(Icons.search, size: 20), tooltip: '搜聊天'),
-            IconButton(onPressed: onCtrl, icon: const Icon(Icons.tune, size: 20), tooltip: '控制器'),
-            IconButton(onPressed: onSet, icon: const Icon(Icons.settings_outlined, size: 20), tooltip: '设置'),
+            if (!simple) IconButton(onPressed: onSearch, icon: const Icon(Icons.search, size: 20), tooltip: '搜聊天'),
+            if (!simple) IconButton(onPressed: onCtrl, icon: const Icon(Icons.tune, size: 20), tooltip: '控制器'),
+            if (!simple) IconButton(onPressed: onSet, icon: const Icon(Icons.settings_outlined, size: 20), tooltip: '设置'),
           ]),
         ),
       ),
     );
+  }
+}
+
+/* ------------------------- ★独立角色辅助（和主对话完全隔离） ------------------------- */
+/// 角色 id → 显示名（以后加角色在这里补一行）
+String roleNameOf(String role) {
+  switch (role) {
+    case 'liuziling':
+      return '刘紫灵';
+    default:
+      return '角色';
+  }
+}
+
+/// 角色 id → 默认头像字
+String _roleLetter(String role) {
+  switch (role) {
+    case 'liuziling':
+      return '灵';
+    default:
+      return '角';
   }
 }
