@@ -252,6 +252,10 @@ class Api {
   String albumKey = '';              // ★相册照片的保密 key（/api/album 返回，必须带在照片地址后面）
   WebSocketChannel? _ws;
   final StreamController<Map<String, dynamic>> _ev = StreamController.broadcast();
+  // ★2026-10-02 修"经常断开"：前台心跳保活 + 错误也重连 + 重试上限放宽
+  Timer? _hb;          // 前台心跳：每 25s 发一次 ping，pong 没回来就认定通道假死 → 重连
+  bool _lastPong = false;
+  int _lastHeartbeatAt = 0;
 
   Stream<Map<String, dynamic>> get events => _ev.stream;
   bool get hasToken => token.isNotEmpty;
@@ -325,23 +329,54 @@ class Api {
       final wsUrl = host.replaceFirst('http://', 'ws://').replaceFirst('https://', 'wss://') + '/ws?t=$token';
       final ch = WebSocketChannel.connect(Uri.parse(wsUrl));
       _ws = ch;
+      _startHeartbeat();
       ch.stream.listen((data) {
         try {
           _retry = 0;   // ★收到消息 = 通道活着，清零重试计数
           final j = jsonDecode('$data');
+          if (j is Map && '${j['type']}' == 'pong') _lastPong = true;
           if (j is Map) _ev.add(Map<String, dynamic>.from(j));
         } catch (_) {}
       }, onDone: () {
         _ws = null;
-        // ★重连条件放宽：只要还有 token 就重试（以前还要求 hasListener，后台冻结后容易满足不了）。
-        //   同时限制 3 次连续失败就停手，避免电脑端没开时无限刷。
-        _retry = (_retry ?? 0) + 1;
-        if ((_retry ?? 0) > 3) { _retry = 0; return; }
-        Future.delayed(const Duration(seconds: 4), () {
-          if (token.isNotEmpty) wsOpen();
-        });
-      }, onError: (_) {});
+        _scheduleReconnect();
+      }, onError: (_) {
+        // ★2026-10-02 之前 onError 是空的 → 连接死了既不清理也不重连，必须手动重连
+        _ws = null;
+        _scheduleReconnect();
+      });
     } catch (_) {}
+  }
+
+  // ★2026-10-02 统一断线重连：退避递增，上限放宽到 10 次（以前 3 次就永久停手，蒲公英抖两下就得手动重连）
+  void _scheduleReconnect() {
+    _retry = (_retry ?? 0) + 1;
+    if ((_retry ?? 0) > 10) { _retry = 0; return; }
+    Future.delayed(Duration(seconds: 3 * (_retry ?? 1)), () {
+      if (token.isNotEmpty && _ws == null) wsOpen();
+    });
+  }
+
+  // ★2026-10-02 前台心跳保活：电脑端 25s 会 ping 我们（底层自动回 pong 就行）；
+  //   但蒲公英/NAT 假死时两边都不知道 → 我们自己也 25s 发一次 ping，6s 没等到 pong 就主动重连
+  void _startHeartbeat() {
+    try { _hb?.cancel(); } catch (_) {}
+    _lastPong = true;
+    _hb = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (_ws == null) {
+        if (token.isNotEmpty) wsOpen();
+        return;
+      }
+      _lastPong = false;
+      try { _ws?.sink.add('{"type":"ping"}'); } catch (_) {}
+      Timer(const Duration(seconds: 6), () {
+        if (!_lastPong && _ws != null) {
+          // pong 没回来 → 通道假死，主动重建
+          wsClose();
+          _scheduleReconnect();
+        }
+      });
+    });
   }
 
   int? _retry;   // ★2026-10-02 断线重连续计数（防电脑端没开时无限重试）
@@ -349,6 +384,10 @@ class Api {
   void wsOpenOk() { _retry = 0; }   // ★连上/收到过消息就清零重试计数
 
   void wsClose() {
+    try {
+      _hb?.cancel();
+    } catch (_) {}
+    _hb = null;
     try {
       _ws?.sink.close();
     } catch (_) {}
