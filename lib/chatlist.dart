@@ -264,6 +264,7 @@ class _ChatListPageState extends State<ChatListPage> {
     final id = '${c['id'] ?? 'baona'}';
     final av = '${c['avatar'] ?? ''}';
     final unread = (c['unread'] as int?) ?? 0;
+    final isGroup = id.startsWith('group.');
     return InkWell(
       onTap: () {
         final isRole = roleIds().contains(id);
