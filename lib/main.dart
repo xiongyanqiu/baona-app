@@ -611,16 +611,7 @@ class _Header extends StatelessWidget {
         child: Row(children: [
           GestureDetector(
             onTap: onUs,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-                image: avatarOf(av) == null ? null : DecorationImage(image: avatarOf(av)!, fit: BoxFit.cover),
-              ),
-              child: av.isEmpty ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))) : null,
-            ),
+            child: _HeaderAvatar(av: av),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -642,6 +633,36 @@ class _Header extends StatelessWidget {
         ]),
         ),
       ),
+    );
+  }
+}
+
+/// ★2026-10-02 闪屏修复：左上角头像独立组件 —— 同 URL 复用缓存 provider + gaplessPlayback，
+///   切页/全局 rebuild 时保留上一帧，不闪回"娜"字占位
+class _HeaderAvatar extends StatelessWidget {
+  const _HeaderAvatar({required this.av});
+  final String av;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = av.isEmpty ? null : avatarOf(av);
+    return Container(
+      width: 38,
+      height: 38,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(colors: [kAccent, kAccent2]),
+      ),
+      child: p == null
+          ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)))
+          : Image(
+              image: p,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) =>
+                  const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            ),
     );
   }
 }
@@ -684,6 +705,7 @@ class _KeepAliveWrapperState extends State<KeepAliveWrapper>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    // ★2026-10-02 闪屏修复：RepaintBoundary 隔离每页绘制 —— 切页动画/一页刷新不会拖着别的页重绘
+    return RepaintBoundary(child: widget.child);
   }
 }
