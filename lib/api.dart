@@ -72,6 +72,16 @@ class Store {
   static int get ctxTokens => _p.getInt('local.ctxTokens') ?? 96000;
   static Future<void> setCtxTokens(int v) => _p.setInt('local.ctxTokens', v);
 
+  // ★26.2.18 全本地：商城钱包 / 背包 / 飞行棋 / 相册（不依赖电脑桌宠）
+  static String get localWallet => _p.getString('local.wallet') ?? '';
+  static Future<void> setLocalWallet(String v) => _p.setString('local.wallet', v);
+  static String get localBag => _p.getString('local.bag') ?? '';
+  static Future<void> setLocalBag(String v) => _p.setString('local.bag', v);
+  static String get localGame => _p.getString('local.game') ?? '';
+  static Future<void> setLocalGame(String v) => _p.setString('local.game', v);
+  static String get localAlbums => _p.getString('local.albums') ?? '';
+  static Future<void> setLocalAlbums(String v) => _p.setString('local.albums', v);
+
   // ★b21 相册列表缓存（秒开）与启动数据缓存（秒开），内容 + 时间戳
   static String get albumCache => _p.getString('album.cache') ?? '';
   static Future<void> setAlbumCache(String v) => _p.setString('album.cache', v);

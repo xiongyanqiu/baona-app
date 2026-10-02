@@ -24,7 +24,7 @@ class _GamePageState extends State<GamePage> {
   void initState() {
     super.initState();
     _load();
-    _sub = app.api?.events.listen((e) {
+    _sub = app.brainOrApi?.events.listen((e) {
       if ('${e['type']}' == 'game' && e['state'] is Map) {
         setState(() => _g = GameState.fromJson(Map.from(e['state'] as Map)));
       }
@@ -38,7 +38,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _load() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final j = await a.game();
     if (!mounted) return;
@@ -49,35 +49,20 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _roll(String who) async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final j = await a.gameRoll(who);
     if (!mounted) return;
     if (j['state'] is Map) {
       setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
     } else {
-      toast(context, '掷不了：${j['error'] ?? '电脑端没接住'}');
+      toast(context, '掷不了：${j['error'] ?? '没接住'}');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    // ★26.2.17 全本地化：飞行棋/控制器是"连电脑（桌宠）"功能
-    if (app.api == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.sports_esports_outlined, size: 44, color: kSub),
-            const SizedBox(height: 14),
-            const Text('飞行棋 / 控制器需要连着电脑桌宠才能玩', style: TextStyle(fontSize: 15)),
-            const SizedBox(height: 6),
-            const Text('聊天 / 记忆 / 人设 / 愿望都在手机本地，不受影响', style: TextStyle(fontSize: 12, color: kSub)),
-          ]),
-        ),
-      );
-    }
     final g = _g;
     if (g == null) return const Center(child: Text('棋盘没打开', style: TextStyle(color: kSub)));
 
@@ -115,14 +100,15 @@ class _GamePageState extends State<GamePage> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: Chip2('${m['name'] ?? m['id']}', on2: '${m['id']}' == g.mode, on: () async {
-                  final a = app.api!;
+                  final dynamic a = app.brainOrApi;
+                  if (a == null) return;
                   final j = await a.gameMode('${m['id']}');
                   if (!mounted) return;
                   if (j['state'] is Map) {
                     setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
                     toast(context, '换成：${m['name'] ?? m['id']}');
                   } else {
-                    toast(context, '换不了：${j['error'] ?? '电脑端没接住'}');
+                    toast(context, '换不了：${j['error'] ?? '没接住'}');
                   }
                 }),
               ),
@@ -165,13 +151,15 @@ class _GamePageState extends State<GamePage> {
                           ),
                         );
                         if (ok != true) return;
-                        final j = await app.api!.gameTile(i, c.text.trim());
+                        final dynamic a = app.brainOrApi;
+                        if (a == null) return;
+                        final j = await a.gameTile(i, c.text.trim());
                         if (!mounted) return;
                         if (j['state'] is Map) {
                           setState(() => _g = GameState.fromJson(Map.from(j['state'] as Map)));
                           toast(context, '改好了');
                         } else {
-                          toast(context, '改不了：${j['error'] ?? '电脑端没接住'}');
+                          toast(context, '改不了：${j['error'] ?? '没接住'}');
                         }
                       }
                     : null,

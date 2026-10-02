@@ -33,11 +33,30 @@ class _PetDrawerState extends State<PetDrawer> {
   String _msg = '';
   bool _touch = false;
 
+  bool get _local => app.brain != null; // ★26.2.18 全本地：不连电脑时显示打包立绘
+
+  static const List<String> _localLines = [
+    '她歪着头看你，眼睛弯弯的',
+    '她朝你眨了眨眼',
+    '她轻轻拉了拉你的衣角',
+    '她凑过来闻了闻你',
+    '她脸有点红，别过头去',
+    '她偷偷看你，被抓包了',
+    '她笑了，好看的那种',
+    '她给你比了个心',
+    '她伸了个懒腰，像只猫',
+    '她小声说"老公回来啦"',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _refresh();
-    _t = Timer.periodic(const Duration(milliseconds: 1600), (_) => _refresh());
+    if (_local) {
+      _msg = _localLines[DateTime.now().millisecondsSinceEpoch % _localLines.length];
+    } else {
+      _refresh();
+      _t = Timer.periodic(const Duration(milliseconds: 1600), (_) => _refresh());
+    }
   }
 
   @override
@@ -47,6 +66,7 @@ class _PetDrawerState extends State<PetDrawer> {
   }
 
   Future<void> _refresh() async {
+    if (_local) return; // 本地立绘不拉实时画面
     final a = app.api;
     if (a == null) return;
     // ★2026-09-29 老公说"这个软件太卡、非常吃网络"：以前不管抽屉开没开都每 1.6 秒拉一张
@@ -72,6 +92,18 @@ class _PetDrawerState extends State<PetDrawer> {
   }
 
   Future<void> _pet() async {
+    if (_local) {
+      // 本地互动：换一句动作气泡，像她真的在
+      setState(() {
+        _touch = true;
+        _msg = _localLines[(DateTime.now().millisecondsSinceEpoch ~/ 700) % _localLines.length];
+      });
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
+      setState(() => _touch = false);
+      toast(context, '你摸了她一下');
+      return;
+    }
     final a = app.api;
     if (a == null) return;
     setState(() => _touch = true);
@@ -128,7 +160,7 @@ class _PetDrawerState extends State<PetDrawer> {
               ),
             ]),
 
-            const Sec('她在桌面上（实时）'),
+            const Sec('她在你身边'),
             Expanded(
               child: PressScale(
                 onTap: _pet,
@@ -140,23 +172,33 @@ class _PetDrawerState extends State<PetDrawer> {
                     gradient: const RadialGradient(colors: [Color(0x24FFFFFF), Color(0x00FFFFFF)], radius: 0.9),
                     border: Border.all(color: kHair),
                   ),
-                  child: _img.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Text(_msg.isEmpty ? '正在看她在干嘛…' : _msg,
-                                textAlign: TextAlign.center, style: const TextStyle(fontSize: 12.5, color: kSub)),
-                          ),
-                        )
-                      : ClipRRect(
+                  child: _local
+                      ? ClipRRect(
                           borderRadius: BorderRadius.circular(kRCard - 1),
-                          child: Image.memory(
-                            dataUriBytes(_img),
+                          child: Image.asset(
+                            'assets/pet.png',
                             fit: BoxFit.contain,
                             gaplessPlayback: true,
-                            errorBuilder: (_, __, ___) => const Center(child: Text('画面没出来', style: TextStyle(fontSize: 12, color: kSub))),
+                            errorBuilder: (_, __, ___) => const Center(child: Text('立绘没加载出来', style: TextStyle(fontSize: 12, color: kSub))),
                           ),
-                        ),
+                        )
+                      : _img.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Text(_msg.isEmpty ? '正在看她在干嘛…' : _msg,
+                                    textAlign: TextAlign.center, style: const TextStyle(fontSize: 12.5, color: kSub)),
+                              ),
+                            )
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(kRCard - 1),
+                              child: Image.memory(
+                                dataUriBytes(_img),
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                errorBuilder: (_, __, ___) => const Center(child: Text('画面没出来', style: TextStyle(fontSize: 12, color: kSub))),
+                              ),
+                            ),
                 ),
               ),
             ),
@@ -164,7 +206,7 @@ class _PetDrawerState extends State<PetDrawer> {
             Row(children: [
               const Icon(Icons.touch_app_outlined, size: 15, color: kSub),
               const SizedBox(width: 6),
-              Expanded(child: Text(_touch ? '摸着呢…' : '点一下画面 = 摸摸她 · 每 2 秒自动刷新', style: const TextStyle(fontSize: 11.5, color: kSub))),
+              Expanded(child: Text(_local ? (_touch ? '摸着呢…' : '点一下她 = 摸摸她 · 她会回应你') : (_touch ? '摸着呢…' : '点一下画面 = 摸摸她 · 每 2 秒自动刷新'), style: const TextStyle(fontSize: 11.5, color: kSub))),
             ]),
             const SizedBox(height: 10),
             Row(children: [

@@ -1,6 +1,7 @@
 // 包娜 App · 「我们」页：情侣空间 / 相册 / 她的记忆 / 她的本事
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -347,6 +348,20 @@ Future<void> openMood(BuildContext context) async {
 Future<void> openAlbum(BuildContext context) async {
   // ★2026-10-01 相册本地缓存：有持久化列表就立即打开（秒开、离线可看），进页后再静默刷新；
   //   没缓存才走网络（可能要相册密码）。
+  // ★26.2.18 全本地：本地模式（不连电脑）直接读手机本地相册（照片存在 App 目录里）
+  if (app.brain != null) {
+    final j = await app.brain!.album();
+    final groups = ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+    if (!context.mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x8A000000),
+      builder: (c) => DraggableScrollableSheet(expand: false, initialChildSize: 0.9, builder: (c, s) => GlassSheet(child: _Album(scroll: s, groups: groups, stale: false, local: true))),
+    );
+    return;
+  }
   final cached = _albumFromCache();
   List<AlbGroup> groups;
   bool stale = false;
@@ -431,10 +446,11 @@ Future<String> pickAlbumImage(BuildContext context) async {
 }
 
 class _Album extends StatefulWidget {
-  const _Album({required this.scroll, required this.groups, this.stale = false});
+  const _Album({required this.scroll, required this.groups, this.stale = false, this.local = false});
   final ScrollController scroll;
   final List<AlbGroup> groups;
   final bool stale; // ★2026-10-01：true=读的是本地缓存，进页后静默刷新（不转圈、不挡手）
+  final bool local; // ★26.2.18 全本地：true=手机本地相册（照片是本地文件路径，存 App 目录）
   @override
   State<_Album> createState() => _AlbumState();
 }
@@ -451,7 +467,7 @@ class _AlbumState extends State<_Album> {
     //   点开相册看着就像"没有内容"（实测 App 连一张照片都没去请求）
     _cur = _firstWithPhotos();
     // ★2026-10-01：读的是本地缓存 → 后台静默拉最新，拉到就替换并更新缓存
-    if (widget.stale) {
+    if (widget.stale && !widget.local) {
       Future.microtask(() async {
         final fresh = await _loadAlbumNetwork(context);
         if (!mounted || fresh.isEmpty) return;
@@ -472,7 +488,7 @@ class _AlbumState extends State<_Album> {
   }
 
   Future<void> _reload() async {
-    final j = await app.api?.album();
+    final j = widget.local ? await app.brain!.album() : await app.api?.album();
     if (!mounted || j?['ok'] != true) return;
     setState(() {
       _g = ((j!['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
@@ -480,9 +496,19 @@ class _AlbumState extends State<_Album> {
       if (_g.isNotEmpty && _g[_cur].photos.isEmpty) _cur = _firstWithPhotos(); // 当前这组空了就换有图的
     });
     // ★2026-10-01：刷新成功同步更新本地缓存
-    try {
-      await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j!['groups']}));
-    } catch (_) {/* ignore */}
+    if (!widget.local) {
+      try {
+        await Store.setAlbumCache(jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'groups': j!['groups']}));
+      } catch (_) {/* ignore */}
+    }
+  }
+
+  /// ★26.2.18 相册图片：本地模式用本地文件；连电脑模式用缓存网络图
+  Widget _photo(AlbPhoto ph, {int? cacheWidth, BoxFit fit = BoxFit.cover}) {
+    if (widget.local) {
+      return Image.file(File(ph.url), fit: fit, cacheWidth: cacheWidth, errorBuilder: (c, e, s) => Container(color: kGlass, child: const Center(child: Icon(Icons.broken_image_outlined, size: 22, color: kSub))));
+    }
+    return CacheImg(app.api!.albumPhotoUrl(ph.url, w: 500), fit: fit, cacheWidth: cacheWidth);
   }
 
   @override
@@ -499,7 +525,7 @@ class _AlbumState extends State<_Album> {
         Chip2('新建分组', ico: Icons.add, on: () async {
           final n = await _askText(context, '新分组叫什么？（她的裸照 / 日常 / 出门）');
           if (n.isEmpty) return;
-          final r = await app.api?.albumGroup('add', name: n);
+          final r = widget.local ? await app.brain!.albumGroup('add', n) : await app.api?.albumGroup('add', name: n);
           if (mounted) toast(context, r?['ok'] == true ? '分组建好了：$n' : '没建成：${r?['error'] ?? '手机没连上'}');
           _reload();
         }),
@@ -543,13 +569,7 @@ class _AlbumState extends State<_Album> {
                 onTap: () => _viewPhoto(ph),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: CacheImg(
-                    // ★2026-09-29 缩略图：网格只下小图（服务端 ?w=500 返回，流量少一大截），点开才看原图
-                    app.api!.albumPhotoUrl(ph.url, w: 500),
-                    fit: BoxFit.cover,
-                    // ★b21 缩略图解码 + 磁盘缓存：秒开不烫
-                    cacheWidth: 420,
-                  ),
+                  child: _photo(ph, cacheWidth: 420),
                 ),
               );
             },
@@ -592,8 +612,10 @@ class _AlbumState extends State<_Album> {
     for (final f in files) {
       try {
         final b = await f.readAsBytes();
-        var r = await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
-        if (r?['ok'] != true && '${r?['error'] ?? ''}'.contains('密码')) {
+        var r = widget.local
+            ? await app.brain!.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}')
+            : await app.api?.albumUpload(cur.id, 'data:image/jpeg;base64,${base64Encode(b)}');
+        if (!widget.local && r?['ok'] != true && '${r?['error'] ?? ''}'.contains('密码')) {
           final pin = await _askText(context, '相册密码', obscure: true);
           if (pin.isNotEmpty) {
             await Store.setAlbumPin(pin);
@@ -603,7 +625,7 @@ class _AlbumState extends State<_Album> {
         if (r?['ok'] == true) {
           ok++;
         } else {
-          lastErr = '${r?['error'] ?? '电脑端没接住'}';
+          lastErr = '${r?['error'] ?? '手机没连上'}';
         }
       } catch (e) {
         lastErr = '$e';
@@ -622,11 +644,13 @@ class _AlbumState extends State<_Album> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          CacheImg(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.contain, radius: BorderRadius.circular(14)),
+          widget.local
+              ? Image.file(File(ph.url), fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox(height: 160, child: Center(child: Icon(Icons.broken_image_outlined, size: 30, color: kSub))))
+              : CacheImg(app.api!.albumPhotoUrl(ph.url), fit: BoxFit.contain, radius: BorderRadius.circular(14)),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Chip2('♥ ${ph.likes}', on: () async {
-              final r = await app.api?.albumLike(ph.id);
+              final r = widget.local ? await app.brain!.albumLike(ph.id) : await app.api?.albumLike(ph.id);
               if (r?['ok'] != true) {
                 if (c.mounted) toast(c, '点不了赞：${r?['error'] ?? '手机没连上'}');
                 return;
@@ -638,7 +662,7 @@ class _AlbumState extends State<_Album> {
             Chip2('评论', on: () async {
               final t = await _askText(context, '说点什么');
               if (t.isEmpty) return;
-              final r2 = await app.api?.albumComment(ph.id, t);
+              final r2 = widget.local ? await app.brain!.albumComment(ph.id, t) : await app.api?.albumComment(ph.id, t);
               if (r2?['ok'] != true) {
                 if (c.mounted) toast(c, '评论没上去：${r2?['error'] ?? '手机没连上'}');
                 return;

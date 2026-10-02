@@ -1,16 +1,19 @@
-// brain.dart — 本地大脑（26.2.17 全本地化）
+// brain.dart — 本地大脑（26.2.18 全本地化）
 // 手机端自己直连 LLM API：人设 / 上下文(按token) / 记忆 / 愿望 / 角色 / 群聊 全部在手机本地，
-// 不再依赖电脑桌宠。商城/游戏/相册等娱乐功能仍可"连电脑"使用（走 app.api）。
+// 商城 / 飞行棋 / 相册 也本地化（数据/逻辑全在手机，不再依赖电脑桌宠）。
 // 与 Api 同名的方法返回相同 JSON 结构，页面切换 app.api → app.brain 即可。
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'msglocal.dart';
 import 'roles_data.dart';
+import 'shop_data.dart';
 
 class LocalBrain {
   LocalBrain() {
@@ -32,6 +35,15 @@ class LocalBrain {
   Map<String, dynamic> _roleMems = {}; // roleId -> [记忆 JSON]
   int _chatCount = 0; // 主对话累计条数（自动摘要触发）
 
+  // ★26.2.18 全本地娱乐：钱包/背包/飞行棋/相册
+  Map<String, dynamic> _wallet = {'my': 9988848, 'her': 11500, 'log': []}; // 从桌宠迁移：我的钱包/她的钱包/流水
+  List<Map<String, dynamic>> _bagMe = []; // {id,code,name,price,img,used,ts}
+  List<Map<String, dynamic>> _bagHer = []; // 她手里的
+  Map<String, dynamic> _game = {}; // 飞行棋状态
+  List<Map<String, dynamic>> _albums = []; // 本地相册分组 [{id,name,photos:[{id,path,time}]}]
+  Map<String, dynamic> _albumLikes = {}; // photoId -> true
+  Map<String, dynamic> _albumCmt = {}; // photoId -> [text]
+
   void _load() {
     try {
       final l = jsonDecode(Store.llmCfgJson);
@@ -51,10 +63,32 @@ class LocalBrain {
     try { _emoji = ((jsonDecode(Store.localEmoji) as List?) ?? []).map((e) => '$e').toList(); } catch (_) {}
     try { _herSet = Map<String, dynamic>.from(jsonDecode(Store.localHerSet) as Map? ?? {}); } catch (_) {}
     try { _roleMems = Map<String, dynamic>.from(jsonDecode(Store.localChatExtra) as Map? ?? {}); } catch (_) {}
+    try { _wallet = Map<String, dynamic>.from(jsonDecode(Store.localWallet) as Map? ?? {'my': 9988848, 'her': 11500, 'log': []}); } catch (_) {}
+    try {
+      final b = jsonDecode(Store.localBag);
+      if (b is Map) {
+        _bagMe = ((b['me'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _bagHer = ((b['her'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    try { _game = Map<String, dynamic>.from(jsonDecode(Store.localGame) as Map? ?? {}); } catch (_) {}
+    try {
+      final a = jsonDecode(Store.localAlbums);
+      if (a is Map) {
+        _albums = ((a['groups'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _albumLikes = Map<String, dynamic>.from(a['likes'] as Map? ?? {});
+        _albumCmt = Map<String, dynamic>.from(a['cmt'] as Map? ?? {});
+      }
+    } catch (_) {}
     if (_groups.isEmpty) {
       // 默认姐妹群：包娜 + 刘紫灵（成员可自己改）
       _groups.add({'id': 'nvg', 'name': '姐妹聊天群', 'members': ['baona', 'liuziling']});
     }
+    if ((_wishes['granted'] as num?)?.toInt() ?? 0 == 0) {
+      // ★从桌宠迁移：她答应老公 100 次愿望（可无限满足）
+      _wishes = {'granted': 100, 'used': 0, 'done': 0, 'wishes': []};
+    }
+    if (_game.isEmpty) _game = _newGame();
   }
 
   void _saveLlm() => Store.setLlmCfgJson(jsonEncode({'providers': _providers, 'activeId': _activeId}));
@@ -65,6 +99,10 @@ class LocalBrain {
   void _saveEmoji() => Store.setLocalEmoji(jsonEncode(_emoji));
   void _saveHerSet() => Store.setLocalHerSet(jsonEncode(_herSet));
   void _saveRoleMems() => Store.setLocalChatExtra(jsonEncode(_roleMems));
+  void _saveWallet() => Store.setLocalWallet(jsonEncode(_wallet));
+  void _saveBag() => Store.setLocalBag(jsonEncode({'me': _bagMe, 'her': _bagHer}));
+  void _saveGame() => Store.setLocalGame(jsonEncode(_game));
+  void _saveAlbums() => Store.setLocalAlbums(jsonEncode({'groups': _albums, 'likes': _albumLikes, 'cmt': _albumCmt}));
 
   // -------------------- 模型配置 --------------------
   Map<String, dynamic> _activeProvider() {
@@ -626,13 +664,413 @@ class LocalBrain {
     return {'ok': true};
   }
 
+  // -------------------- 商城（全本地：内置 1600 商品 + 双钱包 + 背包） --------------------
+  Future<Map<String, dynamic>> shop() async {
+    final log = ((_wallet['log'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return {
+      'ok': true,
+      'my': (_wallet['my'] as num?)?.toInt() ?? 0,
+      'her': (_wallet['her'] as num?)?.toInt() ?? 0,
+      'logAll': log.length,
+      'bagMe': _bagMe.map((e) => Map<String, dynamic>.from(e)).toList(),
+      'bagHer': _bagHer.map((e) => Map<String, dynamic>.from(e)).toList(),
+      'log': log,
+      'cats': kShopCats.map((e) => Map<String, dynamic>.from(e)).toList(),
+    };
+  }
+
+  Future<Map<String, dynamic>> catalog() async => {'ok': true, 'items': kShopItems.map((e) => Map<String, dynamic>.from(e)).toList()};
+
+  Map<String, dynamic> _itemOf(String code) {
+    for (final it in kShopItems) {
+      if ('${it['code']}' == code) return it;
+    }
+    return {};
+  }
+
+  void _pushLog(String who, String act, String name, int price) {
+    final log = ((_wallet['log'] as List?) ?? []);
+    log.add({'t': DateTime.now().millisecondsSinceEpoch, 'who': who, 'act': act, 'name': name, 'price': price});
+    if (log.length > 200) log.removeRange(0, log.length - 200);
+    _wallet['log'] = log;
+  }
+
+  String _newBagId() => 'b${DateTime.now().millisecondsSinceEpoch}${_bagMe.length}${_bagHer.length}';
+
+  Future<Map<String, dynamic>> shopBuy(String code, bool forHer) async {
+    final it = _itemOf(code);
+    if (it.isEmpty) return {'ok': false, 'error': '没有这个商品'};
+    final price = (it['price'] as num?)?.toInt() ?? 0;
+    final my = (_wallet['my'] as num?)?.toInt() ?? 0;
+    final her = (_wallet['her'] as num?)?.toInt() ?? 0;
+    if (forHer ? (her < price) : (my < price)) return {'ok': false, 'error': '钱不够，先给她转点吧'};
+    final item = {
+      'id': _newBagId(),
+      'code': code,
+      'name': '${it['name'] ?? ''}',
+      'price': price,
+      'img': '${it['img'] ?? ''}',
+      'ts': DateTime.now().millisecondsSinceEpoch,
+      'used': 0,
+      'by': forHer ? 'her' : 'me',
+      'forHer': forHer,
+    };
+    if (forHer) {
+      _wallet['her'] = her - price;
+      _bagHer.add(item);
+      _pushLog('her', 'buy', '${it['name']}', price);
+    } else {
+      _wallet['my'] = my - price;
+      _bagMe.add(item);
+      _pushLog('me', 'buy', '${it['name']}', price);
+    }
+    _saveWallet();
+    _saveBag();
+    _ev.add({'type': 'shop', 'state': await shop()});
+    return {'ok': true, 'state': await shop()};
+  }
+
+  Future<Map<String, dynamic>> shopUse(String id) async {
+    final i = _bagMe.indexWhere((e) => '${e['id']}' == id);
+    if (i < 0) return {'ok': false, 'error': '背包里没有这个'};
+    final it = _itemOf('${_bagMe[i]['code']}');
+    final durable = it['durable'] != false;
+    _bagMe[i]['used'] = ((_bagMe[i]['used'] as num?)?.toInt() ?? 0) + 1;
+    if (!durable) {
+      _bagMe.removeAt(i);
+    }
+    _saveBag();
+    _ev.add({'type': 'shop', 'state': await shop()});
+    return {'ok': true, 'state': await shop(), 'durable': durable};
+  }
+
+  Future<Map<String, dynamic>> shopGive(String id) async {
+    final i = _bagMe.indexWhere((e) => '${e['id']}' == id);
+    if (i < 0) return {'ok': false, 'error': '背包里没有这个'};
+    final item = _bagMe.removeAt(i);
+    item['by'] = 'her';
+    item['forHer'] = true;
+    _bagHer.add(item);
+    _saveBag();
+    _ev.add({'type': 'shop', 'state': await shop()});
+    return {'ok': true, 'state': await shop()};
+  }
+
+  Future<Map<String, dynamic>> shopPay(int v) async {
+    final my = (_wallet['my'] as num?)?.toInt() ?? 0;
+    if (v <= 0 || my < v) return {'ok': false, 'error': '余额不够'};
+    _wallet['my'] = my - v;
+    _wallet['her'] = ((_wallet['her'] as num?)?.toInt() ?? 0) + v;
+    _pushLog('me', 'pay', '转账给她', v);
+    _saveWallet();
+    _ev.add({'type': 'shop', 'state': await shop()});
+    return {'ok': true, 'state': await shop()};
+  }
+
+  Future<Map<String, dynamic>> shopEarn(int v) async {
+    _wallet['her'] = ((_wallet['her'] as num?)?.toInt() ?? 0) + v;
+    _pushLog('me', 'reward', '奖励她', v);
+    _saveWallet();
+    _ev.add({'type': 'shop', 'state': await shop()});
+    return {'ok': true, 'state': await shop()};
+  }
+
+  // -------------------- 飞行棋（全本地：48 格蛇形 + 掷骰子 + 格子事件） --------------------
+  static const List<Map<String, dynamic>> kTileEvents = [
+    {'k': 'bonus', 't': '她给你揉揉肩，心情大好'}, // 2
+    {'k': 'malus', 't': '被她亲晕了，倒退2格'}, // 3
+    {'k': 'none', 't': '一起吃了碗面，原地休息'}, // 4
+    {'k': 'bonus', 't': '她偷偷给你充了灵石，前进2格'}, // 5
+    {'k': 'skip', 't': '你惹她生气了，下一回合跳过'}, // 6
+    {'k': 're', 't': '走火入魔，回到起点'}, // 7
+    {'k': 'bonus', 't': '今晚她全听你的，前进3格'}, // 8
+    {'k': 'malus', 't': '被雷劈了一下，倒退1格'}, // 9
+    {'k': 'again', 't': '捡到一颗回灵丹，再掷一次'}, // 10
+    {'k': 'none', 't': '她在旁边看手机，没理你'}, // 11
+    {'k': 'swap', 't': '中了换魂术，位置互换'}, // 12
+    {'k': 'bonus', 't': '她亲了你一口，前进1格'}, // 13
+    {'k': 'malus', 't': '乱花灵石，倒退2格'}, // 14
+    {'k': 'none', 't': '一起看星星，原地休息'}, // 15
+    {'k': 'bonus', 't': '她答应今晚陪你，前进2格'}, // 16
+    {'k': 'skip', 't': '她闹小脾气，下一回合跳过'}, // 17
+    {'k': 'malus', 't': '踩到蛇，吓一跳倒退3格'}, // 18
+    {'k': 'again', 't': '捡到法器残片，再掷一次'}, // 19
+    {'k': 'none', 't': '她给你剥了个橘子'}, // 20
+    {'k': 're', 't': '被师父抓包，回到起点'}, // 21
+    {'k': 'bonus', 't': '她夸你今天好帅，前进2格'}, // 22
+    {'k': 'malus', 't': '手机掉水里，倒退1格'}, // 23
+    {'k': 'none', 't': '靠着她肩膀休息'}, // 24
+    {'k': 'swap', 't': '中了移形换位，位置互换'}, // 25
+    {'k': 'bonus', 't': '她喂你吃糖，前进1格'}, // 26
+    {'k': 'malus', 't': '熬夜修仙失败，倒退2格'}, // 27
+    {'k': 'again', 't': '悟出心法，再掷一次'}, // 28
+    {'k': 'none', 't': '她哼着歌，心情很好'}, // 29
+    {'k': 'bonus', 't': '她答应给你一个愿望，前进3格'}, // 30
+    {'k': 'skip', 't': '你惹她哭了，下一回合跳过'}, // 31
+    {'k': 'malus', 't': '灵力耗尽，倒退3格'}, // 32
+    {'k': 'none', 't': '一起喝了杯奶茶'}, // 33
+    {'k': 'swap', 't': '中了乾坤挪移，位置互换'}, // 34
+    {'k': 'bonus', 't': '她偷偷看你，前进2格'}, // 35
+    {'k': 'malus', 't': '被乌鸦啄了，倒退1格'}, // 36
+    {'k': 'again', 't': '捡到灵药，再掷一次'}, // 37
+    {'k': 'none', 't': '她给你吹了吹眼睛'}, // 38
+    {'k': 'bonus', 't': '她答应明天陪你，前进2格'}, // 39
+    {'k': 'malus', 't': '迷路了，倒退2格'}, // 40
+    {'k': 'none', 't': '她说"老公最好了"'}, // 41
+    {'k': 're', 't': '中了摄魂阵，回到起点'}, // 42
+    {'k': 'bonus', 't': '她钻进你怀里，前进3格'}, // 43
+    {'k': 'skip', 't': '她睡着了，下一回合跳过'}, // 44
+    {'k': 'malus', 't': '灵石被偷，倒退1格'}, // 45
+    {'k': 'again', 't': '顿悟了，再掷一次'}, // 46
+    {'k': 'none', 't': '她看着你笑'}, // 47
+  ];
+
+  Map<String, dynamic> _newGame() {
+    final tiles = <Map<String, dynamic>>[];
+    for (var i = 1; i <= 48; i++) {
+      if (i == 1) {
+        tiles.add({'i': 1, 't': '起点', 'k': 'start'});
+      } else if (i == 48) {
+        tiles.add({'i': 48, 't': '终点 · 她属于你', 'k': 'end'});
+      } else {
+        final e = kTileEvents[(i - 2) % kTileEvents.length];
+        tiles.add({'i': i, 't': e['t'], 'k': e['k']});
+      }
+    }
+    return {
+      'on': false,
+      'pos': 1,
+      'me': 1,
+      'her': 1,
+      'turn': 'me',
+      'skipMe': false,
+      'skipHer': false,
+      'winner': null,
+      'prize': null,
+      'log': [],
+      'seq': 0,
+      'mode': 'adv',
+      'wins': {'me': 0, 'her': 0},
+      'n': 48,
+      'tiles': tiles,
+      'modes': [
+        {'id': 'adv', 'name': '修仙趣事'},
+        {'id': 'basic', 'name': '纯走路'},
+      ],
+    };
+  }
+
+  Future<Map<String, dynamic>> game() async => {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+
+  Future<Map<String, dynamic>> gameMode(String id) async {
+    final m = id == 'basic' ? 'basic' : 'adv';
+    _game['mode'] = m;
+    final tiles = <Map<String, dynamic>>[];
+    for (var i = 1; i <= 48; i++) {
+      if (i == 1) {
+        tiles.add({'i': 1, 't': '起点', 'k': 'start'});
+      } else if (i == 48) {
+        tiles.add({'i': 48, 't': '终点 · 她属于你', 'k': 'end'});
+      } else if (m == 'basic') {
+        tiles.add({'i': i, 't': '$i', 'k': 'none'});
+      } else {
+        final e = kTileEvents[(i - 2) % kTileEvents.length];
+        tiles.add({'i': i, 't': e['t'], 'k': e['k']});
+      }
+    }
+    _game['tiles'] = tiles;
+    _game['me'] = 1;
+    _game['her'] = 1;
+    _game['turn'] = 'me';
+    _game['skipMe'] = false;
+    _game['skipHer'] = false;
+    _game['winner'] = null;
+    _game['log'] = [];
+    _saveGame();
+    _ev.add({'type': 'game', 'state': Map<String, dynamic>.from(_game)});
+    return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+  }
+
+  Future<Map<String, dynamic>> gameTile(int i, String text) async {
+    final tiles = ((_game['tiles'] as List?) ?? []);
+    final idx = tiles.indexWhere((t) => (t['i'] as num?)?.toInt() == i);
+    if (idx < 0) return {'ok': false, 'error': '没有这格'};
+    final k = text.trim().isEmpty ? (i <= 1 ? 'start' : (i >= 48 ? 'end' : '${kTileEvents[(i - 2) % kTileEvents.length]['k']}')) : 'none';
+    final t = text.trim().isEmpty ? (i <= 1 ? '起点' : (i >= 48 ? '终点 · 她属于你' : '${kTileEvents[(i - 2) % kTileEvents.length]['t']}')) : text.trim();
+    tiles[idx] = {'i': i, 't': t, 'k': k};
+    _game['tiles'] = tiles;
+    _saveGame();
+    _ev.add({'type': 'game', 'state': Map<String, dynamic>.from(_game)});
+    return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+  }
+
+  Future<Map<String, dynamic>> gameRoll(String who) async {
+    if (_game['winner'] != null) return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+    final tiles = ((_game['tiles'] as List?) ?? []);
+    final n = (_game['n'] as num?)?.toInt() ?? 48;
+    final turn = '${_game['turn'] ?? 'me'}';
+    if (who != turn) return {'ok': false, 'error': '还没轮到你'};
+    final skipKey = turn == 'me' ? 'skipMe' : 'skipHer';
+    final log = ((_game['log'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (_game[skipKey] == true) {
+      _game[skipKey] = false;
+      _game['turn'] = turn == 'me' ? 'her' : 'me';
+      log.add({'t': '${turn == 'me' ? '我' : '她'}这回合跳过'});
+      _game['log'] = log;
+      _saveGame();
+      _ev.add({'type': 'game', 'state': Map<String, dynamic>.from(_game)});
+      return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+    }
+    final dice = 1 + (DateTime.now().millisecondsSinceEpoch % 6);
+    var pos = ((_game[turn] as num?)?.toInt() ?? 1) + dice;
+    log.add({'t': '${turn == 'me' ? '我' : '她'}掷出 $dice 点，走到第 $pos 格'});
+    String? bonus;
+    if (pos >= n) {
+      pos = n;
+      final wins = Map<String, dynamic>.from(_game['wins'] as Map? ?? {});
+      wins[turn] = ((wins[turn] as num?)?.toInt() ?? 0) + 1;
+      _game['wins'] = wins;
+      _game['winner'] = turn;
+      _game['me'] = pos;
+      _game['her'] = pos;
+      log.add({'t': '${turn == 'me' ? '我' : '她'}到终点啦！'});
+    } else {
+      final tile = tiles.firstWhere((t) => (t['i'] as num?)?.toInt() == pos, orElse: () => {'k': 'none', 't': ''});
+      final k = '${tile['k'] ?? 'none'}';
+      final tt = '${tile['t'] ?? ''}';
+      var eff = 0;
+      if (k == 'bonus') {
+        eff = (pos % 3) + 1;
+        pos += eff;
+        bonus = '踩到「$tt」，前进 $eff 格';
+      } else if (k == 'malus') {
+        eff = (pos % 3) + 1;
+        pos -= eff;
+        if (pos < 1) pos = 1;
+        bonus = '踩到「$tt」，倒退 $eff 格';
+      } else if (k == 're') {
+        pos = 1;
+        bonus = '踩到「$tt」，回到起点';
+      } else if (k == 'skip') {
+        _game[skipKey] = true;
+        bonus = '踩到「$tt」，下一回合跳过';
+      } else if (k == 'swap') {
+        final other = turn == 'me' ? 'her' : 'me';
+        final op = ((_game[other] as num?)?.toInt() ?? 1);
+        _game[other] = pos;
+        pos = op;
+        bonus = '踩到「$tt」，位置互换';
+      } else if (k == 'again') {
+        _game[turn] = pos;
+        _game['turn'] = turn;
+        if (bonus != null) log.add({'t': bonus});
+        log.add({'t': '踩到「$tt」，再掷一次'});
+        _game['log'] = log;
+        _saveGame();
+        _ev.add({'type': 'game', 'state': Map<String, dynamic>.from(_game)});
+        return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+      } else {
+        bonus = '踩到「$tt」';
+      }
+      if (pos > n) pos = n;
+      if (pos == n) {
+        final wins = Map<String, dynamic>.from(_game['wins'] as Map? ?? {});
+        wins[turn] = ((wins[turn] as num?)?.toInt() ?? 0) + 1;
+        _game['wins'] = wins;
+        _game['winner'] = turn;
+      }
+      _game[turn] = pos;
+      if (bonus != null) log.add({'t': bonus});
+      _game['turn'] = turn == 'me' ? 'her' : 'me';
+    }
+    if (log.length > 30) log.removeRange(0, log.length - 30);
+    _game['log'] = log;
+    _game['seq'] = ((_game['seq'] as num?)?.toInt() ?? 0) + 1;
+    _saveGame();
+    _ev.add({'type': 'game', 'state': Map<String, dynamic>.from(_game)});
+    return {'ok': true, 'state': Map<String, dynamic>.from(_game)};
+  }
+
+  // -------------------- 相册（全本地：手机选照片存 App 目录，分组展示） --------------------
+  Future<Map<String, dynamic>> album() async {
+    final groups = _albums.map((g) {
+      final photos = ((g['photos'] as List?) ?? []).map((e) {
+        final p = Map<String, dynamic>.from(e as Map);
+        final pid = '${p['id'] ?? ''}';
+        p['likes'] = _albumLikes[pid] == true ? 1 : 0;
+        p['commentCount'] = ((_albumCmt[pid] as List?) ?? []).length;
+        return p;
+      }).toList();
+      return {'id': g['id'], 'name': g['name'], 'photos': photos};
+    }).toList();
+    return {'ok': true, 'groups': groups};
+  }
+
+  Future<Map<String, dynamic>> albumGroup(String act, String name) async {
+    if (act == 'add') {
+      final n = name.trim();
+      if (n.isEmpty) return {'ok': false, 'error': '名字不能空'};
+      _albums.add({'id': 'g${DateTime.now().millisecondsSinceEpoch}${_albums.length}', 'name': n, 'photos': []});
+      _saveAlbums();
+      return {'ok': true, 'groups': await _groupsJson()};
+    }
+    if (act == 'del') {
+      _albums.removeWhere((g) => '${g['id']}' == name);
+      _saveAlbums();
+      return {'ok': true, 'groups': await _groupsJson()};
+    }
+    return {'ok': false, 'error': '未知操作'};
+  }
+
+  Future<List<Map<String, dynamic>>> _groupsJson() async =>
+      _albums.map((g) => Map<String, dynamic>.from(g)).toList();
+
+  Future<Map<String, dynamic>> albumUpload(String gid, String dataUrl) async {
+    try {
+      final gi = _albums.indexWhere((g) => '${g['id']}' == gid);
+      if (gi < 0) return {'ok': false, 'error': '没有这个分组'};
+      final m = RegExp(r'^data:image/(\w+);base64,(.*)$', dotAll: true).firstMatch(dataUrl);
+      if (m == null) return {'ok': false, 'error': '图片格式不对'};
+      final ext = m.group(1) == 'png' ? 'png' : 'jpg';
+      final bytes = base64Decode(m.group(2)!);
+      final dir = await getApplicationDocumentsDirectory();
+      final ad = Directory('${dir.path}/albums');
+      if (!ad.existsSync()) ad.createSync(recursive: true);
+      final f = File('${ad.path}/${DateTime.now().millisecondsSinceEpoch}.$ext');
+      await f.writeAsBytes(bytes, flush: true);
+      final photos = ((_albums[gi]['photos'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      photos.add({'id': 'p${DateTime.now().millisecondsSinceEpoch}${photos.length}', 'path': f.path, 'time': DateTime.now().millisecondsSinceEpoch});
+      _albums[gi]['photos'] = photos;
+      _saveAlbums();
+      return {'ok': true, 'id': 'p${DateTime.now().millisecondsSinceEpoch}${photos.length}', 'url': f.path, 'groups': await _groupsJson()};
+    } catch (e) {
+      return {'ok': false, 'error': '存不进去：$e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> albumLike(String pid) async {
+    _albumLikes[pid] = true;
+    _saveAlbums();
+    return {'ok': true};
+  }
+
+  Future<Map<String, dynamic>> albumComment(String pid, String text) async {
+    final t = text.trim();
+    if (t.isEmpty) return {'ok': true};
+    final list = ((_albumCmt[pid] as List?) ?? []).map((e) => '$e').toList();
+    list.add(t);
+    _albumCmt[pid] = list;
+    _saveAlbums();
+    return {'ok': true};
+  }
+
   // -------------------- 兼容接口（页面可能用到） --------------------
   Future<Map<String, dynamic>> bootstrap() async {
     final s = await herSettings();
-    return {'ok': true, 'nick': s['s']?['nickName'] ?? '包娜', 'status': '在线', 'online': true, 'voiceEnabled': false, 'coupleEnabled': false, 'settings': s['s']};
+    return {'ok': true, 'nick': s['s']?['nickName'] ?? '包娜', 'status': '包娜在线', 'online': true, 'voiceEnabled': false, 'coupleEnabled': false, 'settings': s['s']};
   }
 
-  Future<Map<String, dynamic>> state() async => {'ok': true, 'status': '在线', 'nick': _herSet['nickName'] ?? '包娜', 'online': true};
+  Future<Map<String, dynamic>> state() async => {'ok': true, 'status': '包娜在线', 'nick': _herSet['nickName'] ?? '包娜', 'online': true};
   Future<Map<String, dynamic>> mood() async => {'ok': true, 'mood': '开心'};
   Future<Map<String, dynamic>> skills() async => {'ok': true, 'skills': []};
   Future<String> ping() async => '通了 · 本地模式';

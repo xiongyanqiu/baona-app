@@ -29,7 +29,7 @@ class AppCtl extends ChangeNotifier {
   /// ★26.2.17：聊天/记忆/人设/愿望/角色/群聊统一走它 —— 有电脑用电脑，没电脑用本地大脑
   dynamic get brainOrApi => brain ?? api;
   String nick = '包娜';
-  String status = '在线';
+  String status = '包娜在线';
   bool online = false;
   bool voiceEnabled = false;
   bool coupleEnabled = false;
@@ -116,7 +116,7 @@ class AppCtl extends ChangeNotifier {
     final j = rs[0];
     if (j['ok'] == true) {
       nick = '${j['nick'] ?? nick}';
-      status = '${j['status'] ?? status}';
+      status = app.brain != null ? '包娜在线' : '${j['status'] ?? status}';
       voiceEnabled = j['voiceEnabled'] == true;
       coupleEnabled = j['coupleEnabled'] == true;
       herSet = Map<String, dynamic>.from((j['settings'] as Map?) ?? {});
