@@ -188,9 +188,16 @@ class _ChatPageState extends State<ConversationPage> {
       // ★2026-09-30 发一条出两条的真凶修法：先按编号认（最准），认不着再退回"内容 + pending"
       final ecid = '${body['cid'] ?? e['cid'] ?? ''}';
       final i = findEchoTarget(_msgs, m, ecid);
+      // ★26.2.20 回复已由 brain 落盘（会话关着也在本地），打开时 _load 已读入 →
+      //   广播再回来要就地更新，别重复画一条
+      final i2 = (m.role == 'assistant' && ecid.isNotEmpty)
+          ? _msgs.indexWhere((x) => x.role == 'assistant' && x.cid == ecid)
+          : -1;
       setState(() {
         if (m.role == 'me' && i >= 0) {
           _msgs[i] = m..st = 'ok';
+        } else if (i2 >= 0) {
+          _msgs[i2] = m;
         } else {
           _msgs.add(m);
         }

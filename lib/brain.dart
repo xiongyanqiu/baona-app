@@ -280,6 +280,10 @@ class LocalBrain {
     _chatCount++;
     _maybeAutoSummary();
     final t = DateTime.now().millisecondsSinceEpoch;
+    // ★26.2.20 回复直接落盘：退出去、切后台也不丢（以前只在对话页打开时才存，关着就没了）
+    final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+    h2.add({'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'});
+    await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
     _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'}});
     return {'ok': true};
   }
@@ -348,6 +352,10 @@ class LocalBrain {
     final content = _stripWish('${r['content']}');
     if (content.isEmpty) return {'ok': true};
     final now = DateTime.now().millisecondsSinceEpoch;
+    // ★26.2.20 角色回复直接落盘：会话关着也存，点进去就能看到（以前只广播，没人听就丢）
+    final h2 = List<Map<String, dynamic>>.from(hist);
+    h2.add({'role': 'assistant', 'content': content, 'time': now, 'cid': 'a$now', 'roleId': role, 'name': '${info['name']}'});
+    await MsgsLocal.save('role_$role', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
     _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': now, 'cid': 'a$now', 'roleId': role, 'name': '${info['name']}'}});
     return {'ok': true};
   }
@@ -479,6 +487,16 @@ class LocalBrain {
       hist.add({'role': 'assistant', 'content': c, 'roleId': rid, 'name': '${info['name']}'});
       replies.add({'roleId': rid, 'name': '${info['name']}', 'content': c, 'time': now});
     }
+    // ★26.2.20 群聊落盘：角色们说完直接进本地，群聊页关着也不丢（不重复加 user，UI 已存）
+    final h2 = (await MsgsLocal.load('group.$gid')).map((m) => m.toJson()).toList();
+    for (final r in replies) {
+      final rid = '${r['roleId'] ?? ''}';
+      final c2 = '${r['content'] ?? ''}';
+      final same = h2.any((m) => '${m['roleId'] ?? ''}' == rid && '${m['content'] ?? ''}' == c2);
+      if (same) continue;
+      h2.add({'role': 'assistant', 'content': c2, 'roleId': rid, 'name': '${r['name'] ?? ''}', 'time': r['time'], 'cid': 'g${r['time']}$rid'});
+    }
+    await MsgsLocal.save('group.$gid', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
     return {'ok': true, 'replies': replies};
   }
 
