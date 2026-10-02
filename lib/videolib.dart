@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'theme.dart';
@@ -180,6 +181,13 @@ class _VideoLibPageState extends State<VideoLibPage>
         f.path.contains('.') ? f.path.split('.').last.toLowerCase() : 'mp4';
     final target = '${vlDir.path}/${ts}_vl.$ext';
     await File(f.path).copy(target);
+    // ★26.2.20 双写系统相册：App 重装后视频还在系统相册里，重新导入就能找回
+    try {
+      final ps = await PhotoManager.requestPermissionExtend();
+      if (ps.hasAccess) {
+        await PhotoManager.editor.saveVideo(File(target), title: 'baona_$ts');
+      }
+    } catch (_) {}
     if (!mounted) return;
     final cat = await _pickCat();
     if (cat == null) {

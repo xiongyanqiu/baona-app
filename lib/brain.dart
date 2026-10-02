@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
@@ -353,6 +354,13 @@ class LocalBrain {
 
   Future<Map<String, dynamic>> roleClear(String role) async {
     await MsgsLocal.clear('role_$role');
+    return {'ok': true};
+  }
+
+  /// ★26.2.20 单独清角色记忆（不清对话）
+  Future<Map<String, dynamic>> roleClearMem(String role) async {
+    _roleMems.remove(role);
+    _saveRoleMems();
     return {'ok': true};
   }
 
@@ -1054,6 +1062,14 @@ class LocalBrain {
       if (!ad.existsSync()) ad.createSync(recursive: true);
       final f = File('${ad.path}/${DateTime.now().millisecondsSinceEpoch}.$ext');
       await f.writeAsBytes(bytes, flush: true);
+      // ★26.2.20 双写系统相册：App 重装（卸载）后照片还在系统相册里，重新导入就能找回
+      try {
+        final ps = await PhotoManager.requestPermissionExtend();
+        if (ps.hasAccess) {
+          await PhotoManager.editor.saveImage(bytes,
+              filename: 'baona_${DateTime.now().millisecondsSinceEpoch}.$ext');
+        }
+      } catch (_) {}
       final photos = ((_albums[gi]['photos'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       photos.add({'id': 'p${DateTime.now().millisecondsSinceEpoch}${photos.length}', 'path': f.path, 'time': DateTime.now().millisecondsSinceEpoch});
       _albums[gi]['photos'] = photos;

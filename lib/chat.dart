@@ -316,6 +316,19 @@ class _ChatPageState extends State<ConversationPage> {
             subtitle: const Text('从相册选一张，只存在手机本地'),
             onTap: () => Navigator.pop(c, 'avatar'),
           ),
+          // ★26.2.20 清除对话 / 清除记忆（角色会话独立，和包娜主对话互不相干）
+          ListTile(
+            leading: const Icon(Icons.delete_sweep_outlined),
+            title: const Text('清除对话'),
+            subtitle: const Text('删掉这个角色的聊天记录，人设和记忆保留'),
+            onTap: () => Navigator.pop(c, 'clrChat'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.psychology_alt_outlined),
+            title: const Text('清除记忆'),
+            subtitle: const Text('忘掉它记得的事，对话保留'),
+            onTap: () => Navigator.pop(c, 'clrMem'),
+          ),
           const SizedBox(height: 6),
         ]),
       ),
@@ -358,6 +371,33 @@ class _ChatPageState extends State<ConversationPage> {
       } catch (e) {
         if (mounted) toast(context, '选图失败：$e');
       }
+    } else if (act == 'clrChat' || act == 'clrMem') {
+      final what = act == 'clrChat' ? '对话记录' : '记忆';
+      final sure = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('清除${what}？'),
+          content: Text('${_roleName.isEmpty ? roleNameOf(_role) : _roleName} 的$what会被清空，${act == 'clrChat' ? '人设和记忆不受影响' : '对话不受影响'}。'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('算了')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('清除', style: TextStyle(color: Colors.white))),
+          ],
+        ),
+      );
+      if (sure != true || !mounted) return;
+      final dynamic a = app.brainOrApi;
+      if (a == null) return;
+      Map<String, dynamic> r;
+      if (act == 'clrChat') {
+        r = await a.roleClear(_role);
+      } else if (app.brain != null) {
+        r = await a.roleClearMem(_role);
+      } else {
+        r = {'ok': false, 'error': '清除记忆要本地模式'};
+      }
+      if (mounted) toast(context, r['ok'] == true ? '已清除 ✓' : '没清掉：${r['error'] ?? ''}');
     }
   }
 

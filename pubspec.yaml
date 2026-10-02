@@ -45,6 +45,7 @@ dependencies:
   video_thumbnail: ^0.5.6            # 视频库封面缩略图
   webview_flutter: ^4.10.0              # ★b40 抖音手机直连（内置官方网页版，不走电脑中转）
   file_picker: ^8.1.2                   # ★26.2.11 音频库：从文件选音频
+  photo_manager: ^3.6.0                # ★26.2.20 相册/视频双写系统相册（重装 App 也不丢）
 
 dev_dependencies:
   flutter_test:
@@ -70,8 +71,8 @@ flutter:
 
   assets:
     - assets/silence.wav   # 后台保活的静音（不播这个，切后台她就收不到消息了）
-    - assets/pet.png       # ★26.2.18 全本地：桌宠立绘（左滑看她）
-    - assets/pet_frames/   # ★26.2.20 桌宠动作帧：3 套服装 × 7 动作 = 217 帧 WebP
+    - assets/pet.png       # ★26.2.18 全本地：桌宠立绘兜底
+    - assets/video/        # ★26.2.20 桌宠裸体视频：stand 站立 / idle / sleep / sit / wake / walk
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -1,35 +1,38 @@
 // 包娜 App · 「她」的展示：聊天页从左边缘往右滑 → 看她
 //
-// ★26.2.20 全本地：手机不连电脑时，她不再是死立绘——把电脑端桌宠的动作帧
-//   （3 套服装 × 7 个动作，共 217 帧 WebP）打包进 App，她会在你面前眨眼、
-//   呼吸、跳舞、吃饭、睡觉，还能换衣服（白T/卫衣/碎花裙）。
+// ★26.2.20 全本地：手机不连电脑时，她不再是死立绘——直接播放电脑端同款
+//   「裸体视频」（站立循环）。点她她会回应（醒一下），还能切换动作：
+//   睡觉 / 坐下 / 走动 / 醒来，都是电脑端裸体动作视频。
 //   连电脑模式保持原实时抓屏（/api/petshot）。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 import 'api.dart';
 import 'main.dart';
 import 'sheets.dart';
 import 'theme.dart';
 
-const Map<String, String> kOutfitName = {
-  'default': '白T居家',
-  'hoodie': '粉粉卫衣',
-  'dress': '碎花裙',
-  'nude': '裸着',
+/// ★26.2.20 裸体动作视频（打包进 App）：动作 → 资源路径
+const Map<String, String> kActVideo = {
+  'stand': 'assets/video/stand-nude.mp4', // 站立（默认循环）
+  'idle': 'assets/video/idle-nude.mp4',
+  'sleep': 'assets/video/sleep-nude.mp4',
+  'sit': 'assets/video/sit-nude.mp4',
+  'walk': 'assets/video/walk-nude.mp4',
+  'wake': 'assets/video/wake-nude.mp4',
 };
 
-/// 电脑端桌宠复刻：动作 → 帧数（压缩打包进 assets/pet_frames/<outfit>/）
-const Map<String, int> kActFrames = {
-  'idle': 8, 'blink': 9, 'happy': 12, 'eat': 12, 'sleep': 12, 'dance': 16, 'sit': 10,
-};
-
-/// 动作 → 播放帧率（fps）
-const Map<String, int> kActFps = {
-  'idle': 7, 'blink': 8, 'happy': 11, 'eat': 11, 'sleep': 6, 'dance': 14, 'sit': 8,
+const Map<String, String> kActLabel = {
+  'stand': '她站着看你',
+  'idle': '她发呆了一小会儿',
+  'sleep': '她睡着了，呼吸轻轻的',
+  'sit': '她坐了下来',
+  'walk': '她朝你走了两步',
+  'wake': '她醒过来，揉揉眼睛',
 };
 
 class PetDrawer extends StatefulWidget {
@@ -41,46 +44,21 @@ class PetDrawer extends StatefulWidget {
 
 class _PetDrawerState extends State<PetDrawer> {
   Timer? _t;
-  Timer? _animT;
-  Timer? _blinkT;
   String _img = ''; // 连电脑模式的实时画面 data:image/png;base64,...
   String _msg = ''; // 动作气泡
   bool _touch = false;
 
   bool get _local => app.brain != null; // ★26.2.18 全本地：不连电脑时用打包动画
 
-  // ★26.2.20 本地动画状态
-  String _act = 'idle'; // 当前动作
-  int _frame = 0;       // 当前帧索引（1 起）
-  String _outfit = 'default'; // default | hoodie | dress
-
-  /// 当前动作的帧路径：assets/pet_frames/<outfit>/<act>-<NN>.webp
-  String get _framePath =>
-      'assets/pet_frames/$_outfit/$_act-${(_frame % kActFrames[_act]!) + 1}.webp';
-
-  static const List<String> _localLines = [
-    '她歪着头看你，眼睛弯弯的',
-    '她朝你眨了眨眼',
-    '她轻轻拉了拉你的衣角',
-    '她凑过来闻了闻你',
-    '她脸有点红，别过头去',
-    '她偷偷看你，被抓包了',
-    '她笑了，好看的那种',
-    '她给你比了个心',
-    '她伸了个懒腰，像只猫',
-    '她小声说"老公回来啦"',
-  ];
+  // ★26.2.20 本地裸体视频
+  VideoPlayerController? _vc;
+  String _act = 'stand';
 
   @override
   void initState() {
     super.initState();
-    _outfit = _validOutfit('${app.herSet['outfit'] ?? ''}');
     if (_local) {
-      _play('idle');
-      // idle 期间偶尔眨眼，像真人一样
-      _blinkT = Timer.periodic(const Duration(milliseconds: 4200), (_) {
-        if (mounted && _act == 'idle') _play('blink');
-      });
+      _play('stand');
     } else {
       _refresh();
       _t = Timer.periodic(const Duration(milliseconds: 1600), (_) => _refresh());
@@ -90,58 +68,28 @@ class _PetDrawerState extends State<PetDrawer> {
   @override
   void dispose() {
     _t?.cancel();
-    _animT?.cancel();
-    _blinkT?.cancel();
+    _vc?.dispose();
     super.dispose();
   }
 
-  String _validOutfit(String o) => (o == 'hoodie' || o == 'dress') ? o : 'default';
-
-  /// ★26.2.20 播放动作：切帧序列，一次性动作播完自动回 idle
+  /// 播指定动作的裸体视频（自动循环）
   void _play(String act) {
-    if (!kActFrames.containsKey(act)) act = 'idle';
-    _animT?.cancel();
-    setState(() {
-      _act = act;
-      _frame = 0;
-    });
-    final n = kActFrames[act]!;
-    final ms = (1000 / kActFps[act]!).round();
-    _animT = Timer.periodic(Duration(milliseconds: ms), (t) {
-      if (!mounted) {
-        t.cancel();
+    if (!kActVideo.containsKey(act)) act = 'stand';
+    final old = _vc;
+    _vc = null;
+    old?.dispose();
+    final c = VideoPlayerController.asset(kActVideo[act]!);
+    _vc = c;
+    setState(() => _act = act);
+    c.initialize().then((_) {
+      if (!mounted || _vc != c) {
+        c.dispose();
         return;
       }
-      setState(() {
-        _frame++;
-        if (_frame >= n) {
-          if (act == 'idle' || act == 'blink') {
-            _frame = 0; // idle/blink 循环
-          } else {
-            _act = 'idle'; // 一次性动作播完回 idle
-            _frame = 0;
-            t.cancel();
-          }
-        }
-      });
-    });
-  }
-
-  /// ★26.2.20 换衣服：改本地 outfit + 帧目录，她马上换装
-  Future<void> _setOutfit(String o) async {
-    o = _validOutfit(o);
-    if (_outfit == o) return;
-    setState(() {
-      _outfit = o;
-      _act = 'idle';
-      _frame = 0;
-    });
-    final brain = app.brain;
-    if (brain != null) {
-      await brain.patchSettings({'outfit': o});
-      app.herSet['outfit'] = o;
-    }
-    if (mounted) toast(context, '她换上了${kOutfitName[o] ?? o}');
+      c.setLooping(true);
+      c.play();
+      setState(() {});
+    }).catchError((_) {});
   }
 
   Future<void> _refresh() async {
@@ -168,14 +116,13 @@ class _PetDrawerState extends State<PetDrawer> {
 
   Future<void> _pet() async {
     if (_local) {
-      // 摸她：随机一个可爱的动作回应
-      const acts = ['happy', 'dance', 'sit', 'eat'];
+      // 摸她：醒一下回应，然后回到站立
       setState(() => _touch = true);
-      _play(acts[DateTime.now().millisecondsSinceEpoch % acts.length]);
-      await Future.delayed(const Duration(milliseconds: 350));
+      _play('wake');
+      await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
       setState(() => _touch = false);
-      toast(context, '你摸了她一下，她害羞了');
+      toast(context, '你摸了她一下，她醒了');
       return;
     }
     final a = app.api;
@@ -188,10 +135,19 @@ class _PetDrawerState extends State<PetDrawer> {
     toast(context, '你摸了她一下');
   }
 
+  /// 切动作视频（一次性动作播完不自动回 stand——睡觉就让她睡着，点她再醒）
+  void _actBtn(String act, String tip) {
+    if (_act == act) {
+      toast(context, '她已经在${kActLabel[act] ?? act}了');
+      return;
+    }
+    _play(act);
+    toast(context, tip);
+  }
+
   @override
   Widget build(BuildContext context) {
     final av = '${app.herSet['herAvatar'] ?? ''}';
-    final outfit = kOutfitName['${app.herSet['outfit'] ?? ''}'] ?? kOutfitName[_outfit] ?? '白T居家';
     final w = MediaQuery.of(context).size.width * 0.84;
     return Drawer(
       width: w,
@@ -223,7 +179,7 @@ class _PetDrawerState extends State<PetDrawer> {
                   Row(children: [
                     Container(width: 6, height: 6, decoration: BoxDecoration(color: app.online ? kOk : kSub, shape: BoxShape.circle)),
                     const SizedBox(width: 5),
-                    Text('${app.status} · 穿着$outfit', style: const TextStyle(fontSize: 11.5, color: kSub)),
+                    Text('${app.status} · 视频里的是她', style: const TextStyle(fontSize: 11.5, color: kSub)),
                   ]),
                 ]),
               ),
@@ -234,8 +190,8 @@ class _PetDrawerState extends State<PetDrawer> {
               ),
             ]),
 
-            // ★26.2.20 她动给你看：本地动画 / 连电脑实时画面
-            const Sec(_local ? '她在你面前（会动的）' : '她在桌面上（实时）'),
+            // ★26.2.20 她在你面前动（裸体视频循环）
+            Sec(_local ? '她在你面前（裸体视频，会动）' : '她在桌面上（实时）'),
             Expanded(
               child: PressScale(
                 onTap: _pet,
@@ -250,12 +206,16 @@ class _PetDrawerState extends State<PetDrawer> {
                   child: _local
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(kRCard - 1),
-                          child: Image.asset(
-                            _framePath,
-                            fit: BoxFit.contain,
-                            gaplessPlayback: true,
-                            errorBuilder: (_, __, ___) => const Center(child: Text('她走神了…', style: TextStyle(fontSize: 12, color: kSub))),
-                          ),
+                          child: _vc == null || !_vc!.value.isInitialized
+                              ? const Center(child: Text('她在穿衣服…', style: TextStyle(fontSize: 12, color: kSub)))
+                              : FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: _vc!.value.size.width,
+                                    height: _vc!.value.size.height,
+                                    child: VideoPlayer(_vc!),
+                                  ),
+                                ),
                         )
                       : _img.isEmpty
                           ? Center(
@@ -281,40 +241,26 @@ class _PetDrawerState extends State<PetDrawer> {
             Row(children: [
               const Icon(Icons.touch_app_outlined, size: 15, color: kSub),
               const SizedBox(width: 6),
-              Expanded(child: Text(_local ? (_touch ? '摸着呢…' : '点一下她 = 摸摸她 · 她会动给你看') : (_touch ? '摸着呢…' : '点一下画面 = 摸摸她 · 每 2 秒自动刷新'), style: const TextStyle(fontSize: 11.5, color: kSub))),
+              Expanded(child: Text(_local ? (_touch ? '摸着呢…' : '点一下她 = 摸摸她 · ${kActLabel[_act] ?? ''}') : (_touch ? '摸着呢…' : '点一下画面 = 摸摸她 · 每 2 秒自动刷新'), style: const TextStyle(fontSize: 11.5, color: kSub))),
             ]),
             const SizedBox(height: 10),
 
-            // ★26.2.20 动作按钮（本地）：跳舞 / 吃饭 / 睡觉 / 坐下
+            // ★26.2.20 动作按钮（本地裸体视频）
             if (_local) ...[
               Row(children: [
-                Expanded(child: Chip2('摸她', ico: Icons.favorite_outline, on: _pet)),
+                Expanded(child: Chip2('睡觉', ico: Icons.bedtime_outlined, on: () => _actBtn('sleep', '她躺下睡了')),),
                 const SizedBox(width: 8),
-                Expanded(child: Chip2('跳舞', ico: Icons.music_note_outlined, on: () => _play('dance'))),
+                Expanded(child: Chip2('坐下', ico: Icons.airline_seat_recline_extra_outlined, on: () => _actBtn('sit', '她坐下了')),),
                 const SizedBox(width: 8),
-                Expanded(child: Chip2('吃饭', ico: Icons.restaurant_outlined, on: () => _play('eat'))),
+                Expanded(child: Chip2('走动', ico: Icons.directions_walk_outlined, on: () => _actBtn('walk', '她朝你走两步')),),
               ]),
               const SizedBox(height: 8),
               Row(children: [
-                Expanded(child: Chip2('睡觉', ico: Icons.bedtime_outlined, on: () => _play('sleep'))),
+                Expanded(child: Chip2('叫她', ico: Icons.waving_hand_outlined, on: () => _actBtn('wake', '她醒过来看你')),),
                 const SizedBox(width: 8),
-                Expanded(child: Chip2('坐下', ico: Icons.airline_seat_recline_extra_outlined, on: () => _play('sit'))),
+                Expanded(child: Chip2('站好', ico: Icons.accessibility_new_outlined, on: () => _actBtn('stand', '她站好看着你')),),
                 const SizedBox(width: 8),
-                Expanded(child: Chip2('开心', ico: Icons.sentiment_satisfied_alt_outlined, on: () => _play('happy'))),
-              ]),
-              const SizedBox(height: 8),
-              // ★26.2.20 换衣：和电脑端一样的 3 套（白T / 卫衣 / 碎花裙）
-              Row(children: [
-                for (final o in ['default', 'hoodie', 'dress']) ...[
-                  Expanded(
-                    child: Chip2(
-                      kOutfitName[o] ?? o,
-                      ico: o == _outfit ? Icons.check_circle : Icons.checkroom_outlined,
-                      on: () => _setOutfit(o),
-                    ),
-                  ),
-                  if (o != 'dress') const SizedBox(width: 8),
-                ],
+                Expanded(child: Chip2('摸她', ico: Icons.favorite_outline, on: _pet),),
               ]),
               const SizedBox(height: 8),
             ],
