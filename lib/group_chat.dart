@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'chat.dart';
 import 'main.dart';
 import 'msglocal.dart';
 import 'theme.dart';
@@ -54,7 +55,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     });
     _loadLocal();
     _loadHistory();
-    _sub = app.api?.events.listen(_onEvent);
+    _sub = app.brainOrApi?.events.listen(_onEvent);
   }
 
   @override
@@ -70,16 +71,99 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final p = _mPrefs[rid];
     if (p != null && (p['name'] ?? '').isNotEmpty) return p['name']!;
     if (rid == 'baona') return app.nick;
-    if (rid == 'liuziling') return '刘紫灵';
-    return rid;
+    final n = roleNameOf(rid);
+    return n == '角色' ? rid : n;
   }
 
   String _memberAvatar(String rid) => _mPrefs[rid]?['avatar'] ?? '';
 
   String _memberLetter(String rid) {
     if (rid == 'baona') return '娜';
-    if (rid == 'liuziling') return '灵';
-    return rid.isEmpty ? '群' : rid[0];
+    final l = roleLetterOf(rid);
+    return l == '角' ? (rid.isEmpty ? '群' : rid[0]) : l;
+  }
+
+  /// ★26.2.17 群成员自选：勾选要拉进群的角色（本地大脑按成员顺序轮流发言）
+  Future<void> _openMembers() async {
+    final brain = app.brain;
+    if (brain == null) return;
+    final all = roleIds();
+    final cur = <String>['baona'];
+    // 当前成员：本地大脑的群配置
+    final gl = await brain.groupList();
+    if (gl['ok'] == true) {
+      for (final g in (gl['groups'] as List?) ?? []) {
+        if (g is Map && '${g['id']}' == _gid) {
+          cur
+            ..clear()
+            ..addAll(((g['members'] as List?) ?? []).map((m) => '$m'));
+        }
+      }
+    }
+    final picked = Set<String>.from(cur);
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1D1D23),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => StatefulBuilder(
+        builder: (c, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('群成员（按这个顺序轮流说话）', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              const Text('勾选谁在这个群里；她们会按顺序接话', style: TextStyle(fontSize: 12, color: kSub)),
+              const SizedBox(height: 6),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final rid in all)
+                      CheckboxListTile(
+                        dense: true,
+                        value: picked.contains(rid),
+                        title: Text(rid == 'baona' ? app.nick : roleNameOf(rid)),
+                        onChanged: (v) => setSheet(() {
+                          if (v == true) {
+                            picked.add(rid);
+                          } else {
+                            picked.remove(rid);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消')),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(c, true),
+                    child: const Text('保存'),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (picked.isEmpty) {
+      toast(context, '至少留一个成员');
+      return;
+    }
+    final r = await brain.groupSetMembers(_gid, picked.toList());
+    if (r['ok'] == true) {
+      toast(context, '群成员已更新');
+    } else {
+      toast(context, '保存失败：${r['error'] ?? ''}');
+    }
   }
 
   Future<void> _loadLocal() async {
@@ -96,7 +180,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     if (more && _busy) return;
     _busy = true;
     try {
-      final j = await app.api?.groupHistory(_gid, limit: more ? _limit : 50);
+      final j = await app.brainOrApi?.groupHistory(_gid, limit: more ? _limit : 50);
       if (!mounted) return;
       final list = (((j ?? {})['history'] as List?) ?? [])
           .map((e) => Msg.fromJson(Map.from(e)))
@@ -172,7 +256,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     });
     _toBottom();
     try {
-      final j = await app.api?.groupSend(_gid, t);
+      final j = await app.brainOrApi?.groupSend(_gid, t);
       final ok = j?['ok'] == true;
       final replies = ((j ?? {})['replies'] as List?) ?? [];
       if (!mounted) return;
@@ -214,7 +298,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return const Center(child: CircularProgressIndicator());
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -226,6 +310,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
           _GroupHeader(
             gname: _gname,
             onBack: () => Navigator.of(context).maybePop(),
+            onManage: _openMembers,
           ),
           Expanded(
             child: _loading
@@ -284,9 +369,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
 /* ------------------------------- 头部 ------------------------------- */
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.gname, required this.onBack});
+  const _GroupHeader({required this.gname, required this.onBack, required this.onManage});
   final String gname;
   final VoidCallback onBack;
+  final VoidCallback onManage;
   @override
   Widget build(BuildContext context) {
     final a = app;
@@ -303,9 +389,16 @@ class _GroupHeader extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(gname, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-            Text('${a.nick} · 刘紫灵 在群里', style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
+            Text('${a.nick} 在群里', style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
           ]),
         ),
+        // ★26.2.17 群成员自选：点开勾选要把谁拉进群
+        IconButton(
+          tooltip: '群成员',
+          onPressed: onManage,
+          icon: const Icon(Icons.group_add_rounded, size: 20, color: Colors.white),
+        ),
+        const SizedBox(width: 4),
       ]),
     );
   }

@@ -63,6 +63,21 @@ class _GamePageState extends State<GamePage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    // ★26.2.17 全本地化：飞行棋/控制器是"连电脑（桌宠）"功能
+    if (app.api == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.sports_esports_outlined, size: 44, color: kSub),
+            const SizedBox(height: 14),
+            const Text('飞行棋 / 控制器需要连着电脑桌宠才能玩', style: TextStyle(fontSize: 15)),
+            const SizedBox(height: 6),
+            const Text('聊天 / 记忆 / 人设 / 愿望都在手机本地，不受影响', style: TextStyle(fontSize: 12, color: kSub)),
+          ]),
+        ),
+      );
+    }
     final g = _g;
     if (g == null) return const Center(child: Text('棋盘没打开', style: TextStyle(color: kSub)));
 

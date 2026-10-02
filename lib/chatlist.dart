@@ -85,7 +85,7 @@ class _ChatListPageState extends State<ChatListPage> {
   }
 
   Future<void> _refresh() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a != null) {
       // ★2026-09-30 断网也能显示最后一条：优先网络，失败退回本地缓存
       try {
@@ -113,6 +113,75 @@ class _ChatListPageState extends State<ChatListPage> {
       }
     }
     if (mounted) setState(() => _loaded = true);
+  }
+
+  /// ★26.2.17 添加自建角色（手机本地，不用编译）
+  Future<void> _openAddRole() async {
+    final nameCtl = TextEditingController();
+    final personaCtl = TextEditingController();
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1D1D23),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('添加新角色', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtl,
+                decoration: const InputDecoration(labelText: '名字', hintText: '比如：鞠婧祎', filled: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: personaCtl,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: '人设（她是谁、什么性格、怎么说话…）',
+                  hintText: '写清楚点，模型才不会理解歪。\n支持：性格 / 口头禅 / 关系 / 说话风格 / 边界',
+                  filled: true,
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消')),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(c, true),
+                    child: const Text('添加'),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = nameCtl.text.trim();
+    final persona = personaCtl.text.trim();
+    if (name.isEmpty) {
+      toast(context, '名字不能空');
+      return;
+    }
+    final brain = app.brain;
+    if (brain == null) return;
+    final r = await brain.roleAdd({'name': name, 'persona': persona.isNotEmpty ? persona : '你是$name。像微信打字一样回消息：只发你说的话，不写动作不写括号不写表情。短句、口语、有来有回。'});
+    if (r['ok'] == true) {
+      toast(context, '已添加，快去跟她聊吧');
+      await _loadRolePrefs();
+      if (mounted) setState(() {});
+    } else {
+      toast(context, '添加失败：${r['error'] ?? ''}');
+    }
   }
 
   String _time(int t) {
@@ -199,7 +268,13 @@ class _ChatListPageState extends State<ChatListPage> {
           const Text('消息',
               style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
           const Spacer(),
-          // ★先不放右侧按钮（新建/搜索等），列表页细节等老公定
+          // ★26.2.17 全本地化：自己添加角色（不用编译，人设写进手机本地）
+          IconButton(
+            tooltip: '添加角色',
+            icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF7B2FFF)),
+            onPressed: _openAddRole,
+          ),
+          const SizedBox(width: 4),
         ]),
       ),
       Expanded(

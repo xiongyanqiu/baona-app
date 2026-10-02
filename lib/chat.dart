@@ -68,7 +68,7 @@ class _ChatPageState extends State<ConversationPage> {
         }
       });
     }
-    _sub = app.api?.events.listen(_onEvent);
+    _sub = app.brainOrApi?.events.listen(_onEvent);
     _sc.addListener(() {
       if (!_sc.hasClients) return;
       final atBottom = _sc.position.pixels >= _sc.position.maxScrollExtent - 80;
@@ -131,8 +131,11 @@ class _ChatPageState extends State<ConversationPage> {
     if (more) _limit += 30;
     Map<String, dynamic>? j;
     try {
+      final dynamic a = app.brainOrApi;
       // ★独立角色：走独立历史接口（人设/上下文/记忆和包娜完全隔离）
-      j = _role.isNotEmpty ? await a.roleHistory(_role, limit: _limit) : await a.history(limit: _limit);
+      j = a == null
+          ? null
+          : (_role.isNotEmpty ? await a.roleHistory(_role, limit: _limit) : await a.history(limit: _limit));
     } catch (_) {
       // 断网：本地缓存已经显示了，安静地停在这里（不弹错、不打断）
       if (mounted) setState(() => _loading = false);
@@ -257,7 +260,7 @@ class _ChatPageState extends State<ConversationPage> {
   }
 
   Future<void> _send(Map<String, dynamic> payload, {String? show}) async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     try { HapticFeedback.lightImpact(); } catch (e) { /* 桌面/web 上没有 */ } // ★发出去手感跟一下
     final text = '${payload['text'] ?? ''}';
@@ -337,6 +340,8 @@ class _ChatPageState extends State<ConversationPage> {
         await sp.setString('role.$_role.name', v);
         setState(() => _roleName = v);
         toast(context, '备注已改 ✓');
+        // ★26.2.17 自建角色同步到本地大脑（她回复时的名字跟着变）
+        await app.brain?.roleSave({'id': _role, 'name': v});
       }
     } else if (act == 'avatar') {
       try {
@@ -345,6 +350,7 @@ class _ChatPageState extends State<ConversationPage> {
         final bytes = await f.readAsBytes();
         final data = 'data:image/jpeg;base64,${base64Encode(bytes)}';
         await sp.setString('role.$_role.avatar', data);
+        await app.brain?.roleSave({'id': _role, 'letter': '图'});
         if (mounted) {
           setState(() => _roleAvatar = data);
           toast(context, '头像已换 ✓');
@@ -440,7 +446,7 @@ class _ChatPageState extends State<ConversationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return const Center(child: CircularProgressIndicator());
     // ★自检：URL 带 ?dbg=1 时，把这页的真实布局数字打到控制台（手机上没有这个参数，不受影响）
     if (Uri.base.queryParameters['dbg'] == '1') {
@@ -574,7 +580,7 @@ class _Bubble extends StatefulWidget {
   final VoidCallback onResend;
   final void Function(String) onPlay;
   final String? playing;
-  final Api urlOf;
+  final dynamic urlOf; // ★26.2.17 本地模式也是它（LocalBrain 同名方法）
   final String roleSrc;    // ★2026-10-02 角色会话：她消息行的头像
   final String roleLetter; // ★角色字
 
@@ -1026,14 +1032,40 @@ class _ConvHeader extends StatelessWidget {
 
 /* ------------------------- ★独立角色辅助（和主对话完全隔离） ------------------------- */
 /// 全部角色 id（新增角色在这里补一行，桌宠端建好目录后手机端自动出现）
-List<String> roleIds() => [
-      'liuziling', 'nvwa', 'houtu', 'xiwangmu', 'medusa',
-      'yunyun', 'xiaoxuaner', 'bibidong', 'qianrenxue', 'xiaowu',
-      'guyuena', 'henrendadi', 'anmiaoyi', 'jiziyue', 'yanrudan', 'huolinger',
-    ];
+/// ★26.2.17 全本地化：内置角色 + 手机本地自建角色（对话列表里自己加的）
+List<String> roleIds() {
+  final out = <String>[
+    'liuziling', 'nvwa', 'houtu', 'xiwangmu', 'medusa',
+    'yunyun', 'xiaoxuaner', 'bibidong', 'qianrenxue', 'xiaowu',
+    'guyuena', 'henrendadi', 'anmiaoyi', 'jiziyue', 'yanrudan', 'huolinger',
+  ];
+  try {
+    final l = jsonDecode(Store.localRoles);
+    if (l is List) {
+      for (final r in l) {
+        if (r is Map) out.add('${r['id']}');
+      }
+    }
+  } catch (_) {/* 没自建角色就内置 */}
+  return out;
+}
+
+String _customRoleField(String role, String key) {
+  try {
+    final l = jsonDecode(Store.localRoles);
+    if (l is List) {
+      for (final r in l) {
+        if (r is Map && '${r['id']}' == role) return '${r[key] ?? ''}';
+      }
+    }
+  } catch (_) {}
+  return '';
+}
 
 /// 角色 id → 显示名（自定义备注优先，没备注用这个默认名）
 String roleNameOf(String role) {
+  final custom = _customRoleField(role, 'name');
+  if (custom.isNotEmpty) return custom;
   switch (role) {
     case 'liuziling':
       return '刘紫灵';
@@ -1074,6 +1106,8 @@ String roleNameOf(String role) {
 
 /// 角色 id → 默认头像字
 String roleLetterOf(String role) {
+  final custom = _customRoleField(role, 'letter');
+  if (custom.isNotEmpty) return custom;
   switch (role) {
     case 'liuziling':
       return '灵';

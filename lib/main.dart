@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'brain.dart';
 import 'chat.dart';
 import 'chatlist.dart';
 import 'eye.dart';
@@ -23,6 +24,10 @@ class AppCtl extends ChangeNotifier {
   static final AppCtl i = AppCtl._();
 
   Api? api;
+  LocalBrain? brain; // ★26.2.17 全本地化：本地大脑（人设/对话/记忆/愿望/角色/群聊 不依赖电脑）
+
+  /// ★26.2.17：聊天/记忆/人设/愿望/角色/群聊统一走它 —— 有电脑用电脑，没电脑用本地大脑
+  dynamic get brainOrApi => brain ?? api;
   String nick = '包娜';
   String status = '在线';
   bool online = false;
@@ -86,7 +91,7 @@ class AppCtl extends ChangeNotifier {
   }
 
   Future<void> loadBootstrap() async {
-    final a = app.api;
+    final dynamic a = app.api ?? app.brain;
     if (a == null) return;
     // ★b21 启动秒开：先把上次的缓存立刻渲染出来（名字/状态/头像/表情），网络回来再覆盖
     try {
@@ -149,13 +154,20 @@ class AppCtl extends ChangeNotifier {
     api = a;
     a.wsOpen();
     loadBootstrap();
-    _watch();
+    _watchSrc(a.events);
   }
 
-  void _watch() {
+  /// ★全本地化：手机自己当"电脑端"（聊天/记忆/人设/模型全本地）
+  void attachBrain(LocalBrain b) {
+    brain = b;
+    api = null;
+    loadBootstrap();
+    _watchSrc(b.events);
+  }
+
+  void _watchSrc(Stream<Map<String, dynamic>> ev) {
     final a = api;
-    if (a == null) return;
-    a.events.listen((e) {
+    ev.listen((e) {
       final t = '${e['type']}';
       if (t == 'eye') {
         // ★2026-09-29 老公要的：她自己看你 —— 电脑端喊一嗓子，我们立刻用【前置】拍一张回过去。
@@ -291,18 +303,22 @@ class _BaonaAppState extends State<BaonaApp> with WidgetsBindingObserver {
       );
 }
 
-/// 一进来先看本地有没有地址/令牌
+/// 一进来：本地大脑直接可用（不依赖电脑）；有电脑地址才额外连电脑（商城/游戏/相册用）
 class Boot extends StatelessWidget {
   const Boot({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final brain = LocalBrain();
+    app.attachBrain(brain);
+    // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
     final base = Store.baseUrl;
-    if (base.isEmpty || Store.token.isEmpty) {
-      return ConnectPage(host: base.isEmpty ? kHosts[0]['url']! : base);
+    if (base.isNotEmpty && Store.token.isNotEmpty) {
+      try {
+        final a = Api(base)..token = Store.token;
+        app.attach(a);
+      } catch (_) {/* 连不上电脑不影响本地聊天 */}
     }
-    final a = Api(base)..token = Store.token;
-    app.attach(a);
     return const HomePage();
   }
 }

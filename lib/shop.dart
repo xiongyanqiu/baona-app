@@ -72,6 +72,28 @@ class _ShopPageState extends State<ShopPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    // ★26.2.17 全本地化：商城是"连电脑（桌宠）"功能，没连电脑就引导去设置里连
+    if (app.api == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.computer_outlined, size: 44, color: kSub),
+            const SizedBox(height: 14),
+            const Text('商城需要连着电脑桌宠才能用', style: TextStyle(fontSize: 15)),
+            const SizedBox(height: 6),
+            const Text('聊天 / 记忆 / 人设 / 愿望都在手机本地，不受影响', style: TextStyle(fontSize: 12, color: kSub)),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ConnectPage(host: Store.baseUrl.isEmpty ? kHosts[0]['url']! : Store.baseUrl),
+              )),
+              child: const Text('去连电脑'),
+            ),
+          ]),
+        ),
+      );
+    }
     final s = _s;
     if (s == null) return const Center(child: Text('商城没打开', style: TextStyle(color: kSub)));
     return Column(children: [

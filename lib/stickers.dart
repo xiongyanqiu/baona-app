@@ -26,7 +26,7 @@ class _EmojiPanelState extends State<EmojiPanel> {
   bool _busy = false;
 
   Future<void> _reload() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final e = await a.emojiList();
     if (!mounted) return;
@@ -39,7 +39,7 @@ class _EmojiPanelState extends State<EmojiPanel> {
   }
 
   Future<void> _add() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 85);
     if (f == null) return;
@@ -64,7 +64,7 @@ class _EmojiPanelState extends State<EmojiPanel> {
       ),
     );
     if (ok != true) return;
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final r = await a.emojiDel(name);
     await _reload();
@@ -129,7 +129,7 @@ class _EmojiPanelState extends State<EmojiPanel> {
                       child: Stack(children: [
                         Positioned.fill(
                           child: CacheImg(
-                            app.api?.emojiUrl(n) ?? '',
+                            app.brainOrApi?.emojiUrl(n) ?? '',
                             headers: {'x-wc-token': app.api?.token ?? ''},
                             fit: BoxFit.cover,
                           ),

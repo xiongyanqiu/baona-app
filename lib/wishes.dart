@@ -39,13 +39,13 @@ class _WishesPageState extends State<WishesPage> {
   }
 
   Future<void> _load() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
     try {
-      final r = await a.get('/api/wishes');
+      final r = await a.wishes();
       if (!mounted) return;
       setState(() {
         _granted = (r['granted'] as num?)?.toInt() ?? 0;
@@ -61,10 +61,10 @@ class _WishesPageState extends State<WishesPage> {
   }
 
   Future<void> _action(String act, String val, String ok) async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     try {
-      await a.post('/api/wishes/action', {'act': act, 'val': val});
+      await a.wishesAction(act, val);
       await _load();
       if (mounted) toast(context, ok);
     } catch (e) {

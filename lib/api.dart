@@ -49,6 +49,29 @@ class Store {
     await _p.remove('pwd');
   }
 
+  // ★26.2.17 全本地化：本地大脑数据（不依赖电脑桌宠，全部存手机本地）
+  static String get llmCfgJson => _p.getString('llm.cfg') ?? '';
+  static Future<void> setLlmCfgJson(String v) => _p.setString('llm.cfg', v);
+  static String get localPersona => _p.getString('local.persona') ?? '';
+  static Future<void> setLocalPersona(String v) => _p.setString('local.persona', v);
+  static String get localMemories => _p.getString('local.memories') ?? '';
+  static Future<void> setLocalMemories(String v) => _p.setString('local.memories', v);
+  static String get localWishes => _p.getString('local.wishes') ?? '';
+  static Future<void> setLocalWishes(String v) => _p.setString('local.wishes', v);
+  static String get localGroups => _p.getString('local.groups') ?? '';
+  static Future<void> setLocalGroups(String v) => _p.setString('local.groups', v);
+  static String get localRoles => _p.getString('local.roles') ?? '';
+  static Future<void> setLocalRoles(String v) => _p.setString('local.roles', v);
+  static String get localHerSet => _p.getString('local.herset') ?? '';
+  static Future<void> setLocalHerSet(String v) => _p.setString('local.herset', v);
+  static String get localEmoji => _p.getString('local.emoji') ?? '';
+  static Future<void> setLocalEmoji(String v) => _p.setString('local.emoji', v);
+  static String get localChatExtra => _p.getString('local.chat.extra') ?? '';
+  static Future<void> setLocalChatExtra(String v) => _p.setString('local.chat.extra', v);
+  /// 上下文 token 预算（默认 96K，可在模型设置里调；写 1M 也行，按模型实际上限调）
+  static int get ctxTokens => _p.getInt('local.ctxTokens') ?? 96000;
+  static Future<void> setCtxTokens(int v) => _p.setInt('local.ctxTokens', v);
+
   // ★b21 相册列表缓存（秒开）与启动数据缓存（秒开），内容 + 时间戳
   static String get albumCache => _p.getString('album.cache') ?? '';
   static Future<void> setAlbumCache(String v) => _p.setString('album.cache', v);

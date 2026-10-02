@@ -29,10 +29,11 @@ class _UsPageState extends State<UsPage> {
   }
 
   Future<void> _load() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
-    final p = await a.couple();
-    final mc = await a.get('/api/memory');
+    // 本地模式没有"情侣空间"（那是连电脑的功能）；记忆数量从本地大脑拿
+    final Map p = app.brain != null ? <String, dynamic>{} : await a.couple();
+    final mc = await a.memories();
     final m = (mc['count'] as num?)?.toInt() ?? 0;
     if (!mounted) return;
     setState(() {
@@ -157,14 +158,14 @@ class _MemState extends State<_Mem> {
   }
 
   Future<void> _load() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final j = await a.memories();
-    final t = await a.get('/api/memory');
+    final t = j;
     if (!mounted) return;
     setState(() {
       _items = ((j['items'] as List?) ?? []).map((e) => MemItem.fromJson(Map.from(e))).toList();
-      _total = (t['total'] as num?)?.toInt() ?? _items.length;
+      _total = (t['count'] as num?)?.toInt() ?? _items.length;
       _loading = false;
     });
   }
@@ -192,7 +193,7 @@ class _MemState extends State<_Mem> {
             onPressed: () async {
               final t = inp.text.trim();
               if (t.isEmpty) return;
-              final r = await app.api?.memoryAdd(t);
+              final r = await app.brainOrApi?.memoryAdd(t);
               if (!mounted) return;
               if (r?['ok'] == true) {
                 inp.clear();
@@ -216,7 +217,7 @@ class _MemState extends State<_Mem> {
               Expanded(child: Text(it.text, style: const TextStyle(fontSize: 13.5, height: 1.45))),
               IconButton(
                 onPressed: () async {
-                  final r = await app.api?.memoryRemove(it.id);
+                  final r = await app.brainOrApi?.memoryRemove(it.id);
                   if (mounted) toast(context, r?['ok'] == true ? '删掉了' : '没删掉：${r?['error'] ?? '手机没连上'}');
                   _load();
                 },
@@ -236,7 +237,7 @@ class _MemState extends State<_Mem> {
               });
               return;
             }
-            await app.api?.memoryClear();
+            await app.brainOrApi?.memoryClear();
             setState(() => _armed = false);
             _load();
             if (mounted) toast(context, '记忆清掉了');

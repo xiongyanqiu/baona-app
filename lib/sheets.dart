@@ -50,7 +50,7 @@ class _SettingsState extends State<_Settings> {
   }
 
   Future<void> _load() async {
-    final j = await app.api?.herSettings();
+    final j = await app.brainOrApi?.herSettings();
     if (!mounted) return;
     if (j != null && j['ok'] == true && j['s'] is Map) {
       setState(() {
@@ -77,7 +77,7 @@ class _SettingsState extends State<_Settings> {
     //   这里直接通知全局（app 是 ChangeNotifier，主界面挂着 AnimatedBuilder 听）
     app.herSet = Map<String, dynamic>.from(hs);
     app.notifyListeners();
-    final r = await app.api?.patchSettings(p);
+    final r = await app.brainOrApi?.patchSettings(p);
     if (r == null) {
       _note('手机没连上电脑端（同一个 WiFi？桌宠开着？）', true);
     } else if (r['ok'] == true) {
@@ -351,7 +351,7 @@ class _SettingsState extends State<_Settings> {
           Chip2('清空聊天记录', ico: Icons.delete_outline, on: () async {
             final ok = await _confirm(context, '清空你们俩的全部聊天记录？电脑那边也清');
             if (ok) {
-              await app.api?.clearChat();
+              await app.brainOrApi?.clearChat();
               if (mounted) toast(context, '清空了');
             }
           }),
@@ -458,7 +458,7 @@ class _ModelBoxState extends State<_ModelBox> {
   }
 
   Future<void> _load() async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     final j = await a.llm();
     if (!mounted) return;
@@ -471,7 +471,7 @@ class _ModelBoxState extends State<_ModelBox> {
   }
 
   Future<void> _use(String id) async {
-    final a = app.api;
+    final dynamic a = app.brainOrApi;
     if (a == null) return;
     if (id == active) return;
     setState(() => busy = true);
@@ -484,12 +484,182 @@ class _ModelBoxState extends State<_ModelBox> {
     toast(context, r['ok'] == true ? '换好了：${r['name'] ?? id}' : '${r['error'] ?? '没换成'}');
   }
 
+  /// ★26.2.17 全本地化：模型配置开放给你 —— 自己加/改/删模型（API 地址/Key/模型名），不用再等我改代码
+  Future<void> _edit() async {
+    // 编辑副本，保存时一次性写回
+    final draft = ps.map((e) => {
+          'id': '${e['id']}',
+          'name': '${e['name'] ?? ''}',
+          'baseUrl': '${e['baseUrl'] ?? ''}',
+          'model': '${e['model'] ?? ''}',
+          'apiKey': '${e['apiKey'] ?? ''}',
+        }).toList();
+    final nameCtl = <String, TextEditingController>{};
+    final baseCtl = <String, TextEditingController>{};
+    final modelCtl = <String, TextEditingController>{};
+    final keyCtl = <String, TextEditingController>{};
+    final newName = TextEditingController();
+    final newBase = TextEditingController();
+    final newModel = TextEditingController();
+    final newKey = TextEditingController();
+    String curActive = active;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1D1D23),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => StatefulBuilder(
+        builder: (c, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('模型配置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text('API 地址 / Key / 模型名 自己填；点名字切换当前用的模型', style: TextStyle(fontSize: 12, color: kSub)),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final p in draft)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: curActive == '${p['id']}' ? const Color(0x147B2FFF) : kGlass,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: curActive == '${p['id']}' ? const Color(0xFF7B2FFF) : kLine),
+                          ),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: (nameCtl['${p['id']}'] ??= TextEditingController(text: '${p['name']}')),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  decoration: const InputDecoration(isDense: true, hintText: '名字（比如：DeepSeek 官方）', border: InputBorder.none),
+                                ),
+                              ),
+                              if (curActive == '${p['id']}')
+                                const Chip2('在用', on2: true)
+                              else
+                                InkWell(
+                                  onTap: () => setSheet(() => curActive = '${p['id']}'),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    child: Text('设为当前', style: TextStyle(fontSize: 12, color: Color(0xFF7B2FFF))),
+                                  ),
+                                ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => setSheet(() => draft.removeWhere((x) => x['id'] == p['id'])),
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFFF9A9A)),
+                              ),
+                            ]),
+                            TextField(
+                              controller: (baseCtl['${p['id']}'] ??= TextEditingController(text: '${p['baseUrl']}')),
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: const InputDecoration(isDense: true, labelText: 'API 地址', hintText: 'https://api.deepseek.com/v1', border: InputBorder.none),
+                            ),
+                            TextField(
+                              controller: (modelCtl['${p['id']}'] ??= TextEditingController(text: '${p['model']}')),
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: const InputDecoration(isDense: true, labelText: '模型名', hintText: 'deepseek-chat', border: InputBorder.none),
+                            ),
+                            TextField(
+                              controller: (keyCtl['${p['id']}'] ??= TextEditingController(text: '${p['apiKey']}')),
+                              obscureText: true,
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: const InputDecoration(isDense: true, labelText: 'API Key', border: InputBorder.none),
+                            ),
+                          ]),
+                        ),
+                      // 新增一个
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: kGlass, borderRadius: BorderRadius.circular(14), border: Border.all(color: kLine, style: BorderStyle.solid)),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('＋ 新模型', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                          TextField(controller: newName, style: const TextStyle(fontSize: 12.5), decoration: const InputDecoration(isDense: true, labelText: '名字', border: InputBorder.none)),
+                          TextField(controller: newBase, style: const TextStyle(fontSize: 12.5), decoration: const InputDecoration(isDense: true, labelText: 'API 地址', hintText: 'https://api.deepseek.com/v1', border: InputBorder.none)),
+                          TextField(controller: newModel, style: const TextStyle(fontSize: 12.5), decoration: const InputDecoration(isDense: true, labelText: '模型名', hintText: 'deepseek-chat', border: InputBorder.none)),
+                          TextField(controller: newKey, obscureText: true, style: const TextStyle(fontSize: 12.5), decoration: const InputDecoration(isDense: true, labelText: 'API Key', border: InputBorder.none)),
+                          const SizedBox(height: 4),
+                          Chip2('添加', on2: true, on: () => setSheet(() {
+                            final nb = newBase.text.trim();
+                            final nm = newModel.text.trim();
+                            final nk = newKey.text.trim();
+                            if (nb.isEmpty || nm.isEmpty || nk.isEmpty) return;
+                            final id = 'p${DateTime.now().millisecondsSinceEpoch}';
+                            draft.add({'id': id, 'name': newName.text.trim().isEmpty ? nm : newName.text.trim(), 'baseUrl': nb, 'model': nm, 'apiKey': nk});
+                            curActive = id;
+                            newName.clear();
+                            newBase.clear();
+                            newModel.clear();
+                            newKey.clear();
+                          })),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消'))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text('保存'),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // 把编辑内容写回
+    final finalList = draft.map((p) {
+      final id = '${p['id']}';
+      return <String, dynamic>{
+        'id': id,
+        'name': (nameCtl[id]?.text ?? '').trim().isNotEmpty ? (nameCtl[id]?.text ?? '').trim() : '${p['name']}',
+        'baseUrl': (baseCtl[id]?.text ?? '').trim().isNotEmpty ? (baseCtl[id]?.text ?? '').trim() : '${p['baseUrl']}',
+        'model': (modelCtl[id]?.text ?? '').trim().isNotEmpty ? (modelCtl[id]?.text ?? '').trim() : '${p['model']}',
+        'apiKey': (keyCtl[id]?.text ?? '').trim().isNotEmpty ? (keyCtl[id]?.text ?? '').trim() : '${p['apiKey']}',
+      };
+    }).toList();
+    if (finalList.isEmpty) {
+      toast(context, '至少留一个模型');
+      return;
+    }
+    final dynamic a = app.brainOrApi;
+    if (a == null) return;
+    setState(() => busy = true);
+    final r = await a.llmSave(finalList, curActive);
+    setState(() => busy = false);
+    if (r['ok'] == true) {
+      toast(context, '模型配置已保存 ✓');
+      await _load();
+    } else {
+      toast(context, '保存失败：${r['error'] ?? ''}');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (ps.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 6),
-        child: Text('没拿到模型列表（电脑端开着吗？）', style: TextStyle(fontSize: 12, color: kSub)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(children: [
+          const Expanded(child: Text('还没有模型，点右边添加', style: TextStyle(fontSize: 12, color: kSub))),
+          Chip2('添加模型', ico: Icons.settings, on: busy ? null : _edit),
+        ]),
       );
     }
     return Column(children: [
@@ -515,6 +685,12 @@ class _ModelBoxState extends State<_ModelBox> {
             ]),
           ),
         ),
+      const SizedBox(height: 8),
+      // ★26.2.17：编辑/新增/删除模型 —— 全部自己配，不用再等我
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Chip2('＋ 编辑模型配置', ico: Icons.tune, on: busy ? null : _edit),
+      ),
     ]);
   }
 }
@@ -877,7 +1053,9 @@ class _ProbeState extends State<_Probe> {
       _busy = true;
       _r = '测着呢…';
     });
-    final t = await app.api?.ping() ?? '手机没连上（回登录页填电脑地址、输口令）';
+    final t = app.brain != null
+        ? '本地模式：模型手机直连，不依赖电脑 ✓'
+        : (await app.api?.ping() ?? '手机没连上（回登录页填电脑地址、输口令）');
     if (!mounted) return;
     setState(() {
       _busy = false;
