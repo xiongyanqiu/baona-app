@@ -136,10 +136,10 @@ ThemeData buildTheme() {
     ),
     snackBarTheme: const SnackBarThemeData(backgroundColor: Color(0xF02A2438), contentTextStyle: TextStyle(color: kText)),
     // ★26.2.22 苹果官网动效：所有 push 页面统一"淡入 + 轻微上浮"过渡
-    // ★26.2.26 iOS 换回系统原生过渡（Cupertino）：右滑入 + 屏幕左边缘侧滑返回。
-    //   之前 iOS 也用自定义过渡 → 系统侧滑返回手势被替换掉了，有些页面退不出去
+    // ★26.2.26 iOS 不覆盖：让系统用默认过渡（右滑入 + 屏幕左边缘侧滑返回）。
+    //   之前 iOS 也用自定义过渡 → 系统侧滑返回手势被替换掉了，有些页面退不出去。
+    //   注：本 Flutter 版本无 CupertinoPageTransitionsBuilder，不写 iOS = 系统默认 Cupertino
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       TargetPlatform.android: AppleTransitionsBuilder(),
       TargetPlatform.macOS: AppleTransitionsBuilder(),
       TargetPlatform.windows: AppleTransitionsBuilder(),
