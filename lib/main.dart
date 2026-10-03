@@ -590,7 +590,19 @@ class _HomePageState extends State<HomePage> {
                 context: context,
                 removeBottom: true,
                 child: Column(children: [
-                  _Header(onSearch: () => openSearch(context), onSet: () => openSettings(context), onCtrl: () => openCtrl(context), onUs: () => _switchTab(4)),
+                  // ★26.2.23 布局整理：聊天页不再叠全局头部（它自己有"消息"大标题），
+                  //   只有商城/游戏/愿望/我们才显示全局头像栏 —— 顶部不再两截、不挤
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _tab == 0
+                        ? const SizedBox(key: ValueKey('nohead'))
+                        : _Header(
+                            key: const ValueKey('head'),
+                            onSearch: () => openSearch(context),
+                            onSet: () => openSettings(context),
+                            onCtrl: () => openCtrl(context),
+                            onUs: () => _switchTab(4)),
+                  ),
                   Expanded(
                     // ★2.0 第四波：PageView 左右滑动切换 —— 页面跟手走，才是 iOS 26 的标签栏
                     child: PageView(

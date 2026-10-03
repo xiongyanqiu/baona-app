@@ -260,7 +260,34 @@ class _ChatListPageState extends State<ChatListPage> {
                 }),
               ]
             : <Map<String, dynamic>>[];
-        return Column(children: [
+      // ★26.2.23 功能整理：列表分区 —— 会话（包娜+群聊）/ 我的角色（15+自建）/ 功能（抖音·视频库·音频库）
+      //   功能入口不再和角色对话混在一起，一眼看清
+      final rows = <Widget>[];
+      void sec(String t) => rows.add(Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Text(t.toUpperCase(),
+                style: const TextStyle(fontSize: 11.5, color: kSub, letterSpacing: 0.9, fontWeight: FontWeight.w600)),
+          ));
+      Widget card(Map<String, dynamic> c) => Padding(
+            padding: const EdgeInsets.fromLTRB(14, 3, 14, 3),
+            child: GlassSurface(radius: 18, blur: 0, pad: EdgeInsets.zero, child: _row(c)),
+          );
+      final byId = <String, Map<String, dynamic>>{for (final c in chats) '${c['id']}': c};
+      sec('会话');
+      for (final id in ['baona', 'group.nvg']) {
+        final c = byId[id];
+        if (c != null) rows.add(card(c));
+      }
+      sec('我的角色');
+      for (final c in chats) {
+        if (roleIds().contains('${c['id']}')) rows.add(card(c));
+      }
+      sec('功能');
+      for (final id in ['douyin', 'videolib', 'audiolib']) {
+        final c = byId[id];
+        if (c != null) rows.add(card(c));
+      }
+      return Column(children: [
       // 顶部：苹果官网式大标题（大而轻、带副标题，跟 iOS 消息 App 一个味道）
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 14, 6),
@@ -287,19 +314,11 @@ class _ChatListPageState extends State<ChatListPage> {
         //   进场交错浮现（Appear），像 apple.com 首页卡片逐个浮起来
         child: ListView.builder(
           padding: EdgeInsets.only(top: 2, bottom: navSpace(context) + 10),
-          itemCount: chats.length,
+          itemCount: rows.length,
           itemBuilder: (_, i) => Appear(
             delay: i * 45,
             dy: 16,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
-              child: GlassSurface(
-                radius: 18,
-                blur: 0,
-                pad: EdgeInsets.zero,
-                child: _row(chats[i]),
-              ),
-            ),
+            child: rows[i],
           ),
         ),
       ),
