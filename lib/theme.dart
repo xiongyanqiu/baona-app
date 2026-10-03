@@ -291,11 +291,12 @@ class _PressScaleState extends State<PressScale> {
 /// ★26.2.22 苹果官网动效：子项交错浮现 —— 淡入 + 上浮，兄弟之间错开 delay，
 ///   就是 apple.com 首页那些卡片逐个"浮起来"的感觉。
 class Appear extends StatefulWidget {
-  const Appear({super.key, required this.child, this.delay = 0, this.dy = 14});
+  const Appear({super.key, required this.child, this.delay = 0, this.dy = 14, this.onDone});
 
   final Widget child;
   final int delay; // 毫秒，后面的兄弟错开一点
   final double dy; // 起点上浮距离（px）
+  final VoidCallback? onDone; // ★26.2.24 动画播完回调（列表用它标记"首播已完成"，防止滚动重建重复播）
 
   @override
   State<Appear> createState() => _AppearState();
@@ -310,10 +311,10 @@ class _AppearState extends State<Appear> with SingleTickerProviderStateMixin {
     super.initState();
     if (widget.delay > 0) {
       Future.delayed(Duration(milliseconds: widget.delay), () {
-        if (mounted) _c.forward();
+        if (mounted) _c.forward().whenComplete(() => widget.onDone?.call());
       });
     } else {
-      _c.forward();
+      _c.forward().whenComplete(() => widget.onDone?.call());
     }
   }
 

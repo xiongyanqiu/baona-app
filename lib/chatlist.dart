@@ -31,6 +31,7 @@ class _ChatListPageState extends State<ChatListPage> {
   //   以后多角色往 _rows() 里加就行。头像/名字/未读实时从 app 读（改了就同步），
   //   最后一条消息预览来自服务端历史（_refresh 拉一次）
   bool _loaded = false;
+  bool _didIntro = false; // ★26.2.24 首屏交错浮现只播一次（滚动重建不再重复动画）
   String _last = '';
   int _lastT = 0;
   late Future<String> _vlAvatarFuture = Future.value('');
@@ -310,16 +311,23 @@ class _ChatListPageState extends State<ChatListPage> {
         ]),
       ),
       Expanded(
-        // ★26.2.22 苹果官网感：会话列表卡片化 —— 每行一张圆角玻璃卡（纯渐变，不实时模糊省电），
-        //   进场交错浮现（Appear），像 apple.com 首页卡片逐个浮起来
+        // ★26.2.22 苹果官网感：会话列表卡片化 —— 每行一张圆角玻璃卡（纯渐变，不实时模糊省电）
+        // ★26.2.24 修复"滑到底部还没浮现"：交错浮现只给首屏前 8 项、只播一次；
+        //   滚动加载的项直接显示 —— 之前每项都 delay=i*45ms，底部项要等一秒多才开始浮现
         child: ListView.builder(
           padding: EdgeInsets.only(top: 2, bottom: navSpace(context) + 10),
           itemCount: rows.length,
-          itemBuilder: (_, i) => Appear(
-            delay: i * 45,
-            dy: 16,
-            child: rows[i],
-          ),
+          itemBuilder: (_, i) {
+            if (_didIntro || i >= 8) return rows[i];
+            return Appear(
+              delay: i * 40,
+              dy: 14,
+              onDone: () {
+                if (mounted) setState(() => _didIntro = true);
+              },
+              child: rows[i],
+            );
+          },
         ),
       ),
         ]);
