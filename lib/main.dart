@@ -650,7 +650,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onSearch, required this.onSet, required this.onCtrl, required this.onUs});
+  const _Header({super.key, required this.onSearch, required this.onSet, required this.onCtrl, required this.onUs});
   final VoidCallback onSearch, onSet, onCtrl, onUs;
 
   @override
