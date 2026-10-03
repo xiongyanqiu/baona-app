@@ -463,18 +463,29 @@ class LocalBrain {
     final hist = (await MsgsLocal.load('group.$gid')).map((m) => m.toJson()).toList();
     // 把刚发的 user 消息补进上下文（本地还没落盘到 MsgsLocal，先手动加）
     hist.add({'role': 'user', 'content': t});
+    // ★26.2.25 群聊上下文带说话人身份：给每条成员消息加上「名字」前缀，
+    //   否则每个角色接话时都分不清"这句是谁说的"，会以为别人的话是自己说的 → 接话混乱
+    final ctxHist = hist.map((m) {
+      final rid = '${m['roleId'] ?? ''}';
+      final nm = '${m['name'] ?? ''}';
+      if (rid.isNotEmpty && nm.isNotEmpty && '${m['role'] ?? ''}' == 'assistant') {
+        return {...m, 'content': '【$nm】${m['content'] ?? ''}'};
+      }
+      return m;
+    }).toList();
     final replies = <Map<String, dynamic>>[];
     final budget = Store.ctxTokens;
     var used = hist.fold<int>(0, (a, m) => a + ('${m['content'] ?? ''}'.length) + 8);
     for (final rid in members) {
       final info = _roleInfo(rid);
       if (info == null) continue;
-      final ctx = _buildCtx(hist, persona: '${info['persona']}', rules: '${info['rules']}', withWish: false, withMem: false);
+      final ctx = _buildCtx(ctxHist, persona: '${info['persona']}', rules: '${info['rules']}', withWish: false, withMem: false);
       used = ctx.fold<int>(0, (a, m) => a + '${m['content'] ?? ''}'.length);
       if (used > budget) {
         // 上下文太长了，丢掉最旧的历史再试一次
         final cut = (hist.length * 0.4).round();
         hist.removeRange(0, cut < 1 ? 1 : cut);
+        ctxHist.removeRange(0, cut < 1 ? 1 : cut);
         continue;
       }
       final r = await _ask(ctx);
@@ -485,7 +496,22 @@ class LocalBrain {
       final c = _stripWish('${r['content']}');
       final now = DateTime.now().millisecondsSinceEpoch;
       hist.add({'role': 'assistant', 'content': c, 'roleId': rid, 'name': '${info['name']}'});
+      ctxHist.add({'role': 'assistant', 'content': '【${info['name']}】$c', 'roleId': rid, 'name': '${info['name']}'});
       replies.add({'roleId': rid, 'name': '${info['name']}', 'content': c, 'time': now});
+      // ★26.2.25 群聊回复也发事件（以前不发 → 群聊页关着时：无未读、无通知、列表最后一条不更新）
+      //   带 groupId → main 全局分流到 group.$gid 的未读/最后一条；群聊页开着时按 gid 收就地渲染
+      _ev.add({
+        'type': 'msg',
+        'msg': {
+          'role': 'assistant',
+          'content': c,
+          'time': now,
+          'cid': 'g$now$rid',
+          'roleId': rid,
+          'name': '${info['name']}',
+          'groupId': gid,
+        }
+      });
     }
     // ★26.2.20 群聊落盘：角色们说完直接进本地，群聊页关着也不丢（不重复加 user，UI 已存）
     final h2 = (await MsgsLocal.load('group.$gid')).map((m) => m.toJson()).toList();

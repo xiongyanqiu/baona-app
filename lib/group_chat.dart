@@ -30,6 +30,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   bool _hasMore = false;
   bool _busy = false;
   int _limit = 50;
+  List<String> _members = []; // ★26.2.25 当前群成员显示名（头部副标题显示，一眼看清拉了谁）
   final _inp = TextEditingController();
   final _sc = ScrollController();
   final _focus = FocusNode();
@@ -55,7 +56,26 @@ class _GroupChatPageState extends State<GroupChatPage> {
     });
     _loadLocal();
     _loadHistory();
+    _loadMembers();
     _sub = app.brainOrApi?.events.listen(_onEvent);
+  }
+
+  /// ★26.2.25 读当前群成员显示名 → 头部副标题"xx、xx、xx 在群里"（拉没拉进去一眼可见）
+  Future<void> _loadMembers() async {
+    final brain = app.brain;
+    if (brain == null) return;
+    final gl = await brain.groupList();
+    if (gl['ok'] != true || !mounted) return;
+    for (final g in (gl['groups'] as List?) ?? []) {
+      if (g is Map && '${g['id']}' == _gid) {
+        final names = ((g['members'] as List?) ?? [])
+            .map((m) => _memberName('$m'))
+            .where((n) => n.isNotEmpty)
+            .toList();
+        setState(() => _members = names);
+        return;
+      }
+    }
   }
 
   @override
@@ -81,6 +101,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
     if (rid == 'baona') return '娜';
     final l = roleLetterOf(rid);
     return l == '角' ? (rid.isEmpty ? '群' : rid[0]) : l;
+  }
+
+  /// ★26.2.25 头部副标题：现在群里都有谁（超过 4 个就"xx、xx、xx 等 N 人"）
+  String _memberLine() {
+    final all = <String>[];
+    if (app.nick.trim().isNotEmpty) all.add(app.nick);
+    all.addAll(_members.where((n) => n != app.nick));
+    if (all.isEmpty) return '还没有成员，点右上角拉人进群';
+    if (all.length > 4) return '${all.take(3).join('、')} 等 ${all.length} 人';
+    return all.join('、');
   }
 
   /// ★26.2.17 群成员自选：勾选要拉进群的角色（本地大脑按成员顺序轮流发言）
@@ -161,6 +191,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final r = await brain.groupSetMembers(_gid, picked.toList());
     if (r['ok'] == true) {
       toast(context, '群成员已更新');
+      await _loadMembers();
     } else {
       toast(context, '保存失败：${r['error'] ?? ''}');
     }
@@ -309,6 +340,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
         child: Column(children: [
           _GroupHeader(
             gname: _gname,
+            memberLine: _memberLine(),
             onBack: () => Navigator.of(context).maybePop(),
             onManage: _openMembers,
           ),
@@ -369,8 +401,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
 /* ------------------------------- 头部 ------------------------------- */
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.gname, required this.onBack, required this.onManage});
+  const _GroupHeader({required this.gname, required this.memberLine, required this.onBack, required this.onManage});
   final String gname;
+  final String memberLine;
   final VoidCallback onBack;
   final VoidCallback onManage;
   @override
@@ -389,7 +422,7 @@ class _GroupHeader extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(gname, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-            Text('${a.nick} 在群里', style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
+            Text(memberLine, style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
           ]),
         ),
         // ★26.2.17 群成员自选：点开勾选要把谁拉进群
