@@ -799,13 +799,16 @@ class _CtrlState extends State<_Ctrl> {
   }
 
   Future<void> _load() async {
-    final j = await app.api?.ctrl();
+    // ★26.2.26 全本地模式走本地大脑的简化控制器；连电脑模式走桌宠 ctrl API
+    final dynamic a = app.brainOrApi;
+    final j = a == null ? null : await a.ctrl();
     if (!mounted) return;
     if (j != null && j['ctrl'] is Map) setState(() => ct = Map<String, dynamic>.from(j['ctrl'] as Map));
   }
 
   Future<void> _cmd(String cmd, [dynamic val]) async {
-    final r = await app.api?.ctrlCmd(cmd, val);
+    final dynamic a = app.brainOrApi;
+    final r = a == null ? null : await a.ctrlCmd(cmd, val);
     if (!mounted) return;
     if (r != null && r['ctrl'] is Map) setState(() => ct = Map<String, dynamic>.from(r['ctrl'] as Map));
   }

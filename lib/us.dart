@@ -424,7 +424,36 @@ Future<List<AlbGroup>> _loadAlbumNetwork(BuildContext context) async {
 }
 
 /// 给设置页"选背景"用：从相册里挑一张，返回它的地址
+/// ★26.2.26 全本地模式：读手机本地相册（照片是 App 目录里的文件路径），选一张直接返回路径；
+///   网络模式才走电脑端相册。之前漏了本地分支 → 纯本地模式下"从相册选一张"永远选不到 → 壁纸用不了
 Future<String> pickAlbumImage(BuildContext context) async {
+  if (app.brain != null) {
+    final j = await app.brain!.album();
+    if (!context.mounted || j['ok'] != true) return '';
+    final groups = ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
+    final all = groups.expand((g) => g.photos).toList();
+    if (all.isEmpty) return '';
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF120F1B),
+      builder: (c) => GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 6, crossAxisSpacing: 6),
+        itemCount: all.length,
+        itemBuilder: (c, i) {
+          final ph = all[i];
+          return GestureDetector(
+            onTap: () => Navigator.pop(c, ph.url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.file(File(ph.url), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: kGlass, child: const Center(child: Icon(Icons.broken_image_outlined, size: 22, color: kSub)))),
+            ),
+          );
+        },
+      ),
+    );
+    return picked ?? '';
+  }
   final groups = await _loadAlbumNetwork(context);
   if (!context.mounted || groups.isEmpty) return '';
   final all = groups.expand((g) => g.photos).toList();

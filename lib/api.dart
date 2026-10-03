@@ -81,6 +81,9 @@ class Store {
   static Future<void> setLocalGame(String v) => _p.setString('local.game', v);
   static String get localAlbums => _p.getString('local.albums') ?? '';
   static Future<void> setLocalAlbums(String v) => _p.setString('local.albums', v);
+  // ★26.2.26 控制器本地状态（全本地模式：兴奋度/档位/模式/记录存在手机）
+  static String get localCtrl => _p.getString('local.ctrl') ?? '';
+  static Future<void> setLocalCtrl(String v) => _p.setString('local.ctrl', v);
 
   // ★b21 相册列表缓存（秒开）与启动数据缓存（秒开），内容 + 时间戳
   static String get albumCache => _p.getString('album.cache') ?? '';

@@ -8,6 +8,7 @@
 //  5) 动效短而稳：按下去轻微缩放（spring 手感），不做花哨弹跳
 //  6) 文字用系统字重分层：大标题 w700 / 正文 w400 / 说明 kSub
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -31,7 +32,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '26.2.12'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '26.2.26'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -66,6 +67,12 @@ ImageProvider? avatarOf(String s) {
     } catch (_) {
       return null;
     }
+  } else if (s.startsWith('file://')) {
+    // ★26.2.26 本地文件路径（file:// 前缀）
+    p = FileImage(File(s.substring(7)));
+  } else if (s.startsWith('/') || (s.length >= 3 && s[1] == ':' && (s[2] == '\\' || s[2] == '/'))) {
+    // ★26.2.26 本地绝对路径（iOS 沙盒 /var/mobile/…、Windows C:\…）→ 本地相册照片做壁纸
+    p = FileImage(File(s));
   } else {
     p = NetworkImage(s);
   }
@@ -129,8 +136,10 @@ ThemeData buildTheme() {
     ),
     snackBarTheme: const SnackBarThemeData(backgroundColor: Color(0xF02A2438), contentTextStyle: TextStyle(color: kText)),
     // ★26.2.22 苹果官网动效：所有 push 页面统一"淡入 + 轻微上浮"过渡
+    // ★26.2.26 iOS 换回系统原生过渡（Cupertino）：右滑入 + 屏幕左边缘侧滑返回。
+    //   之前 iOS 也用自定义过渡 → 系统侧滑返回手势被替换掉了，有些页面退不出去
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.iOS: AppleTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       TargetPlatform.android: AppleTransitionsBuilder(),
       TargetPlatform.macOS: AppleTransitionsBuilder(),
       TargetPlatform.windows: AppleTransitionsBuilder(),

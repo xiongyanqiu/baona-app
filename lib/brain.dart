@@ -41,6 +41,7 @@ class LocalBrain {
   List<Map<String, dynamic>> _bagMe = []; // {id,code,name,price,img,used,ts}
   List<Map<String, dynamic>> _bagHer = []; // 她手里的
   Map<String, dynamic> _game = {}; // 飞行棋状态
+  Map<String, dynamic> _ctrl = {}; // ★26.2.26 控制器本地状态（全本地模式也能用控制器）
   List<Map<String, dynamic>> _albums = []; // 本地相册分组 [{id,name,photos:[{id,path,time}]}]
   Map<String, dynamic> _albumLikes = {}; // photoId -> true
   Map<String, dynamic> _albumCmt = {}; // photoId -> [text]
@@ -81,6 +82,8 @@ class LocalBrain {
         _albumCmt = Map<String, dynamic>.from(a['cmt'] as Map? ?? {});
       }
     } catch (_) {}
+    try { _ctrl = Map<String, dynamic>.from(jsonDecode(Store.localCtrl) as Map? ?? {}); } catch (_) {}
+    if (_ctrl.isEmpty) _ctrl = _newCtrl();
     if (_groups.isEmpty) {
       // 默认姐妹群：包娜 + 刘紫灵（成员可自己改）
       _groups.add({'id': 'nvg', 'name': '姐妹聊天群', 'members': ['baona', 'liuziling']});
@@ -104,6 +107,7 @@ class LocalBrain {
   void _saveBag() => Store.setLocalBag(jsonEncode({'me': _bagMe, 'her': _bagHer}));
   void _saveGame() => Store.setLocalGame(jsonEncode(_game));
   void _saveAlbums() => Store.setLocalAlbums(jsonEncode({'groups': _albums, 'likes': _albumLikes, 'cmt': _albumCmt}));
+  void _saveCtrl() => Store.setLocalCtrl(jsonEncode(_ctrl));
 
   // -------------------- 模型配置 --------------------
   Map<String, dynamic> _activeProvider() {
@@ -893,8 +897,74 @@ class LocalBrain {
     {'k': 'none', 't': '她看着你笑'}, // 47
   ];
 
-  Map<String, dynamic> _newGame() {
-    final tiles = <Map<String, dynamic>>[];
+  // -------------------- 控制器（全本地：简化状态机，替代电脑端 ctrl API） --------------------
+  Map<String, dynamic> _newCtrl() => {
+    'arousal': 0,
+    'level': 0,
+    'pattern': 'slow',
+    'mode': 'idle',
+    'heDone': 'none',
+    'movingAll': true,
+    'edgeCount': 0,
+    'sessEdge': 0,
+    'bond': 0,
+    'play': 'none',
+  };
+
+  Future<Map<String, dynamic>> ctrl() async => {'ok': true, 'ctrl': Map<String, dynamic>.from(_ctrl)};
+
+  Future<Map<String, dynamic>> ctrlCmd(String cmd, [dynamic val]) async {
+    final c = _ctrl;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    switch (cmd) {
+      case 'tap':
+        c['arousal'] = ((c['arousal'] as num?)?.toInt() ?? 0) + 2;
+        break;
+      case 'arousalAdd':
+        final n = (val is num ? val.toInt() : int.tryParse('$val') ?? 0);
+        c['arousal'] = (((c['arousal'] as num?)?.toInt() ?? 0) + n).clamp(0, 100);
+        break;
+      case 'arousalReset':
+        c['arousal'] = 0;
+        break;
+      case 'level':
+        c['level'] = val;
+        break;
+      case 'pattern':
+        c['pattern'] = '$val';
+        break;
+      case 'mode':
+        c['mode'] = '$val';
+        break;
+      case 'finish':
+        c['finish'] = '$val';
+        break;
+      case 'heDone':
+        c['heDone'] = '$val';
+        break;
+      case 'play':
+        c['play'] = '$val';
+        break;
+      case 'movingAll':
+        c['movingAll'] = val == true;
+        break;
+      case 'param':
+        break; // 本地无 playbook，忽略参数项
+    }
+    // ★本地简化：兴奋度 ≥ 100 记一次"高潮"，清零重来
+    if (((c['arousal'] as num?)?.toInt() ?? 0) >= 100) {
+      c['edgeCount'] = ((c['edgeCount'] as num?)?.toInt() ?? 0) + 1;
+      c['sessEdge'] = ((c['sessEdge'] as num?)?.toInt() ?? 0) + 1;
+      c['bond'] = ((c['bond'] as num?)?.toInt() ?? 0) + 1;
+      c['arousal'] = 0;
+      c['at'] = now;
+    }
+    _saveCtrl();
+    _ev.add({'type': 'ctrl', 'state': Map<String, dynamic>.from(c)});
+    return {'ok': true, 'ctrl': Map<String, dynamic>.from(c)};
+  }
+
+  Map<String, dynamic> _newGame() {    final tiles = <Map<String, dynamic>>[];
     for (var i = 1; i <= 48; i++) {
       if (i == 1) {
         tiles.add({'i': 1, 't': '起点', 'k': 'start'});
