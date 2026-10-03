@@ -303,7 +303,7 @@ class Appear extends StatefulWidget {
 
 class _AppearState extends State<Appear> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 480), curve: Curves.easeOutCubic);
+      vsync: this, duration: const Duration(milliseconds: 480));
 
   @override
   void initState() {

@@ -653,7 +653,6 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: widget.fresh ? const Duration(milliseconds: 380) : Duration.zero,
       value: widget.fresh ? 0 : 1,
-      curve: Curves.easeOutCubic,
     );
     if (widget.fresh) _in.forward();
   }
