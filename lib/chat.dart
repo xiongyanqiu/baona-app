@@ -549,7 +549,9 @@ class _ChatPageState extends State<ConversationPage> {
                   final prev = k > 0 ? _msgs[k - 1] : null;
                   // ★2026-09-29：隔得久（>30 分钟）或跨天时插一行时间，翻记录一眼知道"这是啥时候说的"
                   final gap = prev == null || (m.time != null && prev.time != null && (m.time! - prev.time!) > 30 * 60 * 1000);
-                  final bubble = _Bubble(m: m, onResend: () => _send({'text': m.content}), onPlay: _play, playing: _playingUrl, urlOf: a,
+                  // ★26.2.22 苹果官网动效：刚来的新消息（5 秒内）淡入上浮；历史消息不逐个动画
+                  final fresh = m.time != null && (DateTime.now().millisecondsSinceEpoch - m.time!) < 5000;
+                  final bubble = _Bubble(m: m, fresh: fresh, onResend: () => _send({'text': m.content}), onPlay: _play, playing: _playingUrl, urlOf: a,
                       roleSrc: _role.isNotEmpty ? _roleAvatar : '', roleLetter: _role.isNotEmpty ? roleLetterOf(_role) : '');
                   if (!gap) return bubble;
                   return Column(children: [
@@ -622,7 +624,7 @@ class _ChatPageState extends State<ConversationPage> {
 
 /* ------------------------------- 一条消息 ------------------------------- */
 class _Bubble extends StatefulWidget {
-  _Bubble({required this.m, required this.onResend, required this.onPlay, required this.playing, required this.urlOf, this.roleSrc = '', this.roleLetter = ''});
+  _Bubble({required this.m, required this.onResend, required this.onPlay, required this.playing, required this.urlOf, this.roleSrc = '', this.roleLetter = '', this.fresh = false});
   final Msg m;
   final VoidCallback onResend;
   final void Function(String) onPlay;
@@ -630,16 +632,27 @@ class _Bubble extends StatefulWidget {
   final dynamic urlOf; // ★26.2.17 本地模式也是它（LocalBrain 同名方法）
   final String roleSrc;    // ★2026-10-02 角色会话：她消息行的头像
   final String roleLetter; // ★角色字
+  final bool fresh;        // ★26.2.22 苹果官网动效：新消息才淡入上浮，历史不逐个动画
 
   @override
   State<_Bubble> createState() => _BubbleState();
 }
 
-class _BubbleState extends State<_Bubble> {
+class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   // ★2026-10-01：她的【细节】（动作/表情/心里）默认展开显示，点箭头收起
   bool _detailOn = true;
+  // ★26.2.22：新消息 380ms 淡入上浮（easeOutCubic，跟手不晃）；历史消息直接 1.0 不动画
+  late final AnimationController _in = widget.fresh
+      ? AnimationController(vsync: this, duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic)..forward()
+      : AnimationController(vsync: this, duration: Duration.zero, value: 1);
 
   static final RegExp _imgRe = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
+
+  @override
+  void dispose() {
+    _in.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -730,7 +743,8 @@ class _BubbleState extends State<_Bubble> {
     );
 
     // ★2026-09-29：正在发的那条淡一点（一眼看出"还没发出去"），发出去就恢复
-    return Opacity(
+    // ★26.2.22：新消息外面再包一层淡入上浮（苹果官网感）；历史消息直接显示
+    Widget row = Opacity(
       opacity: m.st == 'pending' ? 0.6 : 1,
       child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -752,6 +766,20 @@ class _BubbleState extends State<_Bubble> {
       ),
       ),
     );
+    if (widget.fresh) {
+      row = AnimatedBuilder(
+        animation: _in,
+        child: row,
+        builder: (context, child) => Opacity(
+          opacity: CurvedAnimation(parent: _in, curve: Curves.easeOutCubic).value,
+          child: Transform.translate(
+            offset: Offset(0, 16 * (1 - _in.value)),
+            child: child,
+          ),
+        ),
+      );
+    }
+    return row;
   }
 }
 

@@ -261,12 +261,17 @@ class _ChatListPageState extends State<ChatListPage> {
               ]
             : <Map<String, dynamic>>[];
         return Column(children: [
-      // 顶部：微信那种大标题"消息"
+      // 顶部：苹果官网式大标题（大而轻、带副标题，跟 iOS 消息 App 一个味道）
       Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 14, 6),
+        padding: const EdgeInsets.fromLTRB(20, 20, 14, 6),
         child: Row(children: [
-          const Text('消息',
-              style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('消息',
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.9, height: 1.1)),
+            const SizedBox(height: 3),
+            Text('包娜和她的朋友们',
+                style: TextStyle(fontSize: 12.5, color: kSub.withValues(alpha: 0.9))),
+          ]),
           const Spacer(),
           // ★26.2.17 全本地化：自己添加角色（不用编译，人设写进手机本地）
           IconButton(
@@ -278,11 +283,24 @@ class _ChatListPageState extends State<ChatListPage> {
         ]),
       ),
       Expanded(
-        child: ListView.separated(
-          padding: EdgeInsets.only(top: 4, bottom: navSpace(context) + 8),
+        // ★26.2.22 苹果官网感：会话列表卡片化 —— 每行一张圆角玻璃卡（纯渐变，不实时模糊省电），
+        //   进场交错浮现（Appear），像 apple.com 首页卡片逐个浮起来
+        child: ListView.builder(
+          padding: EdgeInsets.only(top: 2, bottom: navSpace(context) + 10),
           itemCount: chats.length,
-          separatorBuilder: (_, __) => const Hair(),
-          itemBuilder: (_, i) => _row(chats[i]),
+          itemBuilder: (_, i) => Appear(
+            delay: i * 45,
+            dy: 16,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+              child: GlassSurface(
+                radius: 18,
+                blur: 0,
+                pad: EdgeInsets.zero,
+                child: _row(chats[i]),
+              ),
+            ),
+          ),
         ),
       ),
         ]);
