@@ -642,11 +642,21 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   // ★2026-10-01：她的【细节】（动作/表情/心里）默认展开显示，点箭头收起
   bool _detailOn = true;
   // ★26.2.22：新消息 380ms 淡入上浮（easeOutCubic，跟手不晃）；历史消息直接 1.0 不动画
-  late final AnimationController _in = widget.fresh
-      ? AnimationController(vsync: this, duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic)..forward()
-      : AnimationController(vsync: this, duration: Duration.zero, value: 1);
+  late final AnimationController _in;
 
   static final RegExp _imgRe = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
+
+  @override
+  void initState() {
+    super.initState();
+    _in = AnimationController(
+      vsync: this,
+      duration: widget.fresh ? const Duration(milliseconds: 380) : Duration.zero,
+      value: widget.fresh ? 0 : 1,
+      curve: Curves.easeOutCubic,
+    );
+    if (widget.fresh) _in.forward();
+  }
 
   @override
   void dispose() {

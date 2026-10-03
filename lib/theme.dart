@@ -128,7 +128,34 @@ ThemeData buildTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRCard)),
     ),
     snackBarTheme: const SnackBarThemeData(backgroundColor: Color(0xF02A2438), contentTextStyle: TextStyle(color: kText)),
+    // ★26.2.22 苹果官网动效：所有 push 页面统一"淡入 + 轻微上浮"过渡
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.iOS: AppleTransitionsBuilder(),
+      TargetPlatform.android: AppleTransitionsBuilder(),
+      TargetPlatform.macOS: AppleTransitionsBuilder(),
+      TargetPlatform.windows: AppleTransitionsBuilder(),
+      TargetPlatform.linux: AppleTransitionsBuilder(),
+      TargetPlatform.fuchsia: AppleTransitionsBuilder(),
+    }),
   );
+}
+
+/// 苹果官网式页面过渡：淡入 + 轻微上浮（不重、不花，稳定跟手）
+class AppleTransitionsBuilder extends PageTransitionsBuilder {
+  const AppleTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context,
+      Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, 0.018), end: Offset.zero).animate(curved),
+        child: child,
+      ),
+    );
+  }
 }
 
 /* ============================ 玻璃：核心材质 ============================ */
@@ -180,10 +207,13 @@ class GlassSurface extends StatelessWidget {
     );
 
     // 内容下面是「真模糊」——这才是玻璃，不是半透明贴纸
-    core = ClipRRect(
-      borderRadius: BorderRadius.circular(radius - 1),
-      child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: core),
-    );
+    // ★26.2.22：blur<=0 跳过 BackdropFilter —— 列表卡片用纯渐变（实时模糊每行一个太耗电）
+    if (blur > 0) {
+      core = ClipRRect(
+        borderRadius: BorderRadius.circular(radius - 1),
+        child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: core),
+      );
+    }
 
     // 1px 高光描边：外层渐变 + 内层留 1px
     Widget glass = Container(
@@ -258,6 +288,55 @@ class _PressScaleState extends State<PressScale> {
 }
 
 /* ============================== 小组件库 ============================== */
+/// ★26.2.22 苹果官网动效：子项交错浮现 —— 淡入 + 上浮，兄弟之间错开 delay，
+///   就是 apple.com 首页那些卡片逐个"浮起来"的感觉。
+class Appear extends StatefulWidget {
+  const Appear({super.key, required this.child, this.delay = 0, this.dy = 14});
+
+  final Widget child;
+  final int delay; // 毫秒，后面的兄弟错开一点
+  final double dy; // 起点上浮距离（px）
+
+  @override
+  State<Appear> createState() => _AppearState();
+}
+
+class _AppearState extends State<Appear> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 480), curve: Curves.easeOutCubic);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.delay > 0) {
+      Future.delayed(Duration(milliseconds: widget.delay), () {
+        if (mounted) _c.forward();
+      });
+    } else {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        child: widget.child,
+        builder: (context, child) => Opacity(
+          opacity: CurvedAnimation(parent: _c, curve: Curves.easeOutCubic).value,
+          child: Transform.translate(
+            offset: Offset(0, widget.dy * (1 - _c.value)),
+            child: child,
+          ),
+        ),
+      );
+}
+
 /// 胶囊玻璃按钮（页面顶部那排 chip 都是它）
 class Chip2 extends StatelessWidget {
   const Chip2(this.text, {super.key, this.on, this.on2 = false, this.ico});
