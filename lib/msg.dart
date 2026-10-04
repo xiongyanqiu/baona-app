@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'main.dart';
@@ -27,6 +28,7 @@ class _MsgPageState extends State<MsgPage> {
   bool _typing = false;
   int _memCount = 0;
   int _cidSeq = 0;
+  String _myAv = ''; // ★v27.0.1 我的头像本地兜底（双写：SP + brain._herSet，重装也不丢）
   final TextEditingController _inp = TextEditingController();
   final ScrollController _sc = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _sub;
@@ -38,6 +40,16 @@ class _MsgPageState extends State<MsgPage> {
     super.initState();
     _load();
     _sub = _a?.events.listen(_onEv);
+    _loadMyAv();
+  }
+
+  /// 我的头像：SharedPreferences 里的最优先（本地双写兜底）
+  Future<void> _loadMyAv() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final v = sp.getString('v27.myAvatar') ?? '';
+      if (v.isNotEmpty && mounted) setState(() => _myAv = v);
+    } catch (_) {}
   }
 
   @override
@@ -130,6 +142,14 @@ class _MsgPageState extends State<MsgPage> {
       final bytes = await p.readAsBytes();
       final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
       final key = who == 'her' ? 'herAvatar' : 'myAvatar';
+      // ★v27.0.1 双写：本地 SP 兜底（我的头像）+ brain._herSet（她的头像 / 模型能看到）
+      if (who == 'my') {
+        try {
+          final sp = await SharedPreferences.getInstance();
+          await sp.setString('v27.myAvatar', dataUrl);
+        } catch (_) {}
+        setState(() => _myAv = dataUrl);
+      }
       await a.patchSettings({'patch': {key: dataUrl}});
       if (mounted) {
         setState(() => app.herSet[key] = dataUrl);
@@ -175,6 +195,17 @@ class _MsgPageState extends State<MsgPage> {
               ]),
               const SizedBox(height: 14),
               _sec('对话'),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.edit_outlined, color: kAccent),
+                title: const Text('改她的名字', style: TextStyle(fontSize: 15)),
+                subtitle: Text('现在叫：${app.nick}', style: const TextStyle(fontSize: 12.5, color: kSub)),
+                trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+                onTap: () async {
+                  await _renameHer();
+                  setSt(() {});
+                },
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.delete_outline, color: kBad),
@@ -258,6 +289,39 @@ class _MsgPageState extends State<MsgPage> {
         ),
       ),
     );
+  }
+
+  /// ★v27.0.1 改她的名字（备注）—— 存 brain._herSet['nickName']，顶栏和模型都能用
+  Future<void> _renameHer() async {
+    final a = _a;
+    if (a == null) return;
+    final ctl = TextEditingController(text: app.nick);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (cc) => AlertDialog(
+        backgroundColor: kBg2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text('改她的名字', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLength: 12,
+          style: const TextStyle(fontSize: 16),
+          decoration: const InputDecoration(hintText: '输入新名字', counterText: ''),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(cc), child: const Text('取消', style: TextStyle(color: kSub))),
+          TextButton(
+            onPressed: () => Navigator.pop(cc, ctl.text.trim()),
+            child: const Text('保存', style: TextStyle(color: kAccent, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    final n = (name ?? '').trim();
+    if (n.isEmpty || n == app.nick) return;
+    await a.patchSettings({'patch': {'nickName': n}});
+    if (mounted) setState(() => app.nick = n);
   }
 
   /// 记忆列表弹窗
@@ -345,7 +409,7 @@ class _MsgPageState extends State<MsgPage> {
   @override
   Widget build(BuildContext context) {
     final herAv = '${app.herSet['herAvatar'] ?? ''}';
-    final myAv = '${app.herSet['myAvatar'] ?? ''}';
+    final myAv = _myAv.isNotEmpty ? _myAv : '${app.herSet['myAvatar'] ?? ''}';
     return Wall(
       url: app.bg,
       blur: app.bgBlur,
@@ -398,21 +462,24 @@ class _MsgPageState extends State<MsgPage> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: kAccent))
-                : ListView.builder(
-                    controller: _sc,
-                    padding: EdgeInsets.only(top: 10, bottom: navSpace(context) + 6),
-                    itemCount: _msgs.length + (_typing ? 1 : 0),
-                    itemBuilder: (_, i) {
-                      if (i >= _msgs.length) return _TypingRow();
-                      return _row(_msgs[i], herAv, myAv);
-                    },
-                  ),
+                : _msgs.isEmpty
+                    ? const _EmptyHint()
+                    : ListView.builder(
+                        controller: _sc,
+                        padding: EdgeInsets.only(top: 10, bottom: navSpace(context) + 6),
+                        itemCount: _msgs.length + (_typing ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i >= _msgs.length) return _TypingRow();
+                          return _row(_msgs[i], herAv, myAv);
+                        },
+                      ),
           ),
-          // 输入栏（玻璃胶囊）
+          // 输入栏（玻璃胶囊）—— ★v27.0.1 底部给悬浮底栏让位（胶囊+留白+安全区），不再被压住
           SafeArea(
             top: false,
+            bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+              padding: EdgeInsets.fromLTRB(14, 6, 14, kNavInner + kNavMargin + kNavSafe + 8),
               child: GlassSurface(
                 radius: kRCapsule,
                 blur: kBlur,
@@ -517,6 +584,35 @@ class _MsgPageState extends State<MsgPage> {
           Text('她正在输入…', style: TextStyle(fontSize: 13, color: kSub)),
         ]),
       );
+}
+
+/// ★v27.0.1 空聊天区提示
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            color: kBg2,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0x26FFFFFF), width: 0.8),
+          ),
+          child: const Icon(Icons.favorite_border, size: 30, color: kSub),
+        ),
+        const SizedBox(height: 16),
+        const Text('和包娜说第一句话吧',
+            style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        const Text('她会认真回你的',
+            style: TextStyle(fontSize: 13, color: kSub)),
+      ]),
+    );
+  }
 }
 
 /// 圆形头像：同 URL 走 avatarOf 缓存（不闪回占位字）

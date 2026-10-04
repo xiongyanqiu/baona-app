@@ -615,7 +615,6 @@ class _HomePageState extends State<HomePage> {
               child: _Nav(
                 tab: _tab,
                 unread: app.unread > 0,
-                big: 4, // ★27.0：中间大按钮 = 我的
                 onTap: (i) {
                   HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
                   _switchTab(i);
@@ -661,19 +660,17 @@ class _PlacePage extends StatelessWidget {
 }
 
 class _Nav extends StatelessWidget {
-  const _Nav({required this.tab, required this.onTap, this.unread = false, this.big = -1});
+  const _Nav({required this.tab, required this.onTap, this.unread = false});
   final int tab;
   final ValueChanged<int> onTap;
   final bool unread;
-  final int big; // ★27.0：中间大按钮下标（=我的）
 
   @override
   Widget build(BuildContext context) => GlassNav(
         index: tab,
         onTap: onTap,
-        big: big,
         items: [
-          // ★27.0 全新版 5 区：消息 / 照片 / 视频 / 音频 / 我的（中间大按钮）
+          // ★27.0 全新版 5 区：消息 / 照片 / 视频 / 音频 / 我的 —— 全部统一大小对齐
           // ★她来消息时聊天那个图标上冒个小红点
           {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '消息', 'badge': unread},
           {'off': Icons.photo_library_outlined, 'on': Icons.photo_library, 't': '照片'},
