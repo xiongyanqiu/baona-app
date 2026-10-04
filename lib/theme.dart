@@ -15,15 +15,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 /* ------------------------------- 基础色板 ------------------------------- */
-const Color kBg = Color(0xFF0B0B0F);
-const Color kBg2 = Color(0xFF16121F);
-const Color kAccent = Color(0xFF7C6BF5);
-const Color kAccent2 = Color(0xFFB98CFF);
-const Color kText = Color(0xFFF2F1F7);
-const Color kSub = Color(0xFF9A98A6);
-const Color kLine = Color(0x1AFFFFFF);
-const Color kGlass = Color(0x14FFFFFF);
-const Color kGlass2 = Color(0x22FFFFFF);
+// ★27.0 全新版：全部改用 iOS 系统色（深色模式 UIColor 语义色），彻底去掉紫色
+const Color kBg = Color(0xFF000000); // systemBackground
+const Color kBg2 = Color(0xFF1C1C1E); // secondarySystemBackground
+const Color kAccent = Color(0xFF0A84FF); // systemBlue
+const Color kAccent2 = Color(0xFF409CFF); // systemBlue（渐变亮端）
+const Color kText = Color(0xFFFFFFFF); // label
+const Color kSub = Color(0x99EBEBF5); // secondaryLabel（60% 白）
+const Color kLine = Color(0xFF38383A); // separator
+const Color kGlass = Color(0x1FFFFFFF); // 玻璃填充（systemFill 观感）
+const Color kGlass2 = Color(0x2EFFFFFF);
 
 /* --------------------------- Liquid Glass 材质 --------------------------- */
 const double kBlur = 28; // 主玻璃模糊（导航/输入栏）
@@ -32,7 +33,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '26.2.26'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.0'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -79,13 +80,13 @@ ImageProvider? avatarOf(String s) {
   _avCache[s] = p;
   return p;
 }
-const Color kHair = Color(0x1FFFFFFF); // 发丝分隔线
+const Color kHair = Color(0xFF38383A); // separator
 const Color kSpecTop = Color(0x5CFFFFFF); // 上缘高光
 const Color kSpecBottom = Color(0x0FFFFFFF); // 下缘收暗
 const Color kFillA = Color(0x17FFFFFF); // 玻璃填充（亮）
 const Color kFillB = Color(0x0AFFFFFF); // 玻璃填充（暗）
-const Color kOk = Color(0xFF57D9A3);
-const Color kBad = Color(0xFFFF9A9A);
+const Color kOk = Color(0xFF30D158); // systemGreen
+const Color kBad = Color(0xFFFF453A); // systemRed
 
 Color hexColor(String h, [Color dflt = kAccent]) {
   try {
@@ -547,11 +548,12 @@ class GlassBar extends StatelessWidget {
 /// iOS 26 Liquid Glass 悬浮胶囊标签栏
 /// 手指在底栏上左右拖：液态玻璃高亮片跟手滑动，松手吸附到最近 tab（发布会那个特效）
 class GlassNav extends StatefulWidget {
-  const GlassNav({super.key, required this.items, required this.index, required this.onTap});
+  const GlassNav({super.key, required this.items, required this.index, required this.onTap, this.big = -1});
 
   final List<Map<String, dynamic>> items; // [{'on': Icons.x, 'off': Icons.y, 't': '聊天'}]
   final int index;
   final ValueChanged<int> onTap;
+  final int big; // ★27.0：中间大按钮下标（=我的），渲染成凸起圆形玻璃按钮
 
   @override
   State<GlassNav> createState() => _GlassNavState();
@@ -634,71 +636,77 @@ class _GlassNavState extends State<GlassNav> {
                 Row(children: [
                   for (var i = 0; i < items.length; i++)
                     Expanded(
-                      child: PressScale(
-                        onTap: () => widget.onTap(i),
-                        radius: kRCapsule,
-                        scale: 0.95,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Stack(clipBehavior: Clip.none, children: [
-                              AnimatedScale(
-                                scale: index == i ? 1.26 : 1.0,
-                                duration: const Duration(milliseconds: 220),
-                                curve: Curves.easeOutBack,
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 220),
-                                  switchInCurve: Curves.easeOutBack,
-                                  switchOutCurve: Curves.easeIn,
-                                  transitionBuilder: (c, anim) => ScaleTransition(
-                                    scale: Tween(begin: 0.75, end: 1.0).animate(anim),
-                                    child: FadeTransition(opacity: anim, child: c),
-                                  ),
-                                  child: Icon(
-                                    (index == i ? items[i]['on'] : items[i]['off']) as IconData,
-                                    key: ValueKey<bool>(index == i),
-                                    size: 20,
-                                    color: index == i ? Colors.white : kSub,
-                                  ),
-                                ),
-                              ),
-                              if (items[i]['badge'] == true)
-                                Positioned(
-                                  right: -4,
-                                  top: -2,
-                                  child: Container(
-                                    width: 9,
-                                    height: 9,
+                      child: i == widget.big
+                          ? _BigNavBtn(
+                              selected: index == i,
+                              icon: items[i]['on'] as IconData,
+                              label: '${items[i]['t']}',
+                              onTap: () => widget.onTap(i))
+                          : PressScale(
+                              onTap: () => widget.onTap(i),
+                              radius: kRCapsule,
+                              scale: 0.95,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 7),
+                                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                  Stack(clipBehavior: Clip.none, children: [
+                                    AnimatedScale(
+                                      scale: index == i ? 1.26 : 1.0,
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeOutBack,
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 220),
+                                        switchInCurve: Curves.easeOutBack,
+                                        switchOutCurve: Curves.easeIn,
+                                        transitionBuilder: (c, anim) => ScaleTransition(
+                                          scale: Tween(begin: 0.75, end: 1.0).animate(anim),
+                                          child: FadeTransition(opacity: anim, child: c),
+                                        ),
+                                        child: Icon(
+                                          (index == i ? items[i]['on'] : items[i]['off']) as IconData,
+                                          key: ValueKey<bool>(index == i),
+                                          size: 20,
+                                          color: index == i ? Colors.white : kSub,
+                                        ),
+                                      ),
+                                    ),
+                                    if (items[i]['badge'] == true)
+                                      Positioned(
+                                        right: -4,
+                                        top: -2,
+                                        child: Container(
+                                          width: 9,
+                                          height: 9,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF5B7A),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                                color: const Color(0xFF17131F), width: 1.6),
+                                          ),
+                                        ),
+                                      ),
+                                  ]),
+                                  const SizedBox(height: 2),
+                                  Text('${items[i]['t']}',
+                                      style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight:
+                                              index == i ? FontWeight.w600 : FontWeight.w400,
+                                          color: index == i ? Colors.white : kSub)),
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOutCubic,
+                                    width: index == i ? 14 : 0,
+                                    height: 3,
+                                    margin: const EdgeInsets.only(top: 3),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFF5B7A),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: const Color(0xFF17131F), width: 1.6),
+                                      color: index == i ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
-                                ),
-                            ]),
-                            const SizedBox(height: 2),
-                            Text('${items[i]['t']}',
-                                style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight:
-                                        index == i ? FontWeight.w600 : FontWeight.w400,
-                                    color: index == i ? Colors.white : kSub)),
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              width: index == i ? 14 : 0,
-                              height: 3,
-                              margin: const EdgeInsets.only(top: 3),
-                              decoration: BoxDecoration(
-                                color: index == i ? Colors.white : Colors.transparent,
-                                borderRadius: BorderRadius.circular(2),
+                                ]),
                               ),
                             ),
-                          ]),
-                        ),
-                      ),
                     ),
                 ]),
               ]),
@@ -706,6 +714,64 @@ class _GlassNavState extends State<GlassNav> {
           }),
         ),
       ),
+    );
+  }
+}
+
+/* --------------------------------- 背景 --------------------------------- */
+/// ★27.0 底栏中间大按钮：凸起圆形玻璃盘（Liquid Glass），选中时 systemBlue 填充
+class _BigNavBtn extends StatelessWidget {
+  const _BigNavBtn({required this.selected, required this.icon, required this.label, required this.onTap});
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // 圆形盘向上凸出 12，盖住玻璃胶囊上缘（中间主按钮）
+        Transform.translate(
+          offset: const Offset(0, -12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected ? kAccent : const Color(0x33FFFFFF),
+              gradient: selected
+                  ? null
+                  : const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x59FFFFFF), Color(0x1FFFFFFF)],
+                    ),
+              border: Border.all(
+                  color: selected ? kAccent : const Color(0x4DFFFFFF), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: selected ? kAccent.withValues(alpha: 0.35) : const Color(0x33000000),
+                  blurRadius: 16,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Icon(icon,
+                size: 26, color: selected ? Colors.white : const Color(0xE6FFFFFF)),
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? Colors.white : kSub)),
+      ]),
     );
   }
 }
@@ -727,7 +793,7 @@ class Wall extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [kBg, kBg2, Color(0xFF120E1B), kBg],
+          colors: [kBg, kBg2, Color(0xFF0E0E12), kBg],
         ),
       ),
       child: SizedBox.expand(),

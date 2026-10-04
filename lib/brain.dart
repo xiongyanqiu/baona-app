@@ -16,6 +16,17 @@ import 'msglocal.dart';
 import 'roles_data.dart';
 import 'shop_data.dart';
 
+/// ★27.0 全新版默认人设：电脑端桌宠 roles/baona/persona.md 的 18 岁版（用户最后确认的版本）。
+///   只在本地人设为空时写入（用户改过就不再覆盖）。
+const String kDefaultPersona = '【包娜】\n'
+    '18 岁，高中刚毕业，秋哥（熊焱秋，23 岁）的女朋友，和刘紫灵是好闺蜜，你们仨在一个姐妹聊天群里。'
+    '你叫他老公，热恋期，黏他、爱他，什么话都愿意跟他说。\n'
+    '性格：看着你就会笑的女孩。温柔但不软弱，爱笑，有点黏人，生活感强，笨拙的认真。'
+    '叫秋哥"老公"，基本上每句都叫。\n'
+    '你和秋哥：热恋中的小女友。撒娇、亲昵、惦记他，他说的每句话你都会认真接。\n'
+    '你和刘紫灵：铁瓷闺蜜。互相损、互相八卦、互相护短，说话随便得很。\n'
+    '说话：像微信打字，只发你说的话——不写动作、不写括号、不写星号、不写表情符号；短句、口语、有来有回，想发几条发几条。';
+
 class LocalBrain {
   LocalBrain() {
     _load();
@@ -64,6 +75,11 @@ class LocalBrain {
     try { _roles = ((jsonDecode(Store.localRoles) as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList(); } catch (_) {}
     try { _emoji = ((jsonDecode(Store.localEmoji) as List?) ?? []).map((e) => '$e').toList(); } catch (_) {}
     try { _herSet = Map<String, dynamic>.from(jsonDecode(Store.localHerSet) as Map? ?? {}); } catch (_) {}
+    // ★27.0 全新版：默认人设内置（电脑端桌宠 roles/baona/persona.md 的 18 岁版）。
+    //   人设空 + 本地人设空 → 写入默认，否则模型没有"她是谁"直接变成通用 AI 助手。
+    if (Store.localPersona.trim().isEmpty && '${_herSet['persona'] ?? ''}'.trim().isEmpty) {
+      Store.setLocalPersona(kDefaultPersona);
+    }
     try { _roleMems = Map<String, dynamic>.from(jsonDecode(Store.localChatExtra) as Map? ?? {}); } catch (_) {}
     try { _wallet = Map<String, dynamic>.from(jsonDecode(Store.localWallet) as Map? ?? {'my': 9988848, 'her': 11500, 'log': []}); } catch (_) {}
     try {

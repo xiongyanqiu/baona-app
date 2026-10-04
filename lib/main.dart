@@ -6,17 +6,10 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'brain.dart';
-import 'chat.dart';
-import 'chatlist.dart';
 import 'eye.dart';
-import 'game.dart';
-import 'wishes.dart';
+import 'msg.dart';
 import 'notify.dart';
-import 'pet.dart';
-import 'sheets.dart';
-import 'shop.dart';
 import 'theme.dart';
-import 'us.dart';
 
 /// 全局状态（一个 App 就一个连接、一份设置）
 class AppCtl extends ChangeNotifier {
@@ -63,8 +56,8 @@ class AppCtl extends ChangeNotifier {
   double get bgBlur => ((cfg['bgBlur'] as num?)?.toDouble() ?? 0).clamp(0, 24); // ★默认 0：照片先给清晰的，想要朦胧自己往上拖
   double get fontSize => (cfg['fontSize'] as num?)?.toDouble() ?? 16;
   int get bubbleMax => (cfg['bubbleMax'] as num?)?.toInt() ?? 4;
-  Color get myColor => hexColor('${cfg['myColor'] ?? '#7C6BF5'}');
-  Color get herColor => hexColor('${cfg['herColor'] ?? '#2A2A35'}');
+  Color get myColor => hexColor('${cfg['myColor'] ?? '#0A84FF'}'); // ★27.0 systemBlue
+  Color get herColor => hexColor('${cfg['herColor'] ?? '#1C1C1E'}'); // ★27.0 secondarySystemBackground
 
   void save() {
     Store.setCfg(cfg);
@@ -577,34 +570,18 @@ class _HomePageState extends State<HomePage> {
             key: homeKey,
             backgroundColor: Colors.transparent,
             extendBody: true, // ★内容从玻璃底栏底下滚过去（玻璃才是"浮在上面"的）
-            // ★从屏幕左边缘往右滑 = 看她在桌面上什么样（老公 2026-09-29 要的）
-            drawer: const PetDrawer(),
-            drawerEdgeDragWidth: 32,
-            drawerScrimColor: const Color(0x66000000),
             body: NotificationListener<ScrollNotification>(
               onNotification: _onScroll,
               // Scaffold(extendBody) 会往 body 里塞一份底栏高的底部 padding，各页 navSpace
-              //   又自己加一层，输入框/按钮被双重抬到半空（2026-09-30 报修）。这里把 Scaffold
-              //   塞的清掉，留白统一由各页 navSpace(基于 viewPadding) 自己算。
+              //   又自己加一层，输入框/按钮被双重抬到半空。这里把 Scaffold 塞的清掉，
+              //   留白统一由各页 navSpace(基于 viewPadding) 自己算。
               child: MediaQuery.removePadding(
                 context: context,
                 removeBottom: true,
                 child: Column(children: [
-                  // ★26.2.23 布局整理：聊天页不再叠全局头部（它自己有"消息"大标题），
-                  //   只有商城/游戏/愿望/我们才显示全局头像栏 —— 顶部不再两截、不挤
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _tab == 0
-                        ? const SizedBox(key: ValueKey('nohead'))
-                        : _Header(
-                            key: const ValueKey('head'),
-                            onSearch: () => openSearch(context),
-                            onSet: () => openSettings(context),
-                            onCtrl: () => openCtrl(context),
-                            onUs: () => _switchTab(4)),
-                  ),
                   Expanded(
-                    // ★2.0 第四波：PageView 左右滑动切换 —— 页面跟手走，才是 iOS 26 的标签栏
+                    // ★27.0 全新版：5 区 —— 消息 / 照片 / 视频 / 音频 / 中间大按钮=我的
+                    //   消息区 = 仅包娜单聊；其余 4 区先做入口占位，功能等用户想好
                     child: PageView(
                       controller: _pageCtrl,
                       physics: const BouncingScrollPhysics(),
@@ -620,11 +597,11 @@ class _HomePageState extends State<HomePage> {
                         });
                       },
                       children: const [
-                        KeepAliveWrapper(child: ChatListPage()),
-                        KeepAliveWrapper(child: ShopPage()),
-                        KeepAliveWrapper(child: GamePage()),
-                        KeepAliveWrapper(child: WishesPage()),
-                        KeepAliveWrapper(child: UsPage()),
+                        KeepAliveWrapper(child: MsgPage()),
+                        KeepAliveWrapper(child: _PlacePage('照片', Icons.photo_library_outlined, '照片区 · 功能等你构思')),
+                        KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思')),
+                        KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思')),
+                        KeepAliveWrapper(child: _PlacePage('我的', Icons.person_outline, '我的区 · 功能等你构思')),
                       ],
                     ),
                   ),
@@ -638,6 +615,7 @@ class _HomePageState extends State<HomePage> {
               child: _Nav(
                 tab: _tab,
                 unread: app.unread > 0,
+                big: 4, // ★27.0：中间大按钮 = 我的
                 onTap: (i) {
                   HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
                   _switchTab(i);
@@ -649,95 +627,59 @@ class _HomePageState extends State<HomePage> {
       );
 }
 
-class _Header extends StatelessWidget {
-  const _Header({super.key, required this.onSearch, required this.onSet, required this.onCtrl, required this.onUs});
-  final VoidCallback onSearch, onSet, onCtrl, onUs;
+/// ★27.0 占位页：照片 / 视频 / 音频 / 我的 —— 先做入口，功能等用户想好再填
+class _PlacePage extends StatelessWidget {
+  const _PlacePage(this.title, this.icon, this.hint);
+  final String title;
+  final IconData icon;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
-    final av = '${app.herSet['herAvatar'] ?? ''}';
-    return GlassBar(
-      top: true,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-        child: Row(children: [
-          GestureDetector(
-            onTap: onUs,
-            child: _HeaderAvatar(av: av),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(app.nick, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              Row(children: [
-                Container(width: 6, height: 6, decoration: BoxDecoration(color: app.online ? const Color(0xFF57D9A3) : kSub, shape: BoxShape.circle)),
-                const SizedBox(width: 5),
-                Flexible(child: Text(app.status, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kSub))),
-              ]),
-            ]),
-          ),
-          IconButton(onPressed: onSearch, icon: const Icon(Icons.search, size: 20), tooltip: '搜聊天'),
-          IconButton(onPressed: onCtrl, icon: const Icon(Icons.tune, size: 20), tooltip: '控制器'),
-          IconButton(onPressed: onSet, icon: const Icon(Icons.settings_outlined, size: 20), tooltip: '设置'),
-        ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// ★2026-10-02 闪屏修复：左上角头像独立组件 —— 同 URL 复用缓存 provider + gaplessPlayback，
-///   切页/全局 rebuild 时保留上一帧，不闪回"娜"字占位
-class _HeaderAvatar extends StatelessWidget {
-  const _HeaderAvatar({required this.av});
-  final String av;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = av.isEmpty ? null : avatarOf(av);
-    return Container(
-      width: 38,
-      height: 38,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(colors: [kAccent, kAccent2]),
-      ),
-      child: p == null
-          ? const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)))
-          : Image(
-              image: p,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-              errorBuilder: (_, __, ___) =>
-                  const Center(child: Text('娜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+    return SafeArea(
+      child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              color: kBg2,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0x26FFFFFF), width: 0.8),
             ),
+            child: Icon(icon, size: 34, color: kSub),
+          ),
+          const SizedBox(height: 18),
+          Text(title,
+              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+          const SizedBox(height: 7),
+          Text(hint, style: const TextStyle(fontSize: 13.5, color: kSub)),
+        ]),
+      ),
     );
   }
 }
 
 class _Nav extends StatelessWidget {
-  const _Nav({required this.tab, required this.onTap, this.unread = false});
+  const _Nav({required this.tab, required this.onTap, this.unread = false, this.big = -1});
   final int tab;
   final ValueChanged<int> onTap;
   final bool unread;
+  final int big; // ★27.0：中间大按钮下标（=我的）
 
   @override
   Widget build(BuildContext context) => GlassNav(
         index: tab,
         onTap: onTap,
+        big: big,
         items: [
+          // ★27.0 全新版 5 区：消息 / 照片 / 视频 / 音频 / 我的（中间大按钮）
           // ★她来消息时聊天那个图标上冒个小红点
-          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '聊天', 'badge': unread},
-          {'off': Icons.shopping_bag_outlined, 'on': Icons.shopping_bag, 't': '商城'},
-          {'off': Icons.casino_outlined, 'on': Icons.casino, 't': '游戏'},
-          {'off': Icons.auto_awesome_outlined, 'on': Icons.auto_awesome, 't': '愿望'},
-          {'off': Icons.favorite_border, 'on': Icons.favorite, 't': '我们'},
+          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '消息', 'badge': unread},
+          {'off': Icons.photo_library_outlined, 'on': Icons.photo_library, 't': '照片'},
+          {'off': Icons.videocam_outlined, 'on': Icons.videocam, 't': '视频'},
+          {'off': Icons.audiotrack_outlined, 'on': Icons.audiotrack, 't': '音频'},
+          {'off': Icons.person_outline, 'on': Icons.person, 't': '我的'},
         ],
       );
 }
