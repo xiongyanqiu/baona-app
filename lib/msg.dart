@@ -111,6 +111,8 @@ class _MsgPageState extends State<MsgPage> {
     final t = _inp.text.trim();
     if (a == null || t.isEmpty) return;
     _inp.clear();
+    // ★v27.0.2 发送后收键盘（微信习惯，也避免键盘状态卡住）
+    FocusManager.instance.primaryFocus?.unfocus();
     try {
       HapticFeedback.lightImpact();
     } catch (_) {}
@@ -410,13 +412,17 @@ class _MsgPageState extends State<MsgPage> {
   Widget build(BuildContext context) {
     final herAv = '${app.herSet['herAvatar'] ?? ''}';
     final myAv = _myAv.isNotEmpty ? _myAv : '${app.herSet['myAvatar'] ?? ''}';
+    // ★v27.0.2：去掉内层 Scaffold —— 之前两层 Scaffold 嵌套，键盘弹起时 body 被双重压缩，
+    //   输入栏被挤到顶栏下面、键盘状态卡住收不回。现在键盘避让统一交给 HomePage 外层 Scaffold。
+    //   GestureDetector 包一层：点空白处收起键盘（微信习惯）。
     return Wall(
       url: app.bg,
       blur: app.bgBlur,
       opacity: app.bgOpacity,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Column(children: [
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Column(children: [
           // 顶栏：左上角 名字+头像；右上角 设置
           GlassBar(
             top: true,
@@ -474,12 +480,15 @@ class _MsgPageState extends State<MsgPage> {
                         },
                       ),
           ),
-          // 输入栏（玻璃胶囊）—— ★v27.0.1 底部给悬浮底栏让位（胶囊+留白+安全区），不再被压住
+          // 输入栏（玻璃胶囊）
+          // ★v27.0.2 让位改动态：键盘弹起时键盘自己顶住输入栏（只留 10px）；
+          //   键盘收起时给悬浮底栏让位（胶囊 47 + 留白 14 + 安全区 34 + 呼吸 16 = 111），不再重合
           SafeArea(
             top: false,
             bottom: false,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(14, 6, 14, kNavInner + kNavMargin + kNavSafe + 8),
+              padding: EdgeInsets.fromLTRB(
+                  14, 6, 14, kbUp(context) ? 10 : kNavInner + kNavMargin + kNavSafe + 16),
               child: GlassSurface(
                 radius: kRCapsule,
                 blur: kBlur,
