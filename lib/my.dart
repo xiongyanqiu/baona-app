@@ -59,7 +59,7 @@ class _MyPageState extends State<MyPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // 大标题
         Padding(
-          padding: EdgeInsets.fromLTRB(20, navSpace(context) - 30, 20, 12),
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 12),
           child: Text('我的',
               style: const TextStyle(
                   fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
@@ -599,10 +599,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.format_size,
                   title: '字号',
                   sub: '对话文字大小',
+                  onTap: () {},
                   trailing: SizedBox(
                     width: 130,
                     child: Slider(
-                      value: app.fontSize.clamp(13, 20),
+                      value: app.fontSize.clamp(13, 20).toDouble(),
                       min: 13,
                       max: 20,
                       divisions: 7,
@@ -631,6 +632,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.memory,
                   title: '用长期记忆',
                   sub: '她回复时会带上记得的事',
+                  onTap: () {},
                   trailing: Switch(
                     value: _useMem,
                     activeColor: kAccent,
