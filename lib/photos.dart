@@ -4,11 +4,33 @@
 //   相簿：智能相簿（收藏/视频/自拍/截图）+ 系统相册（我的相簿）
 //   搜索：按名称/日期过滤 + 建议
 //   数据源：photo_manager 直读系统相册（本地，不占 App 包体）
+//   ★收藏用 App 本地记录（photo_manager 编译环境无 setFavorite/favorite，本地更稳）
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
+
+// ---------- 本地收藏（App 自己记，不依赖系统相册的收藏状态） ----------
+Future<Set<String>> _loadFav() async {
+  try {
+    final sp = await SharedPreferences.getInstance();
+    final s = sp.getString('v27.favIds');
+    if (s == null || s.isEmpty) return <String>{};
+    return (jsonDecode(s) as List).cast<String>().toSet();
+  } catch (_) {
+    return <String>{};
+  }
+}
+
+Future<void> _saveFav(Set<String> ids) async {
+  try {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString('v27.favIds', jsonEncode(ids.toList()));
+  } catch (_) {}
+}
 
 // ================= 照片区总页（底部 图库/相簿/搜索 三 tab） =================
 class PhotosPage extends StatefulWidget {
@@ -255,9 +277,9 @@ class _LibraryTabState extends State<_LibraryTab> {
   }
 
   Future<void> _favSel() async {
-    try {
-      await PhotoManager.editor.setFavorite(_sel.toList(), true);
-    } catch (_) {}
+    final fav = await _loadFav();
+    fav.addAll(_sel);
+    await _saveFav(fav);
     setState(() {
       _selMode = false;
       _sel.clear();
@@ -280,7 +302,7 @@ class _LibraryTabState extends State<_LibraryTab> {
     );
     if (ok != true) return;
     try {
-      await PhotoManager.editor.deleteAssetWithIds(_sel.toList());
+      await PhotoManager.editor.deleteWithIds(_sel.toList());
     } catch (_) {}
     setState(() {
       _assets.removeWhere((e) => _sel.contains(e.id));
@@ -432,8 +454,7 @@ class _AlbumsTab extends StatefulWidget {
 class _AlbumsTabState extends State<_AlbumsTab> {
   List<AssetPathEntity> _paths = [];
   bool _loading = true;
-  int _favCount = -1;
-  bool _hasFav = false;
+  int _favCount = 0;
 
   @override
   void initState() {
@@ -447,23 +468,12 @@ class _AlbumsTabState extends State<_AlbumsTab> {
     if (ps.isAuth) {
       final paths = await PhotoManager.getAssetPathList(
           type: RequestType.image, onlyAll: false);
-      // 统计收藏数
-      var fav = 0;
-      try {
-        final all = await PhotoManager.getAssetPathList(
-            type: RequestType.image, onlyAll: true);
-        if (all.isNotEmpty) {
-          final list = await all.first.getAssetListPaged(page: 0, size: 1000);
-          for (final e in list) {
-            if (e.favorite == true) fav++;
-          }
-        }
-      } catch (_) {}
+      // 收藏数 = App 本地记录（photo_manager 编译环境没有 favorite 字段）
+      final fav = await _loadFav();
       if (mounted) {
         setState(() {
-          _paths = paths.where((p) => p.assetCount > 0).toList();
-          _favCount = fav;
-          _hasFav = fav > 0;
+          _paths = paths;
+          _favCount = fav.length;
           _loading = false;
         });
       }
@@ -484,15 +494,6 @@ class _AlbumsTabState extends State<_AlbumsTab> {
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.6)),
           const Spacer(),
-          GestureDetector(
-            onTap: () async {
-              try {
-                await PhotoManager.editor.createAlbum('新建相簿');
-                _init();
-              } catch (_) {}
-            },
-            child: const Icon(Icons.add_circle_outline, size: 24, color: kAccent),
-          ),
         ]),
       ),
       Expanded(
@@ -502,25 +503,22 @@ class _AlbumsTabState extends State<_AlbumsTab> {
                 padding: const EdgeInsets.only(bottom: 20),
                 children: [
                   _sec('智能相簿'),
-                  if (_hasFav)
-                    _albumRow('收藏', Icons.favorite, _smartCount(_favCount),
-                        () => _openSmart('favorite')),
-                  _albumRow('视频', Icons.videocam, _smartCount(0),
+                  _albumRow('收藏', Icons.favorite, _favCount > 0 ? '$_favCount' : '—',
+                      () => _openSmart('favorite')),
+                  _albumRow('视频', Icons.videocam, '—',
                       () => _openSmart('video')),
-                  _albumRow('自拍', Icons.face, _smartCount(0),
+                  _albumRow('自拍', Icons.face, '—',
                       () => _openSmart('selfie')),
-                  _albumRow('截图', Icons.crop_original, _smartCount(0),
+                  _albumRow('截图', Icons.crop_original, '—',
                       () => _openSmart('screenshot')),
                   const SizedBox(height: 18),
                   _sec('我的相簿'),
-                  for (final p in _paths) _albumRow(p.name, Icons.photo_album, '${p.assetCount}', () => _openPath(p)),
+                  for (final p in _paths) _albumRow(p.name, Icons.photo_album, '', () => _openPath(p)),
                 ],
               ),
       ),
     ]);
   }
-
-  String _smartCount(int n) => n > 0 ? '$n' : '—';
 
   Widget _sec(String t) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
@@ -544,7 +542,7 @@ class _AlbumsTabState extends State<_AlbumsTab> {
         child: Icon(ic, size: 24, color: kAccent),
       ),
       title: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      subtitle: Text(count, style: const TextStyle(fontSize: 12.5, color: kSub)),
+      subtitle: count.isEmpty ? null : Text(count, style: const TextStyle(fontSize: 12.5, color: kSub)),
       trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
       onTap: onTap,
     );
@@ -667,7 +665,7 @@ class _SmartAlbumGridState extends State<_SmartAlbumGrid> {
   bool _match(AssetEntity e) {
     switch (widget.kind) {
       case 'favorite':
-        return e.favorite == true;
+        return _favIds.contains(e.id);
       case 'video':
         return e.type == AssetType.video;
       case 'selfie':
@@ -681,7 +679,10 @@ class _SmartAlbumGridState extends State<_SmartAlbumGrid> {
     }
   }
 
+  Set<String> _favIds = {};
+
   Future<void> _load() async {
+    _favIds = await _loadFav();
     try {
       final all = await PhotoManager.getAssetPathList(
           type: widget.kind == 'video' ? RequestType.video : RequestType.image,
@@ -787,10 +788,12 @@ class _SearchTabState extends State<_SearchTab> {
           type: RequestType.image, onlyAll: true);
       if (all.isEmpty) return;
       final list = await all.first.getAssetListPaged(page: 0, size: 10000);
+      final fav = await _loadFav();
       final out = list.where((e) {
+        if (k.contains('收藏')) return fav.contains(e.id);
         final t = '${e.title ?? ''}';
         final d = '${e.createDateTime.year}年${e.createDateTime.month}月${e.createDateTime.day}日';
-        return t.contains(k) || d.contains(k) || (e.favorite == true && k.contains('收藏'));
+        return t.contains(k) || d.contains(k);
       }).toList();
       if (!mounted) return;
       setState(() {
@@ -928,7 +931,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
   void initState() {
     super.initState();
     _loadFull(widget.initialIndex);
-    _fav = widget.assets[widget.initialIndex].favorite == true;
+    _initFav();
+  }
+
+  Future<void> _initFav() async {
+    final fav = await _loadFav();
+    if (mounted) {
+      setState(() => _fav = fav.contains(widget.assets[widget.initialIndex].id));
+    }
   }
 
   @override
@@ -966,10 +976,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
           controller: _pc,
           onPageChanged: (i) {
             setState(() => _idx = i);
-            _fav = widget.assets[i].favorite == true;
             _loadFull(i);
             _loadFull(i - 1);
             _loadFull(i + 1);
+            _loadFav().then((fav) {
+              if (mounted) setState(() => _fav = fav.contains(widget.assets[i].id));
+            });
           },
           itemCount: widget.assets.length,
           itemBuilder: (_, i) {
@@ -1021,7 +1033,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
             ),
           ),
         ),
-        // 底部：收藏 / 分享 / 删除
+        // 底部：收藏 / 删除
         AnimatedOpacity(
           opacity: _ui ? 1 : 0,
           duration: const Duration(milliseconds: 180),
@@ -1040,10 +1052,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                   _tool(Icons.favorite, _fav ? Colors.redAccent : Colors.white, () async {
-                    try {
-                      await PhotoManager.editor.setFavorite([e.id], !_fav);
-                      setState(() => _fav = !_fav);
-                    } catch (_) {}
+                    final fav = await _loadFav();
+                    if (_fav) {
+                      fav.remove(e.id);
+                    } else {
+                      fav.add(e.id);
+                    }
+                    await _saveFav(fav);
+                    setState(() => _fav = !_fav);
                   }),
                   _tool(Icons.delete_outline, Colors.white, () async {
                     final ok = await showDialog<bool>(
@@ -1061,7 +1077,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                     );
                     if (ok == true) {
                       try {
-                        await PhotoManager.editor.deleteAssetWithIds([e.id]);
+                        await PhotoManager.editor.deleteWithIds([e.id]);
                       } catch (_) {}
                       if (mounted) Navigator.pop(context);
                     }
