@@ -171,13 +171,16 @@ class _MsgPageState extends State<MsgPage> {
     await showModalBottomSheet(
       context: context,
       backgroundColor: kBg2, // secondarySystemBackground
+      isScrollControlled: true, // ★v27.0.6 内容超过屏幕时整块能上下滑（不然头像区滑不到）
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
       builder: (c) => SafeArea(
-        child: StatefulBuilder(
-          builder: (c, setSt) => Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(c).size.height * 0.92),
+          child: StatefulBuilder(
+            builder: (c, setSt) => SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 const Text('设置',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
@@ -286,7 +289,8 @@ class _MsgPageState extends State<MsgPage> {
                 },
               ),
               const SizedBox(height: 6),
-            ]),
+              ]),
+            ),
           ),
         ),
       ),
