@@ -143,9 +143,8 @@ class LocalBrain {
     try {
       await db.transaction((txn) async {
         await txn.delete('memories');
-        final batch = <Map<String, Object?>>[];
         for (final m in _memories) {
-          batch.add({
+          await txn.insert('memories', {
             'id': '${m['id'] ?? ''}',
             'text': '${m['text'] ?? ''}',
             'cat': '${m['cat'] ?? ''}',
@@ -153,12 +152,7 @@ class LocalBrain {
             'importance': (m['importance'] as num?)?.toDouble() ?? 5,
             't': (m['t'] as num?)?.toInt() ?? 0,
           });
-          if (batch.length >= 500) {
-            await txn.insertAll('memories', batch);
-            batch.clear();
-          }
         }
-        if (batch.isNotEmpty) await txn.insertAll('memories', batch);
       });
     } catch (_) {}
   }
