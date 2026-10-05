@@ -6,9 +6,12 @@
 //   数据源：photo_manager 直读系统相册（本地，不占 App 包体）
 //   ★收藏用 App 本地记录（photo_manager 编译环境无 setFavorite/favorite，本地更稳）
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
@@ -57,7 +60,16 @@ class _PhotosPageState extends State<PhotosPage> {
   }
 }
 
-// ================= 图库：按日期分组的网格 =================
+// ================= 图库：我添加的照片（App 本地库，iOS 相册式分组） =================
+// ★27.0.5：图库主页 = 自己添加的照片（存 App Documents/photos，重装不丢），
+//   右上角 + 从系统相册选多张导入；系统相册挪到"相簿"里看
+class _LocalPhoto {
+  final String path; // 文件绝对路径
+  final String id; // 文件名（收藏/选择用）
+  final DateTime addedAt;
+  _LocalPhoto(this.path, this.id, this.addedAt);
+}
+
 class _LibraryTab extends StatefulWidget {
   const _LibraryTab();
   @override
@@ -65,98 +77,68 @@ class _LibraryTab extends StatefulWidget {
 }
 
 class _LibraryTabState extends State<_LibraryTab> {
-  List<AssetEntity> _assets = [];
+  List<_LocalPhoto> _photos = [];
   bool _loading = true;
-  String _perm = ''; // ''=未处理 'denied' 'authorized' 'limited'
-  final Map<String, Uint8List> _thumbs = {}; // 缩略图缓存
-  final Map<String, DateTime> _days = {}; // assetId -> 日期（分组用）
-  int _loadBatch = 300; // 每次追加 300 张
-  final ScrollController _sc = ScrollController();
   bool _selMode = false;
   final Set<String> _sel = {};
 
   @override
   void initState() {
     super.initState();
-    _sc.addListener(_maybeLoadMore);
-    _init();
+    _loadLocal();
   }
 
-  @override
-  void dispose() {
-    _sc.dispose();
-    super.dispose();
+  Future<Directory> _photosDir() async {
+    final docs = await getApplicationDocumentsDirectory();
+    final d = Directory('${docs.path}/photos');
+    if (!d.existsSync()) d.createSync(recursive: true);
+    return d;
   }
 
-  Future<void> _init() async {
-    final ps = await PhotoManager.requestPermissionExtend();
-    if (!mounted) return;
-    if (ps.isAuth) {
-      setState(() {
-        _perm = ps.hasAccess ? 'authorized' : 'limited';
-      });
-      await _loadMore(reset: true);
-    } else {
-      setState(() => _perm = 'denied');
-    }
-  }
-
-  Future<void> _loadMore({bool reset = false}) async {
-    if (reset) {
-      _assets.clear();
-      _thumbs.clear();
-      _days.clear();
-    }
+  Future<void> _loadLocal() async {
     try {
-      // onlyAll=true 拿到系统"所有照片"路径（相册的全部）
-      final all = await PhotoManager.getAssetPathList(
-          type: RequestType.image, onlyAll: true);
-      if (all.isEmpty) {
-        if (mounted) setState(() => _loading = false);
-        return;
+      final dir = await _photosDir();
+      final files = <_LocalPhoto>[];
+      for (final f in dir.listSync()) {
+        if (f is! File) continue;
+        final p = f.path.toLowerCase();
+        if (!(p.endsWith('.jpg') || p.endsWith('.jpeg') || p.endsWith('.png') ||
+            p.endsWith('.heic') || p.endsWith('.webp'))) continue;
+        final st = f.statSync();
+        files.add(_LocalPhoto(f.path, f.uri.pathSegments.last, st.modified));
       }
-      final path = all.first;
-      final page = (_assets.length ~/ _loadBatch);
-      final list = await path.getAssetListPaged(
-          page: page, size: _loadBatch);
-      if (list.isEmpty) {
-        if (mounted) setState(() => _loading = false);
-        return;
-      }
-      final merged = List<AssetEntity>.from(_assets)..addAll(list);
-      // 按创建时间降序
-      merged.sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
-      for (final e in list) {
-        _days[e.id] = e.createDateTime;
-      }
+      files.sort((a, b) => b.addedAt.compareTo(a.addedAt));
       if (mounted) {
         setState(() {
-          _assets = merged;
+          _photos = files;
           _loading = false;
         });
-        _loadThumbs(list);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _loadThumbs(List<AssetEntity> list) async {
-    for (final e in list) {
-      if (_thumbs.containsKey(e.id)) continue;
-      try {
-        final b = await e.thumbnailDataWithSize(
-            ThumbnailSize.square(560), quality: 82);
-        if (b != null && mounted) {
-          setState(() => _thumbs[e.id] = b);
-        }
-      } catch (_) {}
-    }
-  }
-
-  void _maybeLoadMore() {
-    if (_sc.position.pixels >= _sc.position.maxScrollExtent - 1200) {
-      _loadMore();
+  /// 右上角 +：从系统相册多选导入到 App 本地图库
+  Future<void> _add() async {
+    try {
+      final pics = await ImagePicker()
+          .pickMultiImage(limit: 100, imageQuality: 92);
+      if (pics.isEmpty) return;
+      final dir = await _photosDir();
+      var i = 0;
+      for (final p in pics) {
+        final bytes = await p.readAsBytes();
+        final name =
+            '${DateTime.now().millisecondsSinceEpoch}_${i++}.jpg';
+        await File('${dir.path}/$name').writeAsBytes(bytes);
+      }
+      await _loadLocal();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('添加失败：$e'), behavior: SnackBarBehavior.floating));
+      }
     }
   }
 
@@ -172,10 +154,10 @@ class _LibraryTabState extends State<_LibraryTab> {
   }
 
   // 按天分组，保持降序
-  List<(String, List<AssetEntity>)> _groupByDay() {
-    final map = <String, List<AssetEntity>>{};
-    for (final e in _assets) {
-      final d = _days[e.id] ?? e.createDateTime;
+  List<(String, List<_LocalPhoto>)> _groupByDay() {
+    final map = <String, List<_LocalPhoto>>{};
+    for (final e in _photos) {
+      final d = e.addedAt;
       final key = '${d.year}-${d.month}-${d.day}';
       map.putIfAbsent(key, () => []).add(e);
     }
@@ -190,9 +172,9 @@ class _LibraryTabState extends State<_LibraryTab> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      // 大标题（iOS 相册风格）
+      // 大标题（iOS 相册风格）+ 添加按钮
       Padding(
-        padding: EdgeInsets.fromLTRB(20, navSpace(context) - 30, 20, 4),
+        padding: EdgeInsets.fromLTRB(20, navSpace(context) - 30, 14, 4),
         child: Row(children: [
           Text('图库',
               style: TextStyle(
@@ -206,8 +188,18 @@ class _LibraryTabState extends State<_LibraryTab> {
                 _selMode = false;
                 _sel.clear();
               }),
-              child: Text('取消',
-                  style: TextStyle(fontSize: 16, color: kAccent)),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Text('取消', style: TextStyle(fontSize: 16, color: kAccent)),
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: _add,
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.add_circle_outline, size: 26, color: kAccent),
+              ),
             ),
         ]),
       ),
@@ -255,7 +247,7 @@ class _LibraryTabState extends State<_LibraryTab> {
         backgroundColor: kBg2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: const Text('删除照片', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: Text('确定删除选中的 ${_sel.length} 张照片吗？（会从系统相册删除）', style: const TextStyle(fontSize: 14.5, height: 1.4)),
+        content: Text('确定删除选中的 ${_sel.length} 张照片吗？', style: const TextStyle(fontSize: 14.5, height: 1.4)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(cc, false), child: const Text('取消', style: TextStyle(color: kSub))),
           TextButton(onPressed: () => Navigator.pop(cc, true), child: const Text('删除', style: TextStyle(color: kBad, fontWeight: FontWeight.w600))),
@@ -264,44 +256,40 @@ class _LibraryTabState extends State<_LibraryTab> {
     );
     if (ok != true) return;
     try {
-      await PhotoManager.editor.deleteWithIds(_sel.toList());
+      for (final id in _sel) {
+        final f = File(_photos.firstWhere((p) => p.id == id).path);
+        if (f.existsSync()) f.deleteSync();
+      }
     } catch (_) {}
     setState(() {
-      _assets.removeWhere((e) => _sel.contains(e.id));
+      _photos.removeWhere((p) => _sel.contains(p.id));
       _selMode = false;
       _sel.clear();
     });
   }
 
   Widget _buildBody() {
-    if (_perm == 'denied') {
+    if (_loading && _photos.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: kAccent));
+    }
+    if (_photos.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.photo_library_outlined, size: 54, color: kSub),
           const SizedBox(height: 14),
-          const Text('需要照片访问权限', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text('还没有添加照片', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          const Text('去系统设置里允许访问相册', style: TextStyle(fontSize: 13, color: kSub)),
+          const Text('点右上角 + 从相册添加', style: TextStyle(fontSize: 13, color: kSub)),
           const SizedBox(height: 14),
           TextButton(
-            onPressed: () => PhotoManager.openSetting(),
-            child: const Text('打开设置', style: TextStyle(color: kAccent)),
+            onPressed: _add,
+            child: const Text('添加照片', style: TextStyle(color: kAccent, fontSize: 15)),
           ),
         ]),
       );
     }
-    if (_loading && _assets.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: kAccent));
-    }
-    if (_assets.isEmpty) {
-      return const Center(
-        child: Text('相册里还没有照片',
-            style: TextStyle(fontSize: 15, color: kSub)),
-      );
-    }
     final groups = _groupByDay();
     return ListView.builder(
-      controller: _sc,
       padding: const EdgeInsets.only(bottom: 20),
       itemCount: groups.length,
       itemBuilder: (_, gi) {
@@ -319,7 +307,7 @@ class _LibraryTabState extends State<_LibraryTab> {
     );
   }
 
-  Widget _grid(List<AssetEntity> list) {
+  Widget _grid(List<_LocalPhoto> list) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -334,8 +322,7 @@ class _LibraryTabState extends State<_LibraryTab> {
     );
   }
 
-  Widget _cell(AssetEntity e) {
-    final b = _thumbs[e.id];
+  Widget _cell(_LocalPhoto e) {
     final selected = _sel.contains(e.id);
     return GestureDetector(
       onTap: () {
@@ -348,7 +335,8 @@ class _LibraryTabState extends State<_LibraryTab> {
             }
           });
         } else {
-          _openViewer(e.id);
+          final idx = _photos.indexOf(e);
+          _openViewer(idx);
         }
       },
       onLongPress: () {
@@ -361,11 +349,11 @@ class _LibraryTabState extends State<_LibraryTab> {
         }
       },
       child: Stack(fit: StackFit.expand, children: [
-        if (b != null)
-          Image.memory(b, fit: BoxFit.cover)
-        else
-          Container(color: kBg2, child: const Center(
-              child: Icon(Icons.image_outlined, color: kSub, size: 22))),
+        Image.file(File(e.path), fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+                color: kBg2,
+                child: const Center(
+                    child: Icon(Icons.broken_image_outlined, color: kSub, size: 22)))),
         if (selected)
           Container(
             decoration: BoxDecoration(
@@ -392,14 +380,12 @@ class _LibraryTabState extends State<_LibraryTab> {
     );
   }
 
-  void _openViewer(String id) {
-    final idx = _assets.indexWhere((e) => e.id == id);
-    if (idx < 0) return;
+  void _openViewer(int idx) {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.black,
-      pageBuilder: (_, __, ___) => PhotoViewer(
-        assets: _assets,
+      pageBuilder: (_, __, ___) => _FileViewer(
+        photos: _photos,
         initialIndex: idx,
       ),
     ));
@@ -1054,6 +1040,179 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   Widget _tool(IconData ic, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Icon(ic, color: color, size: 26),
+      ),
+    );
+  }
+}
+
+// ================= 本地图库全屏查看器（我添加的照片） =================
+class _FileViewer extends StatefulWidget {
+  const _FileViewer({super.key, required this.photos, required this.initialIndex});
+  final List<_LocalPhoto> photos;
+  final int initialIndex;
+  @override
+  State<_FileViewer> createState() => _FileViewerState();
+}
+
+class _FileViewerState extends State<_FileViewer> {
+  late int _idx = widget.initialIndex;
+  late final PageController _pc = PageController(initialPage: widget.initialIndex);
+  bool _ui = true;
+  bool _fav = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFav();
+  }
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initFav() async {
+    final fav = await _loadFav();
+    if (mounted) {
+      setState(() => _fav = fav.contains(widget.photos[_idx].id));
+    }
+  }
+
+  String _dateLabel() {
+    final d = widget.photos[_idx].addedAt;
+    return '${d.year}年${d.month}月${d.day}日 ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.photos[_idx];
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(children: [
+        PageView.builder(
+          controller: _pc,
+          onPageChanged: (i) {
+            setState(() => _idx = i);
+            _loadFav().then((fav) {
+              if (mounted) setState(() => _fav = fav.contains(widget.photos[i].id));
+            });
+          },
+          itemCount: widget.photos.length,
+          itemBuilder: (_, i) {
+            return GestureDetector(
+              onTap: () => setState(() => _ui = !_ui),
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Center(
+                  child: Image.file(File(widget.photos[i].path),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.broken_image_outlined,
+                              color: Colors.white54, size: 44))),
+                ),
+              ),
+            );
+          },
+        ),
+        // 顶部：返回 + 序号 + 添加时间
+        AnimatedOpacity(
+          opacity: _ui ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: SafeArea(
+            bottom: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(4, 6, 14, 10),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xAA000000), Color(0x00000000)],
+                ),
+              ),
+              child: Row(children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '${_idx + 1} / ${widget.photos.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Text(_dateLabel(),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13.5)),
+              ]),
+            ),
+          ),
+        ),
+        // 底部：收藏 / 删除
+        AnimatedOpacity(
+          opacity: _ui ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xAA000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                  _ftool(Icons.favorite, _fav ? Colors.redAccent : Colors.white, () async {
+                    final fav = await _loadFav();
+                    if (_fav) {
+                      fav.remove(e.id);
+                    } else {
+                      fav.add(e.id);
+                    }
+                    await _saveFav(fav);
+                    setState(() => _fav = !_fav);
+                  }),
+                  _ftool(Icons.delete_outline, Colors.white, () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (cc) => AlertDialog(
+                        backgroundColor: const Color(0xFF1C1C1E),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        title: const Text('删除照片', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        content: const Text('确定删除这张照片吗？', style: TextStyle(fontSize: 14.5)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(cc, false), child: const Text('取消', style: TextStyle(color: Colors.grey))),
+                          TextButton(onPressed: () => Navigator.pop(cc, true), child: const Text('删除', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600))),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      try {
+                        final f = File(e.path);
+                        if (f.existsSync()) f.deleteSync();
+                      } catch (_) {}
+                      if (mounted) Navigator.pop(context);
+                    }
+                  }),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _ftool(IconData ic, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
