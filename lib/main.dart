@@ -507,6 +507,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _tab = 0;
+  int _photoTab = 0; // ★27.0.4 照片区内部子页（0 图库 1 相簿 2 搜索），底栏由 HomePage 统一接管
   bool _navHidden = false;
   double _lastPix = 0;
   // ★2.0 第四波：页面换成 PageView —— 手指左右滑页面跟手走（iOS 26 Liquid Glass 标签栏规范）
@@ -597,9 +598,12 @@ class _HomePageState extends State<HomePage> {
                           app.chatVisible = (i == 0);
                         });
                       },
-                      children: const [
+                      children: [
                         KeepAliveWrapper(child: MsgPage()),
-                        KeepAliveWrapper(child: PhotosPage()),
+                        KeepAliveWrapper(child: PhotosPage(
+                          photoTab: _photoTab,
+                          onPhotoTab: (i) => setState(() => _photoTab = i),
+                        )),
                         KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思')),
                         KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思')),
                         KeepAliveWrapper(child: _PlacePage('我的', Icons.person_outline, '我的区 · 功能等你构思')),
@@ -613,14 +617,30 @@ class _HomePageState extends State<HomePage> {
               offset: _navHidden ? const Offset(0, 1.3) : Offset.zero,
               duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,
-              child: _Nav(
-                tab: _tab,
-                unread: app.unread > 0,
-                onTap: (i) {
-                  HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
-                  _switchTab(i);
-                },
-              ),
+              // ★27.0.4：底栏只有一条 —— 在照片区时整条底栏换成照片的（返回+图库/相簿/搜索），
+              //   其它区是功能区 5 项，不再出现两层底栏
+              child: _tab == 1
+                  ? _PhotoNav(
+                      photoTab: _photoTab,
+                      onTap: (i) {
+                        HapticFeedback.selectionClick();
+                        if (i == 0) {
+                          // ★返回：退出照片区，回消息页，照片子页复位到图库
+                          _switchTab(0);
+                          setState(() => _photoTab = 0);
+                        } else {
+                          setState(() => _photoTab = i - 1);
+                        }
+                      },
+                    )
+                  : _Nav(
+                      tab: _tab,
+                      unread: app.unread > 0,
+                      onTap: (i) {
+                        HapticFeedback.selectionClick(); // ★点哪儿手感跟一下（iOS 上有效）
+                        _switchTab(i);
+                      },
+                    ),
             ),
           ),
         ),
@@ -678,6 +698,26 @@ class _Nav extends StatelessWidget {
           {'off': Icons.videocam_outlined, 'on': Icons.videocam, 't': '视频'},
           {'off': Icons.audiotrack_outlined, 'on': Icons.audiotrack, 't': '音频'},
           {'off': Icons.person_outline, 'on': Icons.person, 't': '我的'},
+        ],
+      );
+}
+
+/// ★27.0.4 照片专用底栏：最左边返回（退出照片区回消息页），后面是图库/相簿/搜索
+///   进照片区时整条底栏替换成这个，不再有两层底栏
+class _PhotoNav extends StatelessWidget {
+  const _PhotoNav({required this.photoTab, required this.onTap});
+  final int photoTab; // 0 图库 1 相簿 2 搜索
+  final ValueChanged<int> onTap; // 0=返回 1=图库 2=相簿 3=搜索
+
+  @override
+  Widget build(BuildContext context) => GlassNav(
+        index: photoTab + 1,
+        onTap: onTap,
+        items: [
+          {'off': Icons.arrow_back_ios_new, 'on': Icons.arrow_back_ios_new, 't': '返回'},
+          {'off': Icons.photo_library_outlined, 'on': Icons.photo_library, 't': '图库'},
+          {'off': Icons.photo_album_outlined, 'on': Icons.photo_album, 't': '相簿'},
+          {'off': Icons.search, 'on': Icons.search, 't': '搜索'},
         ],
       );
 }

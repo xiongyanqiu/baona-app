@@ -32,65 +32,27 @@ Future<void> _saveFav(Set<String> ids) async {
   } catch (_) {}
 }
 
-// ================= 照片区总页（底部 图库/相簿/搜索 三 tab） =================
+// ================= 照片区总页 =================
+// ★27.0.4：底栏由 HomePage 统一接管（进照片区时全局底栏变成 返回+图库/相簿/搜索），
+//   这里不再画自己的底栏，只接收 photoTab / onPhotoTab 受控切换子页
 class PhotosPage extends StatefulWidget {
-  const PhotosPage({super.key});
+  const PhotosPage({super.key, required this.photoTab, required this.onPhotoTab});
+  final int photoTab; // 0 图库 1 相簿 2 搜索
+  final ValueChanged<int> onPhotoTab;
   @override
   State<PhotosPage> createState() => _PhotosPageState();
 }
 
 class _PhotosPageState extends State<PhotosPage> {
-  int _tab = 0; // 0 图库 1 相簿 2 搜索
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Expanded(
-        child: IndexedStack(
-          index: _tab,
-          children: const [
-            _LibraryTab(),
-            _AlbumsTab(),
-            _SearchTab(),
-          ],
-        ),
-      ),
-      // 底部小 tab：跟 iOS 相册同款（图标+文字，选中 systemBlue）
-      Container(
-        decoration: BoxDecoration(
-          color: kBg.withValues(alpha: 0.6),
-          border: Border(top: BorderSide(color: kHair, width: 0.5)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 6, top: 4),
-            child: Row(children: [
-              _pTab(0, Icons.photo_library_outlined, Icons.photo_library, '图库'),
-              _pTab(1, Icons.photo_album_outlined, Icons.photo_album, '相簿'),
-              _pTab(2, Icons.search, Icons.search, '搜索'),
-            ]),
-          ),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _pTab(int i, IconData off, IconData on, String t) {
-    final sel = _tab == i;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _tab = i),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(sel ? on : off, size: 23, color: sel ? kAccent : kSub),
-          const SizedBox(height: 3),
-          Text(t,
-              style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? kAccent : kSub)),
-        ]),
-      ),
+    return IndexedStack(
+      index: widget.photoTab,
+      children: const [
+        _LibraryTab(),
+        _AlbumsTab(),
+        _SearchTab(),
+      ],
     );
   }
 }
