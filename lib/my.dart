@@ -10,6 +10,7 @@ import 'api.dart';
 import 'brain.dart';
 import 'main.dart';
 import 'theme.dart';
+import 'us.dart'; // ★v27.0.9 壁纸：pickAlbumImage 从手机相册选背景图
 
 // ================= 「我的」主页 =================
 class MyPage extends StatefulWidget {
@@ -660,9 +661,151 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ]),
+              // ★v27.0.9 聊天壁纸（复刻 b 系列：默认深色 / 从相册选一张 / 清掉 + 透明度/模糊）
+              _group([
+                _row(
+                  icon: Icons.wallpaper,
+                  title: '聊天壁纸',
+                  sub: app.bg.isEmpty ? '现在是默认深色背景' : '已设置自定义背景',
+                  onTap: _pickWall,
+                ),
+                _row(
+                  icon: Icons.blur_on,
+                  title: '模糊度',
+                  sub: app.bg.isEmpty ? '先选一张壁纸才能调' : '当前 ${app.bgBlur.round()}',
+                  onTap: app.bg.isEmpty ? null : () {},
+                  trailing: app.bg.isEmpty
+                      ? const Icon(Icons.chevron_right, size: 18, color: kSub)
+                      : SizedBox(
+                          width: 130,
+                          child: Slider(
+                            value: app.bgBlur,
+                            min: 0,
+                            max: 24,
+                            divisions: 24,
+                            activeColor: kAccent,
+                            inactiveColor: const Color(0x33FFFFFF),
+                            onChanged: (v) {
+                              app.cfg['bgBlur'] = v;
+                              app.save();
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                ),
+                _row(
+                  icon: Icons.opacity,
+                  title: '照片透明度',
+                  sub: app.bg.isEmpty ? '先选一张壁纸才能调' : '当前 ${(app.bgOpacity * 100).round()}%',
+                  onTap: app.bg.isEmpty ? null : () {},
+                  trailing: app.bg.isEmpty
+                      ? const Icon(Icons.chevron_right, size: 18, color: kSub)
+                      : SizedBox(
+                          width: 130,
+                          child: Slider(
+                            value: app.bgOpacity,
+                            min: 0.05,
+                            max: 1,
+                            divisions: 19,
+                            activeColor: kAccent,
+                            inactiveColor: const Color(0x33FFFFFF),
+                            onChanged: (v) {
+                              app.cfg['bgOpacity'] = v;
+                              app.save();
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                ),
+                if (app.bg.isNotEmpty)
+                  _row(
+                    icon: Icons.close,
+                    title: '清掉壁纸',
+                    sub: '回到默认深色背景',
+                    danger: true,
+                    onTap: () {
+                      app.put('bg', '');
+                      setState(() {});
+                    },
+                  ),
+              ]),
             ]),
           ),
         ]),
+      ),
+    );
+  }
+
+  /// ★v27.0.9 选壁纸：默认深色 / 从相册选一张（本地相册）
+  Future<void> _pickWall() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Text('聊天壁纸',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.pop(c),
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(color: const Color(0x33FFFFFF), shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 16, color: kSub),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.dark_mode_outlined, color: kAccent),
+              title: const Text('默认深色', style: TextStyle(fontSize: 15.5)),
+              subtitle: const Text('不设壁纸，用系统深色渐变'),
+              trailing: app.bg.isEmpty ? const Icon(Icons.check, color: kAccent, size: 20) : const Icon(Icons.chevron_right, size: 18, color: kSub),
+              onTap: () {
+                app.put('bg', '');
+                Navigator.pop(c);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.photo_library_outlined, color: kAccent),
+              title: const Text('从相册选一张', style: TextStyle(fontSize: 15.5)),
+              subtitle: const Text('在手机相册里挑一张当聊天背景'),
+              trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+              onTap: () async {
+                Navigator.pop(c);
+                final url = await pickAlbumImage(context);
+                if (!mounted || url.isEmpty) return;
+                app.put('bg', url);
+                if (app.bgBlur <= 0) {
+                  app.cfg['bgBlur'] = 8;
+                  app.cfg['bgOpacity'] = 0.9;
+                  app.save();
+                }
+                setState(() {});
+              },
+            ),
+            if (app.bg.isNotEmpty)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.close, color: kBad),
+                title: const Text('清掉壁纸', style: TextStyle(fontSize: 15.5, color: kBad)),
+                trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+                onTap: () {
+                  app.put('bg', '');
+                  Navigator.pop(c);
+                  setState(() {});
+                },
+              ),
+          ]),
+        ),
       ),
     );
   }
@@ -685,7 +828,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required IconData icon,
     required String title,
     required String sub,
-    required VoidCallback onTap,
+    VoidCallback? onTap, // ★v27.0.9 可空：壁纸没选时滑块行点了没反应
     Widget? trailing,
     bool danger = false,
   }) {

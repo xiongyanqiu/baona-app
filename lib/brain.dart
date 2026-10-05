@@ -461,13 +461,39 @@ class LocalBrain {
     _chatCount++;
     _maybeAutoSummary();
     _maybeReflect();
-    final t = DateTime.now().millisecondsSinceEpoch;
-    // ★26.2.20 回复直接落盘：退出去、切后台也不丢（以前只在对话页打开时才存，关着就没了）
-    final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-    h2.add({'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'});
-    await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
-    _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'}});
+    // ★v27.0.9 分段发送（b系列的老习惯，v27 重构时丢了）：按句子边界拆段，逐条落盘+逐条广播，
+    //   像真人打字一条一条来。超过 6 段就合并，避免拖太久。
+    final segs = _segments(content);
+    final wait = segs.length > 1 ? const Duration(milliseconds: 450) : Duration.zero;
+    for (final s in segs) {
+      final t = DateTime.now().millisecondsSinceEpoch;
+      final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+      h2.add({'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t'});
+      await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
+      _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t'}});
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
+    }
     return {'ok': true};
+  }
+
+  /// 按句号/感叹/问号/省略号/换行切段（真人感），每段至少 4 字，上限 6 段
+  List<String> _segments(String s) {
+    final raw = s.split(RegExp(r'(?<=[。！？!?…\n])')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final out = <String>[];
+    var buf = '';
+    for (final seg in raw) {
+      if (out.length >= 5) { // 已 5 段 → 剩的全并进最后一段（不丢内容，只是节奏变慢变稳）
+        buf = out.removeLast();
+        out.add(buf + seg);
+        continue;
+      }
+      if (seg.length < 4) { buf += seg; continue; }
+      if (buf.isNotEmpty) { out.add((buf + seg).trim()); buf = ''; }
+      else out.add(seg);
+    }
+    if (buf.trim().isNotEmpty) out.add(buf.trim());
+    if (out.isEmpty) out.add(s.trim());
+    return out;
   }
 
   Future<Map<String, dynamic>> history({int limit = 30}) async {

@@ -96,6 +96,7 @@ class _MsgPageState extends State<MsgPage> {
   }
 
   void _jumpBottom({bool instant = false}) {
+    if (!mounted) return; // ★v27.0.9 页面已销毁就别再碰滚动条（发送后延迟补偿可能晚于退出）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_sc.hasClients) return;
       try {
@@ -120,7 +121,11 @@ class _MsgPageState extends State<MsgPage> {
     final m = Msg(role: 'me', content: t, st: 'pending', time: DateTime.now().millisecondsSinceEpoch, cid: cid);
     setState(() => _msgs.add(m));
     await MsgsLocal.save('baona', _msgs);
-    _jumpBottom();
+    // ★v27.0.9 发送时不再追键盘动画：键盘收起过程中列表高度一直在变，
+    //   animateTo 追着变动的 maxScrollExtent 跑 → 页面乱弹。改成瞬时定位两次：
+    //   先立刻贴底，等键盘动画（约 250ms）结束后再纠正一次最终位置。
+    _jumpBottom(instant: true);
+    Future.delayed(const Duration(milliseconds: 380), () => _jumpBottom(instant: true));
     final r = await a.send({'text': t, 'cid': cid});
     if (mounted) {
       setState(() => m.st = r['ok'] == true ? 'ok' : 'failed');
@@ -544,7 +549,8 @@ class _MsgPageState extends State<MsgPage> {
   Widget _row(Msg m, String herAv, String myAv) {
     final me = m.role == 'me';
     final bubble = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.68),
+      // ★v27.0.9 文字太窄：0.68 → 0.78（微信级舒适宽度，头像+留白之外几乎铺满）
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: me ? kAccent : kBg2,
