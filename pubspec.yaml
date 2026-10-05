@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 27.0.7+8
+version: 27.0.8+9
 environment:
   sdk: ^3.13.4
 
@@ -46,6 +46,8 @@ dependencies:
   webview_flutter: ^4.10.0              # ★b40 抖音手机直连（内置官方网页版，不走电脑中转）
   file_picker: ^8.1.2                   # ★26.2.11 音频库：从文件选音频
   photo_manager: ^3.6.0                # ★26.2.20 相册/视频双写系统相册（重装 App 也不丢）
+  sqflite: ^2.3.0                      # ★27.0.8 超长期记忆：记忆落 SQLite（SP 兜底）
+  path: ^1.9.0                         # ★27.0.8 sqflite 路径拼接
 
 dev_dependencies:
   flutter_test:

@@ -7,9 +7,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
 
 import 'api.dart';
 import 'msglocal.dart';
@@ -38,7 +40,7 @@ class LocalBrain {
   // -------------------- 内存态（全部有 Store 落盘） --------------------
   List<Map<String, dynamic>> _providers = [];
   String _activeId = '';
-  List<Map<String, dynamic>> _memories = []; // {id,t,text,cat,type}
+  List<Map<String, dynamic>> _memories = []; // {id,t,text,cat,type,importance}
   Map<String, dynamic> _wishes = {'granted': 0, 'used': 0, 'done': 0, 'wishes': []};
   List<Map<String, dynamic>> _groups = []; // {id,name,members:[roleId]}
   List<Map<String, dynamic>> _roles = []; // 自建角色 {id,name,letter,persona,rules}
@@ -46,6 +48,7 @@ class LocalBrain {
   Map<String, dynamic> _herSet = {}; // 人设 / 开关们 / 昵称 等
   Map<String, dynamic> _roleMems = {}; // roleId -> [记忆 JSON]
   int _chatCount = 0; // 主对话累计条数（自动摘要触发）
+  Database? _memDb; // ★27.0.8 超长期记忆：SQLite（SP 兜底）
 
   // ★26.2.18 全本地娱乐：钱包/背包/飞行棋/相册
   Map<String, dynamic> _wallet = {'my': 9988848, 'her': 11500, 'log': []}; // 从桌宠迁移：我的钱包/她的钱包/流水
@@ -70,6 +73,8 @@ class LocalBrain {
       _activeId = kDefaultActiveProvider;
     }
     try { _memories = ((jsonDecode(Store.localMemories) as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList(); } catch (_) {}
+    // ★27.0.8 超长期记忆：SP 空但 SQLite 有数据 → 补载回来
+    if (_memories.isEmpty) _loadDbMemories();
     try { _wishes = Map<String, dynamic>.from(jsonDecode(Store.localWishes) as Map? ?? {'granted': 0, 'used': 0, 'done': 0, 'wishes': []}); } catch (_) {}
     try { _groups = ((jsonDecode(Store.localGroups) as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList(); } catch (_) {}
     try { _roles = ((jsonDecode(Store.localRoles) as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList(); } catch (_) {}
@@ -112,7 +117,69 @@ class LocalBrain {
   }
 
   void _saveLlm() => Store.setLlmCfgJson(jsonEncode({'providers': _providers, 'activeId': _activeId}));
-  void _saveMems() => Store.setLocalMemories(jsonEncode(_memories));
+  // ★27.0.8 Step3：SP 兜底 + SQLite 异步镜像（超长期量级；DB 失败静默，功能不受影响）
+  void _saveMems() {
+    Store.setLocalMemories(jsonEncode(_memories));
+    _syncDb();
+  }
+  Future<Database?> _openMemDb() async {
+    if (_memDb != null) return _memDb;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final path = p.join(dir.path, 'baona_mem.db');
+      _memDb = await openDatabase(path, version: 1, onCreate: (db, v) async {
+        await db.execute('CREATE TABLE memories('
+            'id TEXT PRIMARY KEY, text TEXT NOT NULL, cat TEXT, type TEXT,'
+            'importance REAL DEFAULT 5, t INTEGER NOT NULL)');
+      });
+      return _memDb;
+    } catch (_) {
+      return null;
+    }
+  }
+  Future<void> _syncDb() async {
+    final db = await _openMemDb();
+    if (db == null) return;
+    try {
+      await db.transaction((txn) async {
+        await txn.delete('memories');
+        final batch = <Map<String, Object?>>[];
+        for (final m in _memories) {
+          batch.add({
+            'id': '${m['id'] ?? ''}',
+            'text': '${m['text'] ?? ''}',
+            'cat': '${m['cat'] ?? ''}',
+            'type': '${m['type'] ?? ''}',
+            'importance': (m['importance'] as num?)?.toDouble() ?? 5,
+            't': (m['t'] as num?)?.toInt() ?? 0,
+          });
+          if (batch.length >= 500) {
+            await txn.insertAll('memories', batch);
+            batch.clear();
+          }
+        }
+        if (batch.isNotEmpty) await txn.insertAll('memories', batch);
+      });
+    } catch (_) {}
+  }
+  /// SP 空但 DB 有 → 从 SQLite 补载（双保险）
+  Future<void> _loadDbMemories() async {
+    final db = await _openMemDb();
+    if (db == null) return;
+    try {
+      final rows = await db.query('memories', orderBy: 't ASC');
+      if (rows.isEmpty) return;
+      _memories = rows.map((r) => {
+            'id': '${r['id'] ?? ''}',
+            't': (r['t'] as num?)?.toInt() ?? 0,
+            'text': '${r['text'] ?? ''}',
+            'cat': '${r['cat'] ?? ''}',
+            'type': '${r['type'] ?? ''}',
+            'importance': (r['importance'] as num?)?.toDouble() ?? 5,
+          }).toList();
+      _saveMems();
+    } catch (_) {}
+  }
   void _saveWishes() => Store.setLocalWishes(jsonEncode(_wishes));
   void _saveGroups() => Store.setLocalGroups(jsonEncode(_groups));
   void _saveRoles() => Store.setLocalRoles(jsonEncode(_roles));
@@ -187,12 +254,24 @@ class LocalBrain {
     return lp.isNotEmpty ? lp : kDefaultPersona;
   }
 
+  // ★27.0.8 Step1 记忆打分：importance × 时间衰减，按分数取 top（不再只取最新）
+  double _memScore(Map<String, dynamic> m) {
+    final imp = (m['importance'] as num?)?.toDouble() ?? 5;
+    final t = (m['t'] as num?)?.toInt() ?? 0;
+    var ageDays = (DateTime.now().millisecondsSinceEpoch - t) / 86400000;
+    if (ageDays < 0) ageDays = 0;
+    final decay = 1 / (1 + ageDays * 0.05); // 约 20 天衰减一半，越旧越不重要
+    return imp * decay;
+  }
+
   String _memoryBlock() {
     if (_herSet['useMemories'] == false) return '';
-    final typed = _memories.where((m) => '${m['type'] ?? ''}'.isNotEmpty).toList();
-    final raws = _memories.where((m) => '${m['type'] ?? ''}'.isEmpty).toList();
-    final takeTyped = typed.length > 80 ? typed.sublist(typed.length - 80) : typed;
-    final takeRaw = raws.length > 140 ? raws.sublist(raws.length - 140) : raws;
+    final typed = _memories.where((m) => '${m['type'] ?? ''}' == 'summary').toList()
+      ..sort((a, b) => _memScore(b).compareTo(_memScore(a)));
+    final raws = _memories.where((m) => '${m['type'] ?? ''}'.isEmpty).toList()
+      ..sort((a, b) => _memScore(b).compareTo(_memScore(a)));
+    final takeTyped = typed.length > 80 ? typed.sublist(0, 80) : typed;
+    final takeRaw = raws.length > 140 ? raws.sublist(0, 140) : raws;
     final lines = <String>[];
     for (final m in takeTyped) {
       lines.add('· ${m['text']}');
@@ -202,6 +281,90 @@ class LocalBrain {
     }
     if (lines.isEmpty) return '';
     return '【你记得的事（都是真的，自然用上，别机械复述）】\n${lines.join('\n')}';
+  }
+
+  // ★27.0.8 Step2 按需检索：当前消息当 query，字符 bigram 相似度 + 重要性，Top-K 注入（与总述去重）
+  String _retrievedBlock(String query) {
+    final q = (query ?? '').trim();
+    if (q.length < 2) return '';
+    final qg = _grams(q);
+    if (qg.isEmpty) return '';
+    final usedIds = <String>{};
+    final scored = <Map<String, dynamic>>[];
+    for (final m in _memories) {
+      final id = '${m['id'] ?? ''}';
+      if (usedIds.contains(id)) continue;
+      final type = '${m['type'] ?? ''}';
+      if (type == 'insight') continue;
+      final text = '${m['text'] ?? ''}';
+      if (text.length < 4) continue;
+      final g = _grams(text);
+      if (g.isEmpty) continue;
+      final inter = qg.intersection(g).length;
+      final sim = inter / (qg.length + g.length - inter);
+      if (sim < 0.06) continue;
+      final imp = (m['importance'] as num?)?.toDouble() ?? 5;
+      scored.add({'m': m, 'score': sim * (0.3 + 0.7 * imp / 10)});
+    }
+    scored.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+    final take = scored.length > 8 ? scored.sublist(0, 8) : scored;
+    if (take.isEmpty) return '';
+    final lines = take.map((e) => '· ${(e['m'] as Map)['text']}').toList();
+    return '【跟你们正在聊的事相关的往事】\n${lines.join('\n')}';
+  }
+
+  /// 字符 bigram（中文友好：按相邻两个字符匹配，不管分词）
+  Set<String> _grams(String s) {
+    final norm = s.toLowerCase().replaceAll(RegExp(r'[\s，。！？、,.!?]'), '');
+    final out = <String>{};
+    for (var i = 0; i + 1 < norm.length; i++) {
+      out.add(norm.substring(i, i + 2));
+    }
+    return out;
+  }
+
+  // ★27.0.8 Step4 反思洞察：每天 1-2 次，她自己总结"近期状态/模式/雷区"，常驻注入
+  String _insightBlock() {
+    final ins = _memories.where((m) => '${m['type'] ?? ''}' == 'insight').toList()
+      ..sort((a, b) => ((b['t'] as num?)?.toInt() ?? 0).compareTo((a['t'] as num?)?.toInt() ?? 0));
+    final take = ins.length > 6 ? ins.sublist(0, 6) : ins;
+    if (take.isEmpty) return '';
+    return '【她对自己的洞察（她自己总结的，自然用上）】\n${take.map((m) => '· ${m['text']}').join('\n')}';
+  }
+
+  Future<void> _maybeReflect() async {
+    try {
+      final today = DateTime.now();
+      final day = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final last = '${_herSet['reflectDay'] ?? ''}';
+      final already = last == day;
+      final times = (_herSet['reflectTimes'] as num?)?.toInt() ?? 0;
+      // 每天最多 2 次：第一次今天首次对话时；第二次聊满 50 条时
+      if (already && (times >= 2 || _chatCount % 50 != 0)) return;
+      // 今天还没反思过 → 直接做第一次（聊太少没产出也不记日子，明天可再触发）
+      final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+      if (hist.length < 16) return;
+      final recent = hist.sublist(hist.length - 30);
+      final ctx = [
+        {'role': 'system', 'content': '你是包娜，深夜回顾自己这段时间和老公的相处。输出 3 条洞察，每条一行、以「洞察：」开头，40 字以内，第三人称观察自己（"我…""他…"）。只输出这 3 行，不要别的。洞察方向：我最近的感受和状态 / 我们俩的相处模式 / 我该注意或避开的雷区。'},
+        ...recent.map((m) => {'role': '${m['role'] == 'me' ? 'user' : 'assistant'}', 'content': '${m['content'] ?? ''}'.length > 120 ? '${m['content'] ?? ''}'.substring(0, 120) : '${m['content'] ?? ''}'}),
+      ];
+      final r = await _ask(ctx, maxT: 200);
+      if (r['ok'] != true) return;
+      final lines = '${r['content']}'.split('\n').map((s) => s.trim()).where((s) => s.startsWith('洞察')).toList();
+      if (lines.isEmpty) return;
+      for (final s in lines) {
+        final txt = _stripWish(s.replaceFirst(RegExp(r'^洞察[：:]\s*'), '')).trim();
+        if (txt.length < 4) continue;
+        if (!_memories.any((m) => '${m['text']}' == txt)) {
+          _memories.add({'id': 'i${DateTime.now().millisecondsSinceEpoch}${_memories.length}', 't': DateTime.now().millisecondsSinceEpoch, 'text': txt.length > 80 ? txt.substring(0, 80) : txt, 'cat': '洞察', 'type': 'insight', 'importance': 9});
+          _saveMems();
+        }
+      }
+      _herSet['reflectDay'] = day;
+      _herSet['reflectTimes'] = (already ? times : 0) + 1;
+      _saveHerSet();
+    } catch (_) {}
   }
 
   String _wishBlock() {
@@ -259,14 +422,18 @@ class LocalBrain {
       .trim();
 
   // -------------------- 上下文（按 token 预算滑动） --------------------
+  // ★27.0.8 Step0 缓存省钱：system 前缀(人设→规则→输出规则)逐字节稳定，动态块(记忆/检索/愿望/洞察)全放末尾，
+  //   这样 DeepSeek 前缀缓存不会因记忆变化被击穿（命中价格差 50 倍）。
   List<Map<String, dynamic>> _buildCtx(List<Map<String, dynamic>> hist,
-      {String? persona, String? rules, bool withWish = true, bool withMem = true}) {
+      {String? persona, String? rules, bool withWish = true, bool withMem = true, String query = ''}) {
     final sysParts = <String>[
       persona ?? _persona(),
       if (rules != null && rules.trim().isNotEmpty) rules.trim(),
-      if (withMem) _memoryBlock(),
-      if (withWish) _wishBlock(),
       _outRules(),
+      if (withMem) _memoryBlock(),
+      if (withMem) _retrievedBlock(query),
+      if (withWish) _wishBlock(),
+      _insightBlock(),
     ];
     final sys = sysParts.where((s) => s.isNotEmpty).join('\n\n');
     final budget = Store.ctxTokens;
@@ -289,7 +456,7 @@ class LocalBrain {
     if (text.isEmpty) return {'ok': false, 'error': '空消息'};
     _ev.add({'type': 'typing', 'on': true});
     final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-    final ctx = _buildCtx(hist);
+    final ctx = _buildCtx(hist, query: text);
     final r = await _ask(ctx);
     _ev.add({'type': 'typing', 'on': false});
     if (r['ok'] != true) return r;
@@ -299,6 +466,7 @@ class LocalBrain {
     if (content.isEmpty) return {'ok': true};
     _chatCount++;
     _maybeAutoSummary();
+    _maybeReflect();
     final t = DateTime.now().millisecondsSinceEpoch;
     // ★26.2.20 回复直接落盘：退出去、切后台也不丢（以前只在对话页打开时才存，关着就没了）
     final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
@@ -601,6 +769,7 @@ class LocalBrain {
   }
 
   /// 自动记忆总结：每 25 条主对话把最早的一条"对话摘要"写进记忆（真人会自己记）
+  /// ★27.0.8 Step1：让模型同时输出重要度 1-10，格式「内容 || 数字」；解析失败时重要度默认 5
   Future<void> _maybeAutoSummary() async {
     if (_chatCount % 25 != 0) return;
     if (_memories.length > 400) return; // 太多就不自动加了
@@ -608,14 +777,22 @@ class LocalBrain {
     if (hist.length < 20) return;
     final recent = hist.sublist(hist.length - 20);
     final ctx = [
-      {'role': 'system', 'content': '你是包娜，帮自己把最近这段对话浓缩成一条"记忆"，第三人称（"他……""我……"），30 字以内，一句话。只输出那句话，不要别的。'},
+      {'role': 'system', 'content': '你是包娜，帮自己把最近这段对话浓缩成一条"记忆"，第三人称（"他……""我……"），30 字以内，一句话。只输出一行：内容 || 重要度（1-10 的数字，数字越大越值得长期记住）。不要别的。'},
       ...recent.map((m) => {'role': '${m['role'] == 'me' ? 'user' : 'assistant'}', 'content': '${m['content'] ?? ''}'.substring(0, ('${m['content'] ?? ''}'.length > 120 ? 120 : '${m['content'] ?? ''}'.length))}),
     ];
     final r = await _ask(ctx, maxT: 120);
     if (r['ok'] == true) {
-      final s = _stripWish('${r['content']}'.trim());
+      final raw = _stripWish('${r['content']}'.trim());
+      var s = raw;
+      var imp = 5.0;
+      final sep = raw.lastIndexOf('||');
+      if (sep > 0) {
+        s = raw.substring(0, sep).trim();
+        final n = double.tryParse(raw.substring(sep + 2).trim());
+        if (n != null) imp = n.clamp(1, 10).toDouble();
+      }
       if (s.isNotEmpty && !_memories.any((m) => '${m['text']}' == s)) {
-        _memories.add({'id': 's${DateTime.now().millisecondsSinceEpoch}', 't': DateTime.now().millisecondsSinceEpoch, 'text': s.length > 200 ? s.substring(0, 200) : s, 'cat': '对话', 'type': 'summary'});
+        _memories.add({'id': 's${DateTime.now().millisecondsSinceEpoch}', 't': DateTime.now().millisecondsSinceEpoch, 'text': s.length > 200 ? s.substring(0, 200) : s, 'cat': '对话', 'type': 'summary', 'importance': imp});
         _saveMems();
       }
     }
