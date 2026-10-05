@@ -9,6 +9,7 @@ import 'brain.dart';
 import 'eye.dart';
 import 'msg.dart';
 import 'notify.dart';
+import 'photos.dart';
 import 'theme.dart';
 
 /// 全局状态（一个 App 就一个连接、一份设置）
@@ -598,7 +599,7 @@ class _HomePageState extends State<HomePage> {
                       },
                       children: const [
                         KeepAliveWrapper(child: MsgPage()),
-                        KeepAliveWrapper(child: _PlacePage('照片', Icons.photo_library_outlined, '照片区 · 功能等你构思')),
+                        KeepAliveWrapper(child: PhotosPage()),
                         KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思')),
                         KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思')),
                         KeepAliveWrapper(child: _PlacePage('我的', Icons.person_outline, '我的区 · 功能等你构思')),
