@@ -8,6 +8,7 @@ import 'api.dart';
 import 'brain.dart';
 import 'eye.dart';
 import 'msg.dart';
+import 'my.dart';
 import 'notify.dart';
 import 'photos.dart';
 import 'theme.dart';
@@ -606,7 +607,7 @@ class _HomePageState extends State<HomePage> {
                         )),
                         KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思')),
                         KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思')),
-                        KeepAliveWrapper(child: _PlacePage('我的', Icons.person_outline, '我的区 · 功能等你构思')),
+                        KeepAliveWrapper(child: MyPage()),
                       ],
                     ),
                   ),
