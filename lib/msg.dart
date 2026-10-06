@@ -530,7 +530,13 @@ class _MsgPageState extends State<MsgPage> {
     //   整个页面没有 Material —— 所有 Text 继承 Flutter 的"缺 Material"警告样式（黄色下划线）！
     //   这就是双黄下划线的真根因（不是拼写检查）。这里补一层透明 Material 恢复主题文本样式。
     //   GestureDetector 包一层：点空白处收起键盘（微信习惯）。
-    return Wall(
+    // ★v27.0.14.3 键盘跟随修复：对话页是 push 全屏独立页，祖先链上没有任何 Scaffold，
+    //   自动避让(resizeToAvoidBottomInset)失效 → 键盘弹起输入框被盖住。
+    //   这里补一层透明 Scaffold 恢复键盘跟随（独立 route 无双重压缩问题，v27.0.2 那个 bug 不会回来）。
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: true,
+      body: Wall(
       url: app.bg,
       blur: app.bgBlur,
       opacity: app.bgOpacity,
@@ -720,6 +726,7 @@ class _MsgPageState extends State<MsgPage> {
           ),
         ]),
         ),
+      ),
       ),
     );
   }
