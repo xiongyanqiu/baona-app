@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'brain.dart';
-import 'eye.dart';
 import 'home.dart';
 import 'msg.dart';
 import 'my.dart';
@@ -49,7 +48,6 @@ class AppCtl extends ChangeNotifier {
       notifyListeners();
     }
   }
-  bool eyeOn = false;          // ★她在用手机前置看你（拍的那一下，聊天里会显示"她在看你…"）
   Map<String, dynamic> herSet = {};
   Map<String, dynamic> cfg = Map<String, dynamic>.from(kDefCfg);
 
@@ -165,19 +163,7 @@ class AppCtl extends ChangeNotifier {
     final a = api;
     ev.listen((e) {
       final t = '${e['type']}';
-      if (t == 'eye') {
-        // ★2026-09-29 老公要的：她自己看你 —— 电脑端喊一嗓子，我们立刻用【前置】拍一张回过去。
-        //   iOS 后台不给开摄像头 → 只在前台拍；不在前台就跳过，电脑端退回那两台固定摄像头。
-        final life = WidgetsBinding.instance.lifecycleState;
-        if (life == AppLifecycleState.resumed && !PhoneEye.busy && a != null) {
-          eyeOn = true;
-          notifyListeners();
-          PhoneEye.shootAndSend(a, why: '${e['why'] ?? ''}').then((_) {
-            eyeOn = false;
-            notifyListeners();
-          });
-        }
-      } else if (t == 'state') {
+      if (t == 'state') {
         refreshState(); // ★去取一次（这条事件本身不带内容）
       } else if (t == 'hello') {
         online = true;
