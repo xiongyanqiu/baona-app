@@ -14,6 +14,7 @@ import 'api.dart';
 import 'main.dart';
 import 'msglocal.dart';
 import 'theme.dart';
+import 'us.dart'; // ★v27.0.12 壁纸：pickAlbumImage 从手机相册选背景图
 
 class MsgPage extends StatefulWidget {
   const MsgPage({super.key});
@@ -296,6 +297,22 @@ class _MsgPageState extends State<MsgPage> {
                   await _pickAvatar('my');
                 },
               ),
+              const Divider(height: 18, color: kHair),
+              _sec('壁纸'),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.wallpaper, color: kAccent),
+                title: const Text('聊天壁纸', style: TextStyle(fontSize: 15)),
+                subtitle: Text(app.bg.isEmpty ? '现在是默认深色背景' : '已设置自定义背景',
+                    style: const TextStyle(fontSize: 12.5, color: kSub)),
+                trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+                onTap: () async {
+                  Navigator.pop(c);
+                  await Future.delayed(const Duration(milliseconds: 350));
+                  if (!mounted) return;
+                  await _pickWallSheet(context, setSt);
+                },
+              ),
               const SizedBox(height: 6),
               ]),
             ),
@@ -303,6 +320,87 @@ class _MsgPageState extends State<MsgPage> {
         ),
       ),
     );
+  }
+
+  /// ★v27.0.12 对话页壁纸弹窗（和「我的-设置」里的一样）：默认深色 / 从相册选一张 / 清掉
+  Future<void> _pickWallSheet(BuildContext bc, StateSetter setSt) async {
+    final act = await showModalBottomSheet<String>(
+      context: bc,
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Text('聊天壁纸', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.pop(c),
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(color: const Color(0x33FFFFFF), shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 16, color: kSub),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.dark_mode_outlined, color: kAccent),
+              title: const Text('默认深色', style: TextStyle(fontSize: 15.5)),
+              subtitle: const Text('不设壁纸，用系统深色渐变'),
+              trailing: app.bg.isEmpty ? const Icon(Icons.check, color: kAccent, size: 20) : const Icon(Icons.chevron_right, size: 18, color: kSub),
+              onTap: () => Navigator.pop(c, 'clear'),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.photo_library_outlined, color: kAccent),
+              title: const Text('从相册选一张', style: TextStyle(fontSize: 15.5)),
+              subtitle: const Text('在手机相册里挑一张当聊天背景'),
+              trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+              onTap: () => Navigator.pop(c, 'album'),
+            ),
+            if (app.bg.isNotEmpty)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.close, color: kBad),
+                title: const Text('清掉壁纸', style: TextStyle(fontSize: 15.5, color: kBad)),
+                trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
+                onTap: () => Navigator.pop(c, 'clear'),
+              ),
+          ]),
+        ),
+      ),
+    );
+    if (act == null || !mounted) return;
+    if (act == 'clear') {
+      app.put('bg', '');
+      setSt(() {});
+      return;
+    }
+    // album：先等弹窗关完再开相册，避免动画竞态"点了没反应"
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    final url = await pickAlbumImage(context);
+    if (!mounted) return;
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('相册里还没有照片，先去「照片」里添加一些吧'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: kBg2,
+        duration: Duration(seconds: 2),
+      ));
+      return;
+    }
+    app.put('bg', url);
+    if (app.bgBlur <= 0) {
+      app.cfg['bgBlur'] = 8;
+      app.cfg['bgOpacity'] = 0.9;
+      app.save();
+    }
+    setSt(() {});
   }
 
   /// ★v27.0.1 改她的名字（备注）—— 存 brain._herSet['nickName']，顶栏和模型都能用

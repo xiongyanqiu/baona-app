@@ -780,9 +780,23 @@ class _SettingsPageState extends State<SettingsPage> {
               subtitle: const Text('在手机相册里挑一张当聊天背景'),
               trailing: const Icon(Icons.chevron_right, size: 18, color: kSub),
               onTap: () async {
+                // ★v27.0.12 修复"点了没反应"：先关第一层弹窗，等它的关闭动画走完（350ms）
+                //   再开相册网格 —— 之前连着弹两层，第二层被动画竞态吃掉，看着像没反应
                 Navigator.pop(c);
+                await Future.delayed(const Duration(milliseconds: 350));
+                if (!mounted) return;
                 final url = await pickAlbumImage(context);
-                if (!mounted || url.isEmpty) return;
+                if (!mounted) return;
+                if (url.isEmpty) {
+                  // 相册空 / 没选到 → 明确提示，不再静默
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('相册里还没有照片，先去「照片」里添加一些吧'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: kBg2,
+                    duration: const Duration(seconds: 2),
+                  ));
+                  return;
+                }
                 app.put('bg', url);
                 if (app.bgBlur <= 0) {
                   app.cfg['bgBlur'] = 8;
