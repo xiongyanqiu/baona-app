@@ -54,6 +54,27 @@ class _BaonaHomeState extends State<BaonaHome> {
     final herName = '${app.herSet['nickName'] ?? ''}'.trim().isEmpty
         ? '包娜'
         : '${app.herSet['nickName'] ?? ''}';
+    final herImg = avatarOf(herAv); // 可空：没头像/解码失败就显示占位字
+    final avatarWidget = herImg == null
+        ? Container(
+            color: kBg2,
+            child: const Center(
+                child: Text('包',
+                    style: TextStyle(
+                        fontSize: 52, fontWeight: FontWeight.w700, color: kText))),
+          )
+        : Image(
+            image: herImg,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => Container(
+              color: kBg2,
+              child: const Center(
+                  child: Text('包',
+                      style: TextStyle(
+                          fontSize: 52, fontWeight: FontWeight.w700, color: kText))),
+            ),
+          );
     return SafeArea(
       child: Column(children: [
         Padding(
@@ -100,30 +121,7 @@ class _BaonaHomeState extends State<BaonaHome> {
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: const BoxDecoration(shape: BoxShape.circle),
-            child: herAv.isEmpty
-                ? Container(
-                    color: kBg2,
-                    child: const Center(
-                        child: Text('包',
-                            style: TextStyle(
-                                fontSize: 52,
-                                fontWeight: FontWeight.w700,
-                                color: kText))),
-                  )
-                : Image(
-                    image: avatarOf(herAv),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: kBg2,
-                      child: const Center(
-                          child: Text('包',
-                              style: TextStyle(
-                                  fontSize: 52,
-                                  fontWeight: FontWeight.w700,
-                                  color: kText))),
-                    ),
-                  ),
+            child: avatarWidget,
           ),
         ),
         const SizedBox(height: 18),
