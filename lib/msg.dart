@@ -16,10 +16,9 @@ import 'msglocal.dart';
 import 'theme.dart';
 
 class MsgPage extends StatefulWidget {
-  const MsgPage({super.key, this.onExit});
-  // ★v27.0.10 对话页沉浸：主界面底栏在对话页隐藏，改由输入框左边的箭头呼出"对话功能区"，
-  //   功能区里的"返回主界面"通过这个回调切回主界面（HomePage 传 _switchTab）
-  final VoidCallback? onExit;
+  const MsgPage({super.key});
+  // ★v27.0.11 对话页是 push 的全屏沉浸页（主页"聊天"卡片进入），
+  //   "返回主界面" = Navigator.pop 回主页；输入框左边箭头呼出对话功能区
 
   @override
   State<MsgPage> createState() => _MsgPageState();
@@ -508,14 +507,14 @@ class _MsgPageState extends State<MsgPage> {
                       blur: kBlur,
                       pad: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                       child: Row(children: [
-                        if (widget.onExit != null)
-                          Expanded(
-                            child: _DrawerBtn(
-                              icon: Icons.home_outlined,
-                              label: '返回主界面',
-                              onTap: widget.onExit!,
-                            ),
+                        Expanded(
+                          child: _DrawerBtn(
+                            icon: Icons.home_outlined,
+                            label: '返回主界面',
+                            // ★v27.0.11 对话页是 push 全屏页：返回 = pop 回主页
+                            onTap: () => Navigator.of(context).maybePop(),
                           ),
+                        ),
                         Expanded(
                           child: _DrawerBtn(
                             icon: Icons.settings_outlined,

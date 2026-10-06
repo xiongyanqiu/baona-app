@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'brain.dart';
 import 'eye.dart';
+import 'home.dart';
 import 'msg.dart';
 import 'my.dart';
 import 'notify.dart';
@@ -530,11 +531,32 @@ class _HomePageState extends State<HomePage> {
       _tab = i;
       _navHidden = false; // ★切页先让底栏出来，他不想看时自己往上滑才收
       _firstScroll = true; // 下一条滚动只校准位置，不碰底栏
-      if (i == 0) app.unread = 0; // 进了聊天就没有小红点了
-      app.chatVisible = (i == 0);
+      if (i == 0) app.unread = 0; // 进了主页就没有小红点了
+      app.chatVisible = false; // ★v27.0.11 对话是 push 的全屏页，tab 区都不是对话
     });
     _pageCtrl.animateToPage(i,
         duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+  }
+
+  /// ★v27.0.11 从主页进对话：push 全屏沉浸页（iOS 右滑入 + 侧滑返回），
+  ///   在里面"返回主界面" = pop 回主页；进去时置 chatVisible（来消息不攒红点）
+  void _openChat() {
+    HapticFeedback.selectionClick();
+    app.chatVisible = true;
+    Navigator.of(context)
+        .push(PageRouteBuilder(
+          opaque: true,
+          pageBuilder: (_, __, ___) => const MsgPage(),
+          transitionsBuilder: (_, anim, __, child) {
+            final slide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeOutCubic))
+                .animate(anim);
+            return SlideTransition(position: slide, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 320),
+          reverseTransitionDuration: const Duration(milliseconds: 260),
+        ))
+        .then((_) => app.chatVisible = false);
   }
 
   /// ★下滑收起底栏：**聊天页不参与**（聊天时底栏要一直钉在那儿），只有商城/游戏/我们才收
@@ -598,12 +620,15 @@ class _HomePageState extends State<HomePage> {
                           _navHidden = false; // ★横滑切页底栏也是先出来
                           _firstScroll = true;
                           if (i == 0) app.unread = 0;
-                          app.chatVisible = (i == 0);
+                          app.chatVisible = false; // ★v27.0.11 对话是 push 全屏页
                         });
                       },
                       children: [
-                        // ★v27.0.10 对话页沉浸：主界面底栏在消息区隐藏，输入框左边箭头呼出对话功能区
-                        KeepAliveWrapper(child: MsgPage(onExit: () => _switchTab(4))),
+                        // ★v27.0.11 启动主页面 = 包娜主页；对话从主页"聊天"卡片 push 全屏进入
+                        KeepAliveWrapper(child: BaonaHome(
+                          onOpenChat: _openChat,
+                          onGoTab: _switchTab,
+                        )),
                         KeepAliveWrapper(child: PhotosPage(
                           photoTab: _photoTab,
                           onPhotoTab: (i) => setState(() => _photoTab = i),
@@ -697,9 +722,9 @@ class _Nav extends StatelessWidget {
         index: tab,
         onTap: onTap,
         items: [
-          // ★27.0 全新版 5 区：消息 / 照片 / 视频 / 音频 / 我的 —— 全部统一大小对齐
-          // ★她来消息时聊天那个图标上冒个小红点
-          {'off': Icons.chat_bubble_outline, 'on': Icons.chat_bubble, 't': '消息', 'badge': unread},
+          // ★v27.0.11 5 区：主页 / 照片 / 视频 / 音频 / 我的（启动进主页）
+          // ★她来消息时主页图标上冒个小红点
+          {'off': Icons.home_outlined, 'on': Icons.home, 't': '主页', 'badge': unread},
           {'off': Icons.photo_library_outlined, 'on': Icons.photo_library, 't': '照片'},
           {'off': Icons.videocam_outlined, 'on': Icons.videocam, 't': '视频'},
           {'off': Icons.audiotrack_outlined, 'on': Icons.audiotrack, 't': '音频'},

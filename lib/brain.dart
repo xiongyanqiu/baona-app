@@ -502,6 +502,25 @@ class LocalBrain {
     return {'ok': true, 'messages': take, 'hasMore': list.length > limit};
   }
 
+  /// ★v27.0.11 包娜主页统计：聊过的消息数 / 记得的事 / 陪你的天数（最早一条消息算起）
+  Future<Map<String, dynamic>> stats() async {
+    final msgs = await MsgsLocal.load('baona');
+    int firstT = 0;
+    for (final m in msgs) {
+      final t = m.time;
+      if (t != null && t > 0 && (firstT == 0 || t < firstT)) firstT = t;
+    }
+    final days = firstT > 0
+        ? ((DateTime.now().millisecondsSinceEpoch - firstT) / 86400000).floor() + 1
+        : 0;
+    return {
+      'ok': true,
+      'msgCount': msgs.length,
+      'memCount': _memories.length,
+      'dayCount': days,
+    };
+  }
+
   Future<Map<String, dynamic>> clearChat() async {
     await MsgsLocal.clear('baona');
     _chatCount = 0;
