@@ -8,6 +8,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -120,18 +121,33 @@ class _LibraryTabState extends State<_LibraryTab> {
   }
 
   /// 右上角 +：从系统相册多选导入到 App 本地图库
+  /// ★v27.0.14.3 统一解码转码 JPEG：iOS 相册的 HEIC/未知格式 Flutter 直接解码会失败（灰格子），
+  ///   先解码再重编码 JPEG 保存，图库/壁纸/查看器一定能显示；2.5K 限制防超大图爆内存
   Future<void> _add() async {
     try {
       final pics = await ImagePicker()
-          .pickMultiImage(limit: 100, imageQuality: 80); // ★v27.0.13 92→80，导入更快、占空间更小
+          .pickMultiImage(limit: 100); // 单次最多选 100（系统多选上限），可分多次加，App 本地无存储上限
       if (pics.isEmpty) return;
       final dir = await _photosDir();
       var i = 0;
       for (final p in pics) {
-        final name =
-            '${DateTime.now().millisecondsSinceEpoch}_${i++}.jpg';
-        // ★v27.0.14 流式拷贝（saveTo 不整读内存），HEIC/大图导入不再卡死/白屏
-        await p.saveTo('${dir.path}/$name');
+        final name = '${DateTime.now().millisecondsSinceEpoch}_${i++}.jpg';
+        try {
+          final bytes = await p.readAsBytes();
+          final codec = await ui.instantiateImageCodec(bytes, targetWidth: 2560);
+          final frame = await codec.getNextFrame();
+          final bd = await frame.image
+              .toByteData(format: ui.ImageByteFormat.jpeg, quality: 88);
+          if (bd != null) {
+            await File('${dir.path}/$name')
+                .writeAsBytes(bd.buffer.asUint8List(), flush: true);
+            continue;
+          }
+        } catch (_) {
+          // 转码失败（动图/超大图等）回退：原字节落盘
+        }
+        final bytes = await p.readAsBytes();
+        await File('${dir.path}/$name').writeAsBytes(bytes, flush: true);
       }
       await _loadLocal();
     } catch (e) {
@@ -153,19 +169,18 @@ class _LibraryTabState extends State<_LibraryTab> {
     return '${d.year}年${d.month}月${d.day}日';
   }
 
-  // 按天分组，保持降序
+  // 按天分组，保持降序（★v27.0.14.3 用毫秒时间戳做 key，修掉 DateTime.parse('2026-10-7') 单数字日期抛异常导致整页灰屏）
   List<(String, List<_LocalPhoto>)> _groupByDay() {
-    final map = <String, List<_LocalPhoto>>{};
+    final map = <int, List<_LocalPhoto>>{};
     for (final e in _photos) {
       final d = e.addedAt;
-      final key = '${d.year}-${d.month}-${d.day}';
+      final key = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
       map.putIfAbsent(key, () => []).add(e);
     }
-    final keys = map.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final keys = map.keys.toList()..sort((a, b) => b.compareTo(a));
     return keys.map((k) {
-      final d = DateTime.parse(k);
-      return (_dayLabel(d), map[k]!);
+      final t = DateTime.fromMillisecondsSinceEpoch(k);
+      return (_dayLabel(t), map[k]!);
     }).toList();
   }
 
