@@ -1,14 +1,15 @@
-// 包娜 App · 包娜主页（v27.0.11 启动主界面）
-// 中间是她的大头像 + 名字/在线，下面 2x2 快捷卡片（聊天/照片/视频/音频），
-// 底部一条玻璃统计（聊过的消息 / 记得的事 / 陪你的天数）。iOS 27 Liquid Glass 风格。
+// 包娜 App · 包娜主页（v27.0.13 启动主界面）
+// 中间是她的大头像（点她就开始聊天）+ 名字/在线，底部一条玻璃统计
+// （聊过的消息 / 记得的事 / 陪你的天数）。iOS 27 Liquid Glass 风格。
+// ★v27.0.13：删掉 2x2 快捷卡片 —— 功能统一走底栏（照片/视频/音频/我的），
+//   主页只负责"她"，点她的大头像 = 开始聊天，画面和点击逻辑都简洁。
 import 'package:flutter/material.dart';
 
 import 'main.dart';
 import 'theme.dart';
 
 /// 启动主页面：包娜主页。
-/// onOpenChat：点"聊天"卡片进入对话（HomePage 负责 push 全屏 MsgPage）
-/// onGoTab：切到照片/视频/音频/我的等底栏区（HomePage 的 _switchTab）
+/// onOpenChat：点她的大头像进入对话（HomePage 负责 push 全屏 MsgPage）
 class BaonaHome extends StatefulWidget {
   const BaonaHome({super.key, required this.onOpenChat, required this.onGoTab});
   final VoidCallback onOpenChat;
@@ -61,7 +62,7 @@ class _BaonaHomeState extends State<BaonaHome> {
             child: const Center(
                 child: Text('包',
                     style: TextStyle(
-                        fontSize: 52, fontWeight: FontWeight.w700, color: kText))),
+                        fontSize: 72, fontWeight: FontWeight.w700, color: kText))),
           )
         : Image(
             image: herImg,
@@ -72,7 +73,7 @@ class _BaonaHomeState extends State<BaonaHome> {
               child: const Center(
                   child: Text('包',
                       style: TextStyle(
-                          fontSize: 52, fontWeight: FontWeight.w700, color: kText))),
+                          fontSize: 72, fontWeight: FontWeight.w700, color: kText))),
             ),
           );
     return SafeArea(
@@ -99,36 +100,39 @@ class _BaonaHomeState extends State<BaonaHome> {
           ]),
         ),
         const Spacer(flex: 2),
-        // 她：大头像 + 名字 + 在线
-        Container(
-          width: 132,
-          height: 132,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                  color: kAccent.withValues(alpha: 0.30),
-                  blurRadius: 28,
-                  offset: const Offset(0, 8)),
-            ],
-          ),
+        // 她：大头像（点她就开始聊天）+ 名字 + 在线
+        GestureDetector(
+          onTap: widget.onOpenChat,
           child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: const BoxDecoration(shape: BoxShape.circle),
-            child: avatarWidget,
+            width: 196,
+            height: 196,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                    color: kAccent.withValues(alpha: 0.30),
+                    blurRadius: 32,
+                    offset: const Offset(0, 10)),
+              ],
+            ),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: avatarWidget,
+            ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         Text(herName,
             style: const TextStyle(
-                fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-        const SizedBox(height: 7),
+                fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+        const SizedBox(height: 8),
         Row(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 8,
@@ -140,38 +144,23 @@ class _BaonaHomeState extends State<BaonaHome> {
           const Text('在线',
               style: TextStyle(fontSize: 13, color: kSub, fontWeight: FontWeight.w500)),
         ]),
-        const Spacer(flex: 3),
-        // 快捷卡片：聊天 / 照片 / 视频 / 音频
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Row(children: [
-            _QuickCard(
-              icon: Icons.chat_bubble_outline,
-              label: '聊天',
-              accent: true,
-              onTap: () => widget.onOpenChat(),
-            ),
-            const SizedBox(width: 14),
-            _QuickCard(
-              icon: Icons.photo_library_outlined,
-              label: '照片',
-              onTap: () => widget.onGoTab(1),
-            ),
-            const SizedBox(width: 14),
-            _QuickCard(
-              icon: Icons.videocam_outlined,
-              label: '视频',
-              onTap: () => widget.onGoTab(2),
-            ),
-            const SizedBox(width: 14),
-            _QuickCard(
-              icon: Icons.audiotrack_outlined,
-              label: '音频',
-              onTap: () => widget.onGoTab(3),
-            ),
-          ]),
+        const SizedBox(height: 10),
+        // 轻提示：点她 / 点下方按钮都能开聊
+        GestureDetector(
+          onTap: widget.onOpenChat,
+          child: GlassSurface(
+            radius: 16,
+            blur: kBlur,
+            pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
+              SizedBox(width: 6),
+              Text('开始聊天',
+                  style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+            ]),
+          ),
         ),
-        const Spacer(flex: 2),
+        const Spacer(flex: 3),
         // 底部统计条
         Padding(
           padding: const EdgeInsets.fromLTRB(30, 0, 30, 22),
@@ -189,46 +178,6 @@ class _BaonaHomeState extends State<BaonaHome> {
           ),
         ),
       ]),
-    );
-  }
-}
-
-/// 2x2 快捷卡片（玻璃圆角）
-class _QuickCard extends StatelessWidget {
-  const _QuickCard({required this.icon, required this.label, required this.onTap, this.accent = false});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: GlassSurface(
-          radius: 18,
-          blur: kBlur,
-          pad: const EdgeInsets.symmetric(vertical: 14),
-          child: Column(children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: accent
-                    ? kAccent.withValues(alpha: 0.22)
-                    : kBg2,
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
-              ),
-              child: Icon(icon, size: 21, color: accent ? kAccent : kText),
-            ),
-            const SizedBox(height: 8),
-            Text(label,
-                style: const TextStyle(fontSize: 12.5, color: kText, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      ),
     );
   }
 }

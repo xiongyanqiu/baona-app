@@ -737,6 +737,8 @@ class _SmallFieldState extends State<_SmallField> {
   @override
   Widget build(BuildContext context) => TextField(
         controller: c,
+        enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+        autocorrect: false,
         decoration: InputDecoration(hintText: widget.label),
         onSubmitted: widget.onDone,
         onTapOutside: (_) => widget.onDone(c.text.trim()),

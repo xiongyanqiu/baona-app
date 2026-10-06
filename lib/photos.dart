@@ -123,7 +123,7 @@ class _LibraryTabState extends State<_LibraryTab> {
   Future<void> _add() async {
     try {
       final pics = await ImagePicker()
-          .pickMultiImage(limit: 100, imageQuality: 92);
+          .pickMultiImage(limit: 100, imageQuality: 80); // ★v27.0.13 92→80，导入更快、占空间更小
       if (pics.isEmpty) return;
       final dir = await _photosDir();
       var i = 0;
@@ -350,6 +350,7 @@ class _LibraryTabState extends State<_LibraryTab> {
       },
       child: Stack(fit: StackFit.expand, children: [
         Image.file(File(e.path), fit: BoxFit.cover,
+            cacheWidth: 420, // ★v27.0.13 缩略小尺寸解码，防止大图全尺寸解码白屏/卡顿
             errorBuilder: (_, __, ___) => Container(
                 color: kBg2,
                 child: const Center(
@@ -782,6 +783,8 @@ class _SearchTabState extends State<_SearchTab> {
           child: TextField(
             controller: _q,
             onSubmitted: _search,
+            enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+            autocorrect: false,
             style: const TextStyle(fontSize: 16),
             decoration: InputDecoration(
               hintText: '搜索照片',
@@ -1112,6 +1115,7 @@ class _FileViewerState extends State<_FileViewer> {
                 child: Center(
                   child: Image.file(File(widget.photos[i].path),
                       fit: BoxFit.contain,
+                      cacheWidth: (MediaQuery.of(context).size.width * 2).round(), // ★v27.0.13 按屏宽解码，大图不撑爆内存
                       errorBuilder: (_, __, ___) => const Center(
                           child: Icon(Icons.broken_image_outlined,
                               color: Colors.white54, size: 44))),

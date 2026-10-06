@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart'; // ★v27.0.13 壁纸读「照片」区本地目录
 
 import 'api.dart';
 import 'imgsrv.dart';
@@ -424,32 +425,58 @@ Future<List<AlbGroup>> _loadAlbumNetwork(BuildContext context) async {
 }
 
 /// 给设置页"选背景"用：从相册里挑一张，返回它的地址
-/// ★26.2.26 全本地模式：读手机本地相册（照片是 App 目录里的文件路径），选一张直接返回路径；
-///   网络模式才走电脑端相册。之前漏了本地分支 → 纯本地模式下"从相册选一张"永远选不到 → 壁纸用不了
+/// ★v27.0.13 全本地模式：直接读「照片」区添加的照片（App 文档目录 photos/），
+///   选一张返回文件路径 —— 之前读 brain 的旧分组相册（v27 里没人往里加照片，恒为空）
+///   → 壁纸永远选不到照片，表现就是"读取不了照片"
 Future<String> pickAlbumImage(BuildContext context) async {
   if (app.brain != null) {
-    final j = await app.brain!.album();
-    if (!context.mounted || j['ok'] != true) return '';
-    final groups = ((j['groups'] as List?) ?? []).map((e) => AlbGroup.fromJson(Map.from(e))).toList();
-    final all = groups.expand((g) => g.photos).toList();
-    if (all.isEmpty) return '';
+    final photos = await _localWallPhotos();
+    if (!context.mounted) return '';
+    if (photos.isEmpty) return '';
     final picked = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: const Color(0xFF120F1B),
-      builder: (c) => GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 6, crossAxisSpacing: 6),
-        itemCount: all.length,
-        itemBuilder: (c, i) {
-          final ph = all[i];
-          return GestureDetector(
-            onTap: () => Navigator.pop(c, ph.url),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(File(ph.url), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: kGlass, child: const Center(child: Icon(Icons.broken_image_outlined, size: 22, color: kSub)))),
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (c) => SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            child: Row(children: [
+              const Text('选一张当壁纸',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.pop(c),
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(color: const Color(0x33FFFFFF), shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 16, color: kSub),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3, mainAxisSpacing: 6, crossAxisSpacing: 6),
+              itemCount: photos.length,
+              itemBuilder: (c, i) {
+                final p = photos[i];
+                return GestureDetector(
+                  onTap: () => Navigator.pop(c, p),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(File(p), fit: BoxFit.cover,
+                        cacheWidth: 480, // 小尺寸解码，弹窗秒开不白屏
+                        errorBuilder: (_, __, ___) => Container(color: kBg2, child: const Center(child: Icon(Icons.broken_image_outlined, size: 22, color: kSub)))),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ]),
       ),
     );
     return picked ?? '';
@@ -472,6 +499,27 @@ Future<String> pickAlbumImage(BuildContext context) async {
     ),
   );
   return picked == null ? '' : app.api!.albumPhotoUrl(picked);
+}
+
+/// ★v27.0.13 读「照片」区添加的照片（App 文档目录 photos/），按时间倒序
+Future<List<String>> _localWallPhotos() async {
+  try {
+    final docs = await getApplicationDocumentsDirectory();
+    final d = Directory('${docs.path}/photos');
+    if (!d.existsSync()) return [];
+    final out = <String>[];
+    for (final f in d.listSync()) {
+      if (f is! File) continue;
+      final p = f.path.toLowerCase();
+      if (!(p.endsWith('.jpg') || p.endsWith('.jpeg') || p.endsWith('.png') ||
+          p.endsWith('.heic') || p.endsWith('.webp'))) continue;
+      out.add(f.path);
+    }
+    out.sort((a, b) => (File(b).statSync().modified).compareTo(File(a).statSync().modified));
+    return out;
+  } catch (_) {
+    return [];
+  }
 }
 
 class _Album extends StatefulWidget {

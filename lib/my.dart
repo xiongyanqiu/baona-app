@@ -264,6 +264,8 @@ class _ModelPageState extends State<ModelPage> {
       controller: c,
       obscureText: obscure,
       keyboardType: keyboard,
+      enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+      autocorrect: false,
       style: const TextStyle(fontSize: 14.5),
       decoration: InputDecoration(
         hintText: hint,
@@ -453,6 +455,8 @@ class _PersonaPageState extends State<PersonaPage> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
+                enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+                autocorrect: false,
                 style: const TextStyle(fontSize: 14.5, height: 1.55),
                 decoration: InputDecoration(
                   hintText: '在这里写她的人设……',
@@ -532,6 +536,8 @@ class _SettingsPageState extends State<SettingsPage> {
           controller: ctl,
           autofocus: true,
           maxLength: 12,
+          enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+          autocorrect: false,
           style: const TextStyle(fontSize: 16),
           decoration: const InputDecoration(hintText: '输入新名字', counterText: ''),
         ),

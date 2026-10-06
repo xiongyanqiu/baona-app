@@ -418,6 +418,8 @@ class _MsgPageState extends State<MsgPage> {
           controller: ctl,
           autofocus: true,
           maxLength: 12,
+          enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+          autocorrect: false,
           style: const TextStyle(fontSize: 16),
           decoration: const InputDecoration(hintText: '输入新名字', counterText: ''),
         ),
@@ -676,6 +678,8 @@ class _MsgPageState extends State<MsgPage> {
                       controller: _inp,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
+                      enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+                      autocorrect: false,
                       style: const TextStyle(fontSize: 16, color: kText),
                       decoration: const InputDecoration(
                         hintText: '跟包娜说点什么…',

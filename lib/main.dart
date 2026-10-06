@@ -471,6 +471,8 @@ class _LoginPageState extends State<LoginPage> {
                     controller: _p,
                     obscureText: true,
                     onSubmitted: (_) => _login(),
+                    enableSuggestions: false, // ★v27.0.13 关掉 iOS 拼写检查（双黄下划线）
+                    autocorrect: false,
                     decoration: const InputDecoration(hintText: '手机端口令'),
                   ),
                   const SizedBox(height: 10),
@@ -508,14 +510,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // ★v27.0.10 启动主页面不再是对话区（用户新想法）：先进"我的"作主界面占位，
-  //   他想好主界面放什么内容后这里再换；对话通过底栏"消息"进入，进去后沉浸全屏
-  int _tab = 4;
+  // ★v27.0.13 启动先进包娜主页（tab0）；功能统一走底栏，主页只展示"她"
+  int _tab = 0;
   int _photoTab = 0; // ★27.0.4 照片区内部子页（0 图库 1 相簿 2 搜索），底栏由 HomePage 统一接管
   bool _navHidden = false;
   double _lastPix = 0;
   // ★2.0 第四波：页面换成 PageView —— 手指左右滑页面跟手走（iOS 26 Liquid Glass 标签栏规范）
-  final PageController _pageCtrl = PageController(initialPage: 4);
+  final PageController _pageCtrl = PageController(initialPage: 0);
   bool _firstScroll = true; // ★切页后第一条滚动只校准位置，不误收起底栏（不然切回滚动中的页面底栏立刻消失）
 
   @override
@@ -642,9 +643,7 @@ class _HomePageState extends State<HomePage> {
                 ]),
               ),
             ),
-            bottomNavigationBar: _tab == 0
-                ? const SizedBox.shrink() // ★v27.0.10 对话页沉浸：主界面底栏整个收掉（等效"收到输入框左边"），由 msg.dart 的呼出按钮接管
-                : AnimatedSlide(
+            bottomNavigationBar: AnimatedSlide( // ★v27.0.13 主页也有底栏（功能统一走底栏，主页不再放卡片入口）
               offset: _navHidden ? const Offset(0, 1.3) : Offset.zero,
               duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,
