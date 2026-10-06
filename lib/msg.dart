@@ -525,13 +525,18 @@ class _MsgPageState extends State<MsgPage> {
     final herAv = '${app.herSet['herAvatar'] ?? ''}';
     final myAv = _myAv.isNotEmpty ? _myAv : '${app.herSet['myAvatar'] ?? ''}';
     // ★v27.0.2：去掉内层 Scaffold —— 之前两层 Scaffold 嵌套，键盘弹起时 body 被双重压缩，
-    //   输入栏被挤到顶栏下面、键盘状态卡住收不回。现在键盘避让统一交给 HomePage 外层 Scaffold。
+    //   输入栏被挤到顶栏下面、键盘状态卡住收不回。键盘避让由 SafeArea+Column 自己处理。
+    // ★★v27.0.14：v27.0.11 对话页改成 push 全屏独立页面后，外层 HomePage 的 Scaffold 不在祖先链上，
+    //   整个页面没有 Material —— 所有 Text 继承 Flutter 的"缺 Material"警告样式（黄色下划线）！
+    //   这就是双黄下划线的真根因（不是拼写检查）。这里补一层透明 Material 恢复主题文本样式。
     //   GestureDetector 包一层：点空白处收起键盘（微信习惯）。
     return Wall(
       url: app.bg,
       blur: app.bgBlur,
       opacity: app.bgOpacity,
-      child: GestureDetector(
+      child: Material(
+        type: MaterialType.transparency,
+        child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Column(children: [
@@ -714,6 +719,7 @@ class _MsgPageState extends State<MsgPage> {
             ),
           ),
         ]),
+        ),
       ),
     );
   }

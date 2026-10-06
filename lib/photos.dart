@@ -128,10 +128,10 @@ class _LibraryTabState extends State<_LibraryTab> {
       final dir = await _photosDir();
       var i = 0;
       for (final p in pics) {
-        final bytes = await p.readAsBytes();
         final name =
             '${DateTime.now().millisecondsSinceEpoch}_${i++}.jpg';
-        await File('${dir.path}/$name').writeAsBytes(bytes);
+        // ★v27.0.14 流式拷贝（saveTo 不整读内存），HEIC/大图导入不再卡死/白屏
+        await p.saveTo('${dir.path}/$name');
       }
       await _loadLocal();
     } catch (e) {

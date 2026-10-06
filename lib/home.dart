@@ -161,9 +161,9 @@ class _BaonaHomeState extends State<BaonaHome> {
           ),
         ),
         const Spacer(flex: 3),
-        // 底部统计条
+        // 底部统计条 ★v27.0.14 底部留 navSpace 让位 —— 之前少这一层，统计条被玻璃底栏盖住
         Padding(
-          padding: const EdgeInsets.fromLTRB(30, 0, 30, 22),
+          padding: EdgeInsets.fromLTRB(30, 0, 30, navSpace(context) + 10),
           child: GlassSurface(
             radius: 22,
             blur: kBlur,
