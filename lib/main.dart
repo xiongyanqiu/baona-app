@@ -31,7 +31,7 @@ class AppCtl extends ChangeNotifier {
   List<Map> emoji = [];
   Set<String> emojiMine = {}; // ★哪些是「我加的」（可以长按删）
   int unread = 0;              // ★她来消息时底栏聊天图标上的小红点
-  bool chatVisible = true;     // 他现在是不是就待在聊天页（不在就攒小红点）
+  bool chatVisible = false;    // 他现在是不是就待在聊天页（不在就攒小红点）★v27.0.10 启动不在对话页
   // ★2026-10-02 角色/群聊消息的会话级未读与最后一条（不进主对话红点、不弹主对话通知）
   final Map<String, int> _sideUnread = {};
   final Map<String, String> _sideLast = {};
@@ -507,12 +507,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _tab = 0;
+  // ★v27.0.10 启动主页面不再是对话区（用户新想法）：先进"我的"作主界面占位，
+  //   他想好主界面放什么内容后这里再换；对话通过底栏"消息"进入，进去后沉浸全屏
+  int _tab = 4;
   int _photoTab = 0; // ★27.0.4 照片区内部子页（0 图库 1 相簿 2 搜索），底栏由 HomePage 统一接管
   bool _navHidden = false;
   double _lastPix = 0;
   // ★2.0 第四波：页面换成 PageView —— 手指左右滑页面跟手走（iOS 26 Liquid Glass 标签栏规范）
-  final PageController _pageCtrl = PageController();
+  final PageController _pageCtrl = PageController(initialPage: 4);
   bool _firstScroll = true; // ★切页后第一条滚动只校准位置，不误收起底栏（不然切回滚动中的页面底栏立刻消失）
 
   @override
@@ -600,7 +602,8 @@ class _HomePageState extends State<HomePage> {
                         });
                       },
                       children: [
-                        KeepAliveWrapper(child: MsgPage()),
+                        // ★v27.0.10 对话页沉浸：主界面底栏在消息区隐藏，输入框左边箭头呼出对话功能区
+                        KeepAliveWrapper(child: MsgPage(onExit: () => _switchTab(4))),
                         KeepAliveWrapper(child: PhotosPage(
                           photoTab: _photoTab,
                           onPhotoTab: (i) => setState(() => _photoTab = i),
@@ -614,7 +617,9 @@ class _HomePageState extends State<HomePage> {
                 ]),
               ),
             ),
-            bottomNavigationBar: AnimatedSlide(
+            bottomNavigationBar: _tab == 0
+                ? const SizedBox.shrink() // ★v27.0.10 对话页沉浸：主界面底栏整个收掉（等效"收到输入框左边"），由 msg.dart 的呼出按钮接管
+                : AnimatedSlide(
               offset: _navHidden ? const Offset(0, 1.3) : Offset.zero,
               duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,

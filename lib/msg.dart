@@ -16,7 +16,10 @@ import 'msglocal.dart';
 import 'theme.dart';
 
 class MsgPage extends StatefulWidget {
-  const MsgPage({super.key});
+  const MsgPage({super.key, this.onExit});
+  // ★v27.0.10 对话页沉浸：主界面底栏在对话页隐藏，改由输入框左边的箭头呼出"对话功能区"，
+  //   功能区里的"返回主界面"通过这个回调切回主界面（HomePage 传 _switchTab）
+  final VoidCallback? onExit;
 
   @override
   State<MsgPage> createState() => _MsgPageState();
@@ -29,6 +32,7 @@ class _MsgPageState extends State<MsgPage> {
   int _memCount = 0;
   int _cidSeq = 0;
   String _myAv = ''; // ★v27.0.1 我的头像本地兜底（双写：SP + brain._herSet，重装也不丢）
+  bool _drawerOpen = false; // ★v27.0.10 对话功能区（输入框左边箭头呼出/收起）
   final TextEditingController _inp = TextEditingController();
   final ScrollController _sc = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _sub;
@@ -481,7 +485,9 @@ class _MsgPageState extends State<MsgPage> {
                     ? const _EmptyHint()
                     : ListView.builder(
                         controller: _sc,
-                        padding: EdgeInsets.only(top: 10, bottom: navSpace(context) + 6),
+                        // ★v27.0.10 对话页没有主界面底栏了：底部不再留 navSpace 让位，
+                        //   列表直接贴输入框，最新消息始终紧跟输入框（键盘弹起也跟着动）
+                        padding: const EdgeInsets.only(top: 10, bottom: 8),
                         itemCount: _msgs.length + (_typing ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i >= _msgs.length) return _TypingRow();
@@ -489,20 +495,85 @@ class _MsgPageState extends State<MsgPage> {
                         },
                       ),
           ),
-          // 输入栏（玻璃胶囊）
-          // ★v27.0.2 让位改动态：键盘弹起时键盘自己顶住输入栏（只留 10px）；
-          //   键盘收起时给悬浮底栏让位（胶囊 47 + 留白 14 + 安全区 34 + 呼吸 16 = 111），不再重合
+          // ★v27.0.10 对话功能区：输入框左边箭头呼出/收起（替代主界面底栏，对话专用）
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.bottomCenter,
+            child: _drawerOpen
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                    child: GlassSurface(
+                      radius: 18,
+                      blur: kBlur,
+                      pad: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      child: Row(children: [
+                        if (widget.onExit != null)
+                          Expanded(
+                            child: _DrawerBtn(
+                              icon: Icons.home_outlined,
+                              label: '返回主界面',
+                              onTap: widget.onExit!,
+                            ),
+                          ),
+                        Expanded(
+                          child: _DrawerBtn(
+                            icon: Icons.settings_outlined,
+                            label: '对话设置',
+                            onTap: () => _openSettings(),
+                          ),
+                        ),
+                        Expanded(
+                          child: _DrawerBtn(
+                            icon: Icons.delete_outline,
+                            label: '清空聊天',
+                            onTap: () async {
+                              final a = _a;
+                              if (a == null) return;
+                              final ok = await _confirm(context, '清空聊天记录', '和包娜的聊天记录会全部删掉，确定吗？');
+                              if (ok == true) {
+                                await a.clearChat();
+                                if (mounted) setState(() => _msgs.clear());
+                              }
+                            },
+                          ),
+                        ),
+                      ]),
+                    ),
+                  )
+                : const SizedBox(width: 0, height: 0),
+          ),
+          // 输入栏（玻璃胶囊）★v27.0.10 对话页无主底栏：输入栏直接坐底（安全区之上），
+          //   键盘弹起时 SafeArea 自动失效贴键盘顶，消息列表紧跟输入框
           SafeArea(
             top: false,
-            bottom: false,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                  14, 6, 14, kbUp(context) ? 10 : kNavInner + kNavMargin + kNavSafe + 16),
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
               child: GlassSurface(
                 radius: kRCapsule,
                 blur: kBlur,
                 pad: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 child: Row(children: [
+                  // ★v27.0.10 呼出按钮：箭头指向右边 = 点击呼出对话功能区；展开后箭头转左 = 收起
+                  GestureDetector(
+                    onTap: () => setState(() => _drawerOpen = !_drawerOpen),
+                    child: AnimatedRotation(
+                      turns: _drawerOpen ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: _drawerOpen ? kAccent.withValues(alpha: 0.9) : kBg2,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0x26FFFFFF), width: 0.8),
+                        ),
+                        child: const Icon(Icons.chevron_right, size: 21, color: kText),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
                       controller: _inp,
@@ -665,6 +736,34 @@ class _Av extends StatelessWidget {
                   child: Text(fallback,
                       style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w600, color: kText))),
             ),
+    );
+  }
+}
+
+/// ★v27.0.10 对话功能区按钮：图标 + 文字竖排（返回主界面 / 对话设置 / 清空聊天）
+class _DrawerBtn extends StatelessWidget {
+  const _DrawerBtn({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 21, color: kAccent),
+          const SizedBox(height: 3),
+          Text(label,
+              style: const TextStyle(fontSize: 11, color: kSub, fontWeight: FontWeight.w500)),
+        ]),
+      ),
     );
   }
 }
