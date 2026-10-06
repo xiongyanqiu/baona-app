@@ -8,7 +8,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -121,33 +120,18 @@ class _LibraryTabState extends State<_LibraryTab> {
   }
 
   /// 右上角 +：从系统相册多选导入到 App 本地图库
-  /// ★v27.0.14.3 统一解码转码 JPEG：iOS 相册的 HEIC/未知格式 Flutter 直接解码会失败（灰格子），
-  ///   先解码再重编码 JPEG 保存，图库/壁纸/查看器一定能显示；2.5K 限制防超大图爆内存
+  /// ★v27.0.14.3 imageQuality 在 iOS 会把 HEIC/原图统一转成 JPEG 再返回，保存即 JPEG，
+  ///   图库/壁纸/查看器必然能解码显示（不再有灰格子）；saveTo 流式复制不整读内存
   Future<void> _add() async {
     try {
       final pics = await ImagePicker()
-          .pickMultiImage(limit: 100); // 单次最多选 100（系统多选上限），可分多次加，App 本地无存储上限
+          .pickMultiImage(limit: 100, imageQuality: 88); // 单次最多 100（系统多选上限），可分多次加，App 本地无存储上限
       if (pics.isEmpty) return;
       final dir = await _photosDir();
       var i = 0;
       for (final p in pics) {
         final name = '${DateTime.now().millisecondsSinceEpoch}_${i++}.jpg';
-        try {
-          final bytes = await p.readAsBytes();
-          final codec = await ui.instantiateImageCodec(bytes, targetWidth: 2560);
-          final frame = await codec.getNextFrame();
-          final bd = await frame.image
-              .toByteData(format: ui.ImageByteFormat.jpeg, quality: 88);
-          if (bd != null) {
-            await File('${dir.path}/$name')
-                .writeAsBytes(bd.buffer.asUint8List(), flush: true);
-            continue;
-          }
-        } catch (_) {
-          // 转码失败（动图/超大图等）回退：原字节落盘
-        }
-        final bytes = await p.readAsBytes();
-        await File('${dir.path}/$name').writeAsBytes(bytes, flush: true);
+        await p.saveTo('${dir.path}/$name');
       }
       await _loadLocal();
     } catch (e) {
