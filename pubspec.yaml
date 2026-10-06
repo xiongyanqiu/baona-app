@@ -40,7 +40,8 @@ dependencies:
   image_picker: ^1.1.0         # 发照片
   audioplayers: ^6.1.0         # 听她的语音条
   flutter_local_notifications: ^18.0.1   # 消息通知（她发消息时手机弹出来）
-  camera: ^0.12.1
+  # camera 已移除：★v27.0.14.1 b 系列遗留死依赖（源码零引用），其 iOS 实现 camera_avfoundation
+  #   在 Xcode 15.4 的 iOS 17.5 SDK 下编译失败（wasInterruptedNotification API 变更），删除以稳定编译
   video_player: ^2.9.2                   # 抖音页视频播放
   video_thumbnail: ^0.5.6            # 视频库封面缩略图
   webview_flutter: ^4.10.0              # ★b40 抖音手机直连（内置官方网页版，不走电脑中转）
