@@ -9,7 +9,9 @@ on:
 
 jobs:
   ipa:
-    runs-on: macos-latest
+    # ★v27.0.14.1 锁定 macos-14：之前用 macos-latest（滚动标签），GitHub 升级编译机后
+    #   新 Xcode 编译产物在手机上启动闪退（v27.0.13 之前一直正常）。锁稳定编译机避免再漂移。
+    runs-on: macos-14
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
