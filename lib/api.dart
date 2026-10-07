@@ -91,6 +91,12 @@ class Store {
 
   static String get bootCache => _p.getString('boot.cache') ?? '';
   static Future<void> setBootCache(String v) => _p.setString('boot.cache', v);
+
+  // ★27.0.14.13 启动锁：密码哈希（空 = 没设置过，不锁）+ 是否开启人脸识别
+  static String get lockHash => _p.getString('lock.hash') ?? '';
+  static Future<void> setLockHash(String v) => _p.setString('lock.hash', v);
+  static bool get lockFace => _p.getBool('lock.face') ?? false;
+  static Future<void> setLockFace(bool v) => _p.setBool('lock.face', v);
 }
 
 const Map<String, dynamic> kDefCfg = {
