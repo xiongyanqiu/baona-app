@@ -110,7 +110,7 @@ class _BaonaHomeState extends State<BaonaHome> {
         Appear3D(
           fromAngle: 0.16,
           child: UniverseHub(
-            size: 330,
+            size: 340,
             coreSize: 176,
             orbitR: 128,
             core: Tilt3D(

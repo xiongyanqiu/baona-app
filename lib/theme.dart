@@ -35,7 +35,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.7'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.8'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -1286,27 +1286,67 @@ class UniverseHub extends StatefulWidget {
     super.key,
     required this.core,
     required this.nodes,
-    this.size = 330,
+    this.size = 340,
     this.coreSize = 176,
     this.orbitR = 128,
-    this.period = 30,
+    this.basePeriod = 30,
+    this.seed = 42,
   });
 
   final Widget core; // 中心主星（她的头像）
   final List<Map<String, dynamic>> nodes; // [{icon, label, onTap}]
   final double size; // 星系总直径
   final double coreSize; // 中心主星直径
-  final double orbitR; // 节点轨道半径
-  final int period; // 公转周期（秒）
+  final double orbitR; // 节点基准轨道半径
+  final int basePeriod; // 基准公转周期（秒）
+  final int seed; // 无序轨道随机种子（固定，避免重建时位置乱跳）
 
   @override
   State<UniverseHub> createState() => _UniverseHubState();
 }
 
+/// 每颗小星辰的独立轨道参数（无序宇宙：半径/相位/速度/大小/光色都不同，
+/// 没有两颗星在同一个轨道上、没有两颗星同步旋转）
+class _StarSpec {
+  _StarSpec(
+      {required this.r,
+      required this.phase,
+      required this.speed,
+      required this.size,
+      required this.glow,
+      required this.arcSeed});
+  final double r; // 轨道半径（各有偏差）
+  final double phase; // 初始相位（各自随机起点）
+  final double speed; // 公转速度系数（0.75~1.3，快慢不一）
+  final double size; // 星辰直径（有大有小）
+  final Color glow; // 星光色（月白/星蓝/暖金随机）
+  final int arcSeed; // 断弧轨道的随机种子（每颗星轨道断裂位置不同）
+}
+
 class _UniverseHubState extends State<UniverseHub>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
-      vsync: this, duration: Duration(seconds: widget.period))..repeat();
+      vsync: this, duration: Duration(seconds: widget.basePeriod))..repeat();
+
+  late final List<_StarSpec> _specs;
+
+  @override
+  void initState() {
+    super.initState();
+    final rnd = math.Random(widget.seed);
+    const glows = [Color(0xFFE8F4FF), Color(0xFF8FBFFF), Color(0xFFFFD9A8)];
+    _specs = [
+      for (var i = 0; i < widget.nodes.length; i++)
+        _StarSpec(
+          r: widget.orbitR + rnd.nextDouble() * 34 - 22,
+          phase: rnd.nextDouble() * 2 * math.pi,
+          speed: 0.75 + rnd.nextDouble() * 0.55,
+          size: 30 + rnd.nextDouble() * 12,
+          glow: glows[rnd.nextInt(glows.length)],
+          arcSeed: rnd.nextInt(10000),
+        ),
+    ];
+  }
 
   @override
   void dispose() {
@@ -1316,7 +1356,6 @@ class _UniverseHubState extends State<UniverseHub>
 
   @override
   Widget build(BuildContext context) {
-    final n = widget.nodes.length;
     return AnimatedBuilder(
       animation: _c,
       child: widget.core,
@@ -1327,22 +1366,21 @@ class _UniverseHubState extends State<UniverseHub>
           width: widget.size,
           height: widget.size,
           child: Stack(alignment: Alignment.center, children: [
-            // 轨道 + 中心光晕 + 连接线（与节点同步旋转）
+            // 断弧轨道 + 尘埃星带 + 连接线（与节点同步旋转）
             Positioned.fill(
               child: CustomPaint(
                 painter: _UniversePainter(
                   t: _c.value,
-                  orbitR: widget.orbitR,
-                  trackR2: widget.orbitR + 26,
-                  nodes: n,
+                  specs: _specs,
                   coreR: widget.coreSize / 2,
+                  seed: widget.seed,
                 ),
               ),
             ),
             // 中心主星
             core ?? const SizedBox.shrink(),
-            // 环绕公转的小星辰设备
-            for (var i = 0; i < n; i++) _node(i, cx, cy),
+            // 环绕公转的小星辰
+            for (var i = 0; i < _specs.length; i++) _node(i, cx, cy),
           ]),
         );
       },
@@ -1350,39 +1388,50 @@ class _UniverseHubState extends State<UniverseHub>
   }
 
   Widget _node(int i, double cx, double cy) {
-    final n = widget.nodes.length;
-    final ang = i * 2 * math.pi / n + _c.value * 2 * math.pi;
-    final px = cx + math.cos(ang) * widget.orbitR;
-    final py = cy + math.sin(ang) * widget.orbitR;
+    final s = _specs[i];
+    // 轻微椭圆 + 各自相位/速度 → 无序但有生命感的公转
+    final ang = s.phase + _c.value * 2 * math.pi * s.speed;
+    final px = cx + math.cos(ang) * s.r;
+    final py = cy + math.sin(ang) * s.r * 0.94;
     final item = widget.nodes[i];
+    final d = s.size;
     return Positioned(
-      left: px - 32,
-      top: py - 18,
-      width: 64,
+      left: px - 30,
+      top: py - d / 2,
+      width: 60,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: item['onTap'] as VoidCallback?,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // 星辰本体：中心白亮 → 星光色 → 透明，外圈双层光晕
           Container(
-            width: 34,
-            height: 34,
+            width: d,
+            height: d,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0x59FFFFFF), Color(0x1FFFFFFF)],
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xF2FFFFFF),
+                  s.glow.withValues(alpha: 0.85),
+                  s.glow.withValues(alpha: 0.10),
+                ],
+                stops: const [0.0, 0.5, 1.0],
               ),
-              border: Border.all(color: const Color(0x4DFFFFFF), width: 0.8),
               boxShadow: [
                 BoxShadow(
-                    color: kAccent.withValues(alpha: 0.25),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2)),
+                    color: s.glow.withValues(alpha: 0.45),
+                    blurRadius: d * 0.9,
+                    spreadRadius: 0.5),
+                BoxShadow(
+                    color: s.glow.withValues(alpha: 0.20),
+                    blurRadius: d * 1.8),
               ],
             ),
-            child: Icon(item['icon'] as IconData,
-                size: 16, color: Colors.white.withValues(alpha: 0.92)),
+            child: Center(
+              child: Icon(item['icon'] as IconData,
+                  size: d * 0.40,
+                  color: const Color(0x8C1A2433)),
+            ),
           ),
           const SizedBox(height: 2),
           Text('${item['label']}',
@@ -1397,70 +1446,108 @@ class _UniverseHubState extends State<UniverseHub>
 class _UniversePainter extends CustomPainter {
   _UniversePainter(
       {required this.t,
-      required this.orbitR,
-      required this.trackR2,
-      required this.nodes,
-      required this.coreR});
+      required this.specs,
+      required this.coreR,
+      required this.seed});
 
   final double t;
-  final double orbitR;
-  final double trackR2;
-  final int nodes;
+  final List<_StarSpec> specs;
   final double coreR;
+  final int seed;
+
+  late final List<_Dust> _dust = _makeDust();
+
+  // 尘埃星带：固定种子生成，随 t 整片缓慢旋转（宇宙不是空的，是弥漫着微尘）
+  List<_Dust> _makeDust() {
+    final rnd = math.Random(seed);
+    return [
+      for (var i = 0; i < 46; i++)
+        _Dust(
+          r: 62 + rnd.nextDouble() * 72,
+          a: rnd.nextDouble() * 2 * math.pi,
+          d: 0.6 + rnd.nextDouble() * 1.4,
+          o: 0.08 + rnd.nextDouble() * 0.22,
+        ),
+    ];
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2, cy = size.height / 2;
     final c = Offset(cx, cy);
-    // 中心光晕：径向渐变（主星的光，照亮整个星系核心）
+    // 中心光晕：主星的光照亮整个星系核心
     final glow = Paint()
       ..shader = RadialGradient(
-        colors: const [Color(0x45A8C8FF), Color(0x18A8C8FF), Color(0x00A8C8FF)],
-      ).createShader(Rect.fromCircle(center: c, radius: orbitR + 14));
-    canvas.drawCircle(c, orbitR + 14, glow);
-    // 节点轨道环
-    final tp = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8
-      ..color = const Color(0x2EFFFFFF);
-    canvas.drawCircle(c, orbitR, tp);
-    // 外圈装饰轨道（更淡）
-    final tp2 = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.6
-      ..color = const Color(0x1AFFFFFF);
-    canvas.drawCircle(c, trackR2, tp2);
-    // 虚线感：轨道上画几段小弧（模拟分段轨道）
-    final dash = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..color = const Color(0x338FBFFF);
-    const seg = 14;
-    for (var s = 0; s < seg; s++) {
-      final a0 = s * 2 * math.pi / seg + t * 0.06;
-      final a1 = a0 + 2 * math.pi / seg * 0.32;
-      canvas.drawArc(Rect.fromCircle(center: c, radius: orbitR), a0, a1 - a0, false, dash);
+        colors: const [Color(0x40A8C8FF), Color(0x16A8C8FF), Color(0x00A8C8FF)],
+      ).createShader(Rect.fromCircle(center: c, radius: 146));
+    canvas.drawCircle(c, 146, glow);
+    // 中心碎光：8 个光点绕着主星慢慢漂移（像她身边的气态卫星尘）
+    final frag = Paint();
+    for (var i = 0; i < 8; i++) {
+      final a0 = i * 2 * math.pi / 8 + t * 2 * math.pi * 0.35;
+      final rr = coreR + 10 + (i % 3) * 10.0;
+      final px = cx + math.cos(a0) * rr;
+      final py = cy + math.sin(a0) * rr * 0.92;
+      final fa = 0.15 + 0.25 * (0.5 + 0.5 * math.sin(i * 2.1 + t * 2 * math.pi));
+      frag.color = const Color(0xFFD9EBFF).withValues(alpha: fa);
+      canvas.drawCircle(Offset(px, py), 1.1 + (i % 2) * 1.1, frag);
     }
-    // 发光连接线：中心主星边缘 → 每个节点（跟随公转）
-    for (var i = 0; i < nodes; i++) {
-      final ang = i * 2 * math.pi / nodes + t * 2 * math.pi;
+    // 尘埃星带
+    for (final d in _dust) {
+      final a = d.a + t * 2 * math.pi * 0.05;
+      final px = cx + math.cos(a) * d.r;
+      final py = cy + math.sin(a) * d.r * 0.94;
+      frag.color = const Color(0xFFCFE6FF).withValues(alpha: d.o);
+      canvas.drawCircle(Offset(px, py), d.d, frag);
+    }
+    // 断弧轨道：每颗星自己的轨道，断裂位置随机（没有完美正圆，只有被扰动过的轨迹）
+    final arc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(0x2EFFFFFF);
+    for (var i = 0; i < specs.length; i++) {
+      final s = specs[i];
+      final rnd = math.Random(s.arcSeed);
+      for (var k = 0; k < 3; k++) {
+        final a0 = rnd.nextDouble() * 2 * math.pi;
+        final span = 0.9 + rnd.nextDouble() * 1.2;
+        canvas.drawArc(Rect.fromCircle(center: c, radius: s.r), a0, span, false, arc);
+      }
+    }
+    // 发光连接线：主星边缘 → 星（断成 4 段的信号脉冲，像万物互联的数据流）
+    final line = Paint()..strokeWidth = 1.0;
+    for (var i = 0; i < specs.length; i++) {
+      final s = specs[i];
+      final ang = s.phase + t * 2 * math.pi * s.speed;
       final sx = cx + math.cos(ang) * coreR;
       final sy = cy + math.sin(ang) * coreR;
-      final ex = cx + math.cos(ang) * orbitR;
-      final ey = cy + math.sin(ang) * orbitR;
-      final line = Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: const [Color(0x00FFFFFF), Color(0x52FFFFFF), Color(0x99FFFFFF)],
-        ).createShader(Rect.fromPoints(Offset(sx, sy), Offset(ex, ey)));
-      canvas.drawLine(Offset(sx, sy), Offset(ex, ey), line..strokeWidth = 1.0);
-      // 节点底部的微光星点
+      final ex = cx + math.cos(ang) * s.r;
+      final ey = cy + math.sin(ang) * s.r * 0.94;
+      const segs = 4;
+      for (var k = 0; k < segs; k++) {
+        final f0 = k / segs, f1 = (k + 0.45) / segs;
+        line.color =
+            const Color(0xFFE8F4FF).withValues(alpha: 0.10 + 0.28 * (k + 1) / segs);
+        canvas.drawLine(
+            Offset(sx + (ex - sx) * f0, sy + (ey - sy) * f0),
+            Offset(sx + (ex - sx) * f1, sy + (ey - sy) * f1),
+            line);
+      }
+      // 星底微光
       canvas.drawCircle(
-          Offset(ex, ey), 3.2, Paint()..color = const Color(0x8CA8C8FF));
+          Offset(ex, ey), 2.6, Paint()..color = s.glow.withValues(alpha: 0.55));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _UniversePainter old) => old.t != t;
+  bool shouldRepaint(covariant _UniversePainter old) =>
+      old.t != t || old.seed != seed;
+}
+
+class _Dust {
+  _Dust({required this.r, required this.a, required this.d, required this.o});
+  final double r;
+  final double a;
+  final double d;
+  final double o;
 }
