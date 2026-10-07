@@ -1,5 +1,6 @@
 // 包娜 · 手机端 App 主入口：连电脑 → 登录 → 主界面（聊天/商城/游戏/我们）
 import 'dart:convert';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -211,6 +212,21 @@ final app = AppCtl.i;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ★27.0.14.14 崩溃留痕：Dart 未捕获异常记到本地，下次启动锁页面能看到（定位闪退用）
+  FlutterError.onError = (d) {
+    try {
+      final s = d.exception.toString();
+      Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
+    } catch (_) {}
+    FlutterError.presentError(d);
+  };
+  PlatformDispatcher.instance.onError = (e, st) {
+    try {
+      final s = '$e';
+      Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
+    } catch (_) {}
+    return true;
+  };
   await Store.init();
   await Notify.i.init();
   app.cfg = Store.cfg;
@@ -302,15 +318,23 @@ class _BootState extends State<Boot> {
   @override
   void initState() {
     super.initState();
-    final brain = LocalBrain();
-    app.attachBrain(brain);
-    // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
-    final base = Store.baseUrl;
-    if (base.isNotEmpty && Store.token.isNotEmpty) {
+    try {
+      final brain = LocalBrain();
+      app.attachBrain(brain);
+      // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
+      final base = Store.baseUrl;
+      if (base.isNotEmpty && Store.token.isNotEmpty) {
+        try {
+          final a = Api(base)..token = Store.token;
+          app.attach(a);
+        } catch (_) {/* 连不上电脑不影响本地聊天 */}
+      }
+    } catch (e) {
+      // 大脑初始化失败也不能让 App 白屏 —— 记录后仍进主页（对话会提示模型没接好）
       try {
-        final a = Api(base)..token = Store.token;
-        app.attach(a);
-      } catch (_) {/* 连不上电脑不影响本地聊天 */}
+        final s = '$e';
+        Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
+      } catch (_) {}
     }
   }
 

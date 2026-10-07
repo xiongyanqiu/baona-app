@@ -21,7 +21,8 @@ String _hash(String pwd) => sha256.convert(utf8.encode('v27.$pwd')).toString();
 Future<bool> _biometricsAvailable() async {
   try {
     final a = LocalAuthentication();
-    return await a.canCheckBiometrics;
+    if (!await a.canCheckBiometrics) return false;
+    return await a.isDeviceSupported();
   } catch (_) {
     return false;
   }
@@ -56,13 +57,19 @@ class _LockSetupPageState extends State<LockSetupPage> {
   final TextEditingController _p2 = TextEditingController();
   bool _face = false;
   bool _faceAvail = false;
+  bool _faceAvailChecked = false; // ★.14.14 设备能力是否已确认（避免和"完成"竞态丢开关）
   bool _err = false;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _biometricsAvailable().then((v) {
-      if (mounted) setState(() => _faceAvail = v);
+      if (!mounted) return;
+      setState(() {
+        _faceAvail = v;
+        _faceAvailChecked = true;
+      });
     });
   }
 
@@ -73,22 +80,49 @@ class _LockSetupPageState extends State<LockSetupPage> {
     super.dispose();
   }
 
+  /// 保存前确保设备能力已确认（最多等 1.5s，不让开关设置被竞态丢掉）
+  Future<bool> _ensureFaceAvail() async {
+    if (_faceAvailChecked) return _faceAvail;
+    final v = await _biometricsAvailable().timeout(const Duration(milliseconds: 1500), onTimeout: () => false);
+    if (mounted) {
+      setState(() {
+        _faceAvail = v;
+        _faceAvailChecked = true;
+      });
+    }
+    return v;
+  }
+
   Future<void> _save() async {
     final p1 = _p1.text;
     final p2 = _p2.text;
-    if (p1.length < 4) {
+    if (p1.length < 4 || p1 != p2) {
       setState(() => _err = true);
       return;
     }
-    if (p1 != p2) {
-      setState(() => _err = true);
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _err = false;
+    });
+    try {
+      final avail = await _ensureFaceAvail();
+      await Store.setLockHash(_hash(p1));
+      await Store.setLockFace(_face && avail);
+    } catch (e) {
+      try { Store.setCrashLog('setup: $e'); } catch (_) {}
+      if (mounted) setState(() {
+        _busy = false;
+        _err = true;
+      });
       return;
     }
-    // 存哈希 + 是否开人脸（用户自己点开关选择）
-    await Store.setLockHash(_hash(p1));
-    await Store.setLockFace(_face && _faceAvail);
-    HapticFeedback.mediumImpact();
-    if (mounted) widget.onDone();
+    try { HapticFeedback.mediumImpact(); } catch (_) {/* 无震动设备忽略 */}
+    if (!mounted) return;
+    // 下一帧再切主页（等锁页完全退场，避免切换树时机问题）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onDone();
+    });
   }
 
   @override
@@ -161,7 +195,7 @@ class _LockSetupPageState extends State<LockSetupPage> {
                 if (_faceAvail)
                   SwitchListTile(
                     value: _face,
-                    onChanged: (v) => setState(() => _face = v),
+                    onChanged: _busy ? null : (v) => setState(() => _face = v),
                     contentPadding: EdgeInsets.zero,
                     title: const Text('开启人脸识别', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
                     subtitle: const Text('打开时自动 Face ID 解锁，识别不了再输密码', style: TextStyle(fontSize: 12, color: kSub)),
@@ -185,11 +219,11 @@ class _LockSetupPageState extends State<LockSetupPage> {
                   ),
                 const SizedBox(height: 18),
                 FilledButton(
-                  onPressed: _save,
+                  onPressed: _busy ? null : _save,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  child: const Text('完成并进入', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  child: Text(_busy ? '保存中…' : '完成并进入', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ]),
             ),
@@ -224,17 +258,25 @@ class _LockGatePageState extends State<LockGatePage> {
   }
 
   Future<void> _autoFace() async {
-    if (_faceTried) return;
+    if (_faceTried || _busy) return;
     _faceTried = true;
-    final avail = await _biometricsAvailable();
-    if (!avail || !mounted) return;
-    setState(() => _busy = true);
-    final ok = await _tryFace();
+    // 等页面转场稳定再调 Face ID（转场期调用容易失败/异常）
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    setState(() => _busy = false);
-    if (ok) {
-      HapticFeedback.mediumImpact();
-      widget.onUnlocked();
+    try {
+      final avail = await _biometricsAvailable();
+      if (!avail || !mounted) return;
+      setState(() => _busy = true);
+      final ok = await _tryFace();
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (ok) {
+        try { HapticFeedback.mediumImpact(); } catch (_) {}
+        widget.onUnlocked();
+      }
+    } catch (e) {
+      try { Store.setCrashLog('face: $e'); } catch (_) {}
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -244,21 +286,27 @@ class _LockGatePageState extends State<LockGatePage> {
       setState(() => _err = true);
       return;
     }
+    if (_busy) return;
     setState(() {
       _busy = true;
       _err = false;
     });
-    // 哈希比对（延时一点点，防暴力试密码的手感）
-    await Future.delayed(const Duration(milliseconds: 220));
-    final ok = _hash(p) == Store.lockHash;
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (ok) {
-      HapticFeedback.mediumImpact();
-      widget.onUnlocked();
-    } else {
-      setState(() => _err = true);
-      _p.clear();
+    try {
+      // 哈希比对（延时一点点，防暴力试密码的手感）
+      await Future.delayed(const Duration(milliseconds: 220));
+      final ok = _hash(p) == Store.lockHash;
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (ok) {
+        try { HapticFeedback.mediumImpact(); } catch (_) {}
+        widget.onUnlocked();
+      } else {
+        setState(() => _err = true);
+        _p.clear();
+      }
+    } catch (e) {
+      try { Store.setCrashLog('unlock: $e'); } catch (_) {}
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -335,6 +383,16 @@ class _LockGatePageState extends State<LockGatePage> {
                   TextButton(
                     onPressed: _busy ? null : _autoFace,
                     child: const Text('用人脸识别解锁', style: TextStyle(fontSize: 14, color: kAccent)),
+                  ),
+                // ★.14.14 崩溃留痕：上次异常会显示在这里（定位闪退用）
+                if (Store.crashLog.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Text('上次异常：${Store.crashLog}',
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: kSub)),
                   ),
               ]),
             ),
