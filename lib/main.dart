@@ -8,6 +8,7 @@ import 'api.dart';
 import 'alib.dart';
 import 'brain.dart';
 import 'home.dart';
+import 'lock.dart';
 import 'msg.dart';
 import 'my.dart';
 import 'notify.dart';
@@ -288,11 +289,19 @@ class _BaonaAppState extends State<BaonaApp> with WidgetsBindingObserver {
 }
 
 /// 一进来：本地大脑直接可用（不依赖电脑）；有电脑地址才额外连电脑（商城/游戏/相册用）
-class Boot extends StatelessWidget {
+/// ★v27.0.14.13 启动锁：冷启动先进 设密码/解锁门，过了才进主界面；挂后台回来不重锁
+class Boot extends StatefulWidget {
   const Boot({super.key});
+  @override
+  State<Boot> createState() => _BootState();
+}
+
+class _BootState extends State<Boot> {
+  bool _unlocked = false;
 
   @override
-  Widget build(BuildContext context) {
+  void initState() {
+    super.initState();
     final brain = LocalBrain();
     app.attachBrain(brain);
     // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
@@ -302,6 +311,17 @@ class Boot extends StatelessWidget {
         final a = Api(base)..token = Store.token;
         app.attach(a);
       } catch (_) {/* 连不上电脑不影响本地聊天 */}
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_unlocked) {
+      // 没设过密码 → 首次引导设置；设过 → 冷启动解锁门（开启人脸会自动识别）
+      if (Store.lockHash.isEmpty) {
+        return LockSetupPage(onDone: () => setState(() => _unlocked = true));
+      }
+      return LockGatePage(onUnlocked: () => setState(() => _unlocked = true));
     }
     return const HomePage();
   }
