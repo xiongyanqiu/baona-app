@@ -172,7 +172,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
                   color: const Color(0x99000000),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(_dur(e.duration)),
+                child: Text(_dur(e.duration),
                     style: const TextStyle(fontSize: 9.5, color: Colors.white)),
               ),
             ),
