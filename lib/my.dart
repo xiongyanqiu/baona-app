@@ -56,6 +56,11 @@ class _MyPageState extends State<MyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final herAv = '${app.herSet['herAvatar'] ?? ''}';
+    final herName = '${app.herSet['nickName'] ?? ''}'.trim().isEmpty
+        ? '包娜'
+        : '${app.herSet['nickName'] ?? ''}';
+    final herImg = avatarOf(herAv);
     return SafeArea(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // 大标题
@@ -67,6 +72,98 @@ class _MyPageState extends State<MyPage> {
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+            // ★v27.0.14.10 Bento 主卡：她（头像 + 名字 + 在线 + 当前模型小卡）
+            //   玻璃 2.0：强调色渐变 + 锐利描边 + 浮起投影（空间分层）
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    kAccent.withValues(alpha: 0.42),
+                    kAccent.withValues(alpha: 0.12),
+                  ],
+                ),
+                border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                      color: kAccent.withValues(alpha: 0.22),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8)),
+                ],
+              ),
+              child: Row(children: [
+                ClipOval(
+                  child: herImg == null
+                      ? Container(
+                          width: 54,
+                          height: 54,
+                          color: kBg2,
+                          child: Center(
+                              child: Text(herName.substring(0, 1),
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: kText))))
+                      : Image(
+                          image: herImg,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(herName,
+                            style: const TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.2)),
+                        const SizedBox(height: 3),
+                        Row(children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                                color: Color(0xFF34C759), shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 5),
+                          const Text('在线',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: kSub,
+                                  fontWeight: FontWeight.w500)),
+                        ]),
+                      ]),
+                ),
+                // 右侧模型小卡（Bento 副卡）
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.black.withValues(alpha: 0.18),
+                    border: Border.all(color: const Color(0x26FFFFFF), width: 0.6),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    const Text('模型',
+                        style: TextStyle(fontSize: 9.5, color: kSub)),
+                    Text(
+                      _modelSub.length > 10
+                          ? '${_modelSub.substring(0, 10)}…'
+                          : _modelSub,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w600, color: kText),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
             _group([
               _row(
                 icon: Icons.architecture,
@@ -517,6 +614,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (b == null) return;
     final r = await b.herSettings();
     final s = (r['s'] as Map?) ?? {};
+    // ★v27.0.14.10 玻璃强度恢复（液态玻璃 2.0：iOS 27 透明度滑块）
+    gGlassStrength = (app.cfg['glassStrength'] as num?)?.toDouble() ?? 0.75;
     if (mounted) {
       setState(() => _useMem = s['useMemories'] != false);
     }
@@ -617,6 +716,30 @@ class _SettingsPageState extends State<SettingsPage> {
                       activeColor: kAccent,
                       inactiveColor: const Color(0x33FFFFFF),
                       onChanged: (v) => app.put('fontSize', v.round()),
+                    ),
+                  ),
+                ),
+                // ★v27.0.14.10 玻璃强度（液态玻璃 2.0 透明度滑块）：越高玻璃越清晰锐利
+                _row(
+                  icon: Icons.blur_on,
+                  title: '玻璃强度',
+                  sub: '液态玻璃清晰度（iOS 27 透明度滑块）',
+                  onTap: () {},
+                  trailing: SizedBox(
+                    width: 130,
+                    child: Slider(
+                      value: gGlassStrength,
+                      min: 0.3,
+                      max: 1.0,
+                      divisions: 14,
+                      activeColor: kAccent,
+                      inactiveColor: const Color(0x33FFFFFF),
+                      onChanged: (v) {
+                        gGlassStrength = v;
+                        app.cfg['glassStrength'] = v;
+                        app.save();
+                        setState(() {});
+                      },
                     ),
                   ),
                 ),

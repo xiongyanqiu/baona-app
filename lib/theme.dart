@@ -35,7 +35,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.9'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.10'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -88,9 +88,10 @@ const Color kSpecBottom = Color(0x14FFFFFF); // 下缘收暗（层次更分明�
 const Color kFillA = Color(0x1CFFFFFF); // 玻璃填充（亮）v27.0.14.9：更实，漫射更有效（液态玻璃 2.0）
 const Color kFillB = Color(0x0FFFFFFF); // 玻璃填充（暗）
 /// 液态玻璃强度（0~1）。iOS 27「透明度滑块」的对应物：
-/// 越高玻璃越清晰锐利，越低越接近透明。v27.0.14.9 先定常量，
-/// 后续在"我的→外观"开放给用户调节（默认 0.75）。
-const double kGlassStrength = 0.75;
+/// 越高玻璃越清晰锐利，越低越接近透明。
+/// v27.0.14.10 起运行时可变：设置页滑块写入 app.cfg['glassStrength']，实时生效。
+const double kGlassStrength = 0.75; // 出厂默认
+double gGlassStrength = 0.75; // 当前生效值（启动后由设置页从 cfg 恢复）
 const Color kOk = Color(0xFF30D158); // systemGreen
 const Color kBad = Color(0xFFFF453A); // systemRed
 
@@ -204,6 +205,7 @@ class GlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final br = BorderRadius.circular(radius);
+    final str = gGlassStrength; // v27.0.14.10：玻璃强度（设置页滑块实时调）
     final fill = tint != null
         ? LinearGradient(
             begin: Alignment.topCenter,
@@ -215,7 +217,10 @@ class GlassSurface extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: strong
                 ? const [Color(0x2BFFFFFF), Color(0x14FFFFFF)]
-                : const [kFillA, kFillB],
+                : [
+                    kFillA.withValues(alpha: kFillA.a * str),
+                    kFillB.withValues(alpha: kFillB.a * str),
+                  ],
           );
 
     Widget core = Container(
@@ -239,10 +244,14 @@ class GlassSurface extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         borderRadius: br,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [kSpecTop, Color(0x1FFFFFFF), kSpecBottom],
+          colors: [
+            kSpecTop.withValues(alpha: kSpecTop.a * str),
+            const Color(0x1FFFFFFF),
+            kSpecBottom.withValues(alpha: kSpecBottom.a * str),
+          ],
         ),
         boxShadow: elevated
             ? [
