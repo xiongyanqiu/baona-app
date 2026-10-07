@@ -7,6 +7,7 @@
 //  4) 形状统一用胶囊与大圆角（continuous corner 观感）
 //  5) 动效短而稳：按下去轻微缩放（spring 手感），不做花哨弹跳
 //  6) 文字用系统字重分层：大标题 w700 / 正文 w400 / 说明 kSub
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -1178,11 +1179,13 @@ class _StarPainter extends CustomPainter {
         final py = (shoot!.sy + shoot!.dy * p) * h;
         final tx = px - shoot!.dx * 0.07 * w;
         final ty = py - shoot!.dy * 0.07 * h;
+        // ★不能用 Gradient.linear：material 的 Gradient 抽象类遮蔽了 dart:ui 的 → 用 LinearGradient.createShader
         final grad = Paint()
-          ..shader = Gradient.linear(
-              Offset(tx, ty),
-              Offset(px, py),
-              [const Color(0x00FFFFFF), const Color(0xB3FFFFFF)]);
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: const [Color(0x00FFFFFF), Color(0xB3FFFFFF)],
+          ).createShader(Rect.fromPoints(Offset(tx, ty), Offset(px, py)));
         canvas.drawLine(Offset(tx, ty), Offset(px, py), grad..strokeWidth = 1.3);
         canvas.drawCircle(Offset(px, py), 1.5, Paint()..color = const Color(0xE6FFFFFF));
       }
