@@ -1340,7 +1340,7 @@ class _UniverseHubState extends State<UniverseHub>
               ),
             ),
             // 中心主星
-            core,
+            core ?? const SizedBox.shrink(),
             // 环绕公转的小星辰设备
             for (var i = 0; i < n; i++) _node(i, cx, cy),
           ]),
