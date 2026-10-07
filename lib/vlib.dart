@@ -182,9 +182,9 @@ class _VideoLibPageState extends State<VideoLibPage> {
     );
   }
 
-  String _dur(Duration? d) {
-    if (d == null || d.inSeconds <= 0) return '';
-    final s = d.inSeconds;
+  /// photo_manager 3.x：AssetEntity.duration 是 int（单位秒）
+  String _dur(int s) {
+    if (s <= 0) return '';
     final m = s ~/ 60;
     final r = (s % 60).toString().padLeft(2, '0');
     return '$m:$r';
