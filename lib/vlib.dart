@@ -110,7 +110,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
             : _videos.isEmpty
                 ? _empty()
                 : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, navSpace(context) + 16),
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, navSpace(context) + 16),
                     physics: const BouncingScrollPhysics(),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
@@ -172,7 +172,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
                   color: const Color(0x99000000),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(_dur(e.durationSeconds),
+                child: Text(_dur(e.duration)),
                     style: const TextStyle(fontSize: 9.5, color: Colors.white)),
               ),
             ),
@@ -182,8 +182,9 @@ class _VideoLibPageState extends State<VideoLibPage> {
     );
   }
 
-  String _dur(int s) {
-    if (s <= 0) return '';
+  String _dur(Duration? d) {
+    if (d == null || d.inSeconds <= 0) return '';
+    final s = d.inSeconds;
     final m = s ~/ 60;
     final r = (s % 60).toString().padLeft(2, '0');
     return '$m:$r';

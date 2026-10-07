@@ -150,7 +150,7 @@ class _AudioLibPageState extends State<AudioLibPage> {
             : _files.isEmpty
                 ? _empty()
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, navSpace(context) + 16),
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, navSpace(context) + 16),
                     physics: const BouncingScrollPhysics(),
                     itemCount: _files.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
