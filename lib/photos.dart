@@ -203,17 +203,20 @@ class _LibraryTabState extends State<_LibraryTab> {
         ]),
       ),
       Expanded(child: _buildBody()),
-      // 多选底部操作栏
+      // 多选底部操作栏（★v27.0.14.12 抬高 navSpace，不被悬浮玻璃底栏遮挡）
       if (_selMode)
-        Container(
-          color: kBg,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            Text('已选 ${_sel.length} 张',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            _selAct(Icons.favorite_outline, '收藏', _favSel),
-            _selAct(Icons.delete_outline, '删除', _delSel),
-          ]),
+        Padding(
+          padding: EdgeInsets.only(bottom: navSpace(context)),
+          child: Container(
+            color: kBg,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              Text('已选 ${_sel.length} 张',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              _selAct(Icons.favorite_outline, '收藏', _favSel),
+              _selAct(Icons.delete_outline, '删除', _delSel),
+            ]),
+          ),
         ),
     ]);
   }
