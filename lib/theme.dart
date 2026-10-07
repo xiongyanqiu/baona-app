@@ -35,7 +35,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.8'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.9'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -83,10 +83,14 @@ ImageProvider? avatarOf(String s) {
   return p;
 }
 const Color kHair = Color(0xFF38383A); // separator
-const Color kSpecTop = Color(0x5CFFFFFF); // 上缘高光
-const Color kSpecBottom = Color(0x0FFFFFFF); // 下缘收暗
-const Color kFillA = Color(0x17FFFFFF); // 玻璃填充（亮）
-const Color kFillB = Color(0x0AFFFFFF); // 玻璃填充（暗）
+const Color kSpecTop = Color(0x6EFFFFFF); // 上缘高光（v27.0.14.9 锐化：液态玻璃 2.0 更清晰的镜面高光）
+const Color kSpecBottom = Color(0x14FFFFFF); // 下缘收暗（层次更分明）
+const Color kFillA = Color(0x1CFFFFFF); // 玻璃填充（亮）v27.0.14.9：更实，漫射更有效（液态玻璃 2.0）
+const Color kFillB = Color(0x0FFFFFFF); // 玻璃填充（暗）
+/// 液态玻璃强度（0~1）。iOS 27「透明度滑块」的对应物：
+/// 越高玻璃越清晰锐利，越低越接近透明。v27.0.14.9 先定常量，
+/// 后续在"我的→外观"开放给用户调节（默认 0.75）。
+const double kGlassStrength = 0.75;
 const Color kOk = Color(0xFF30D158); // systemGreen
 const Color kBad = Color(0xFFFF453A); // systemRed
 
@@ -182,6 +186,7 @@ class GlassSurface extends StatelessWidget {
     this.blur = kBlurSoft,
     this.tint, // 染色玻璃（主按钮/选中态用）
     this.strong = false, // 更实的底（抽屉/弹窗）
+    this.elevated = false, // v27.0.14.9：浮起投影（Bento 卡片/主按钮用，玻璃悬浮在内容上）
     this.onTap,
     this.margin,
   });
@@ -192,6 +197,7 @@ class GlassSurface extends StatelessWidget {
   final double blur;
   final Color? tint;
   final bool strong;
+  final bool elevated;
   final VoidCallback? onTap;
   final EdgeInsets? margin;
 
@@ -228,6 +234,7 @@ class GlassSurface extends StatelessWidget {
     }
 
     // 1px 高光描边：外层渐变 + 内层留 1px
+    // v27.0.14.9 elevated：加软投影，玻璃卡片像浮在内容上（空间分层，Bento 便当盒的深度）
     Widget glass = Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -237,6 +244,18 @@ class GlassSurface extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [kSpecTop, Color(0x1FFFFFFF), kSpecBottom],
         ),
+        boxShadow: elevated
+            ? [
+                BoxShadow(
+                    color: const Color(0x42000000),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8)),
+                BoxShadow(
+                    color: kSpecTop.withValues(alpha: 0.10),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1)),
+              ]
+            : null,
       ),
       child: Padding(padding: const EdgeInsets.all(1), child: core),
     );

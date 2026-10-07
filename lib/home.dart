@@ -189,6 +189,7 @@ class _BaonaHomeState extends State<BaonaHome> {
             child: GlassSurface(
               radius: 16,
               blur: kBlur,
+              elevated: true,
               pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
@@ -200,24 +201,42 @@ class _BaonaHomeState extends State<BaonaHome> {
           ),
         ),
         const Spacer(flex: 3),
-        // 底部统计条 ★v27.0.14 底部留 navSpace 让位 —— 之前少这一层，统计条被玻璃底栏盖住
+        // 底部统计 Bento 卡 ★v27.0.14.9：从一行均分改成便当盒——中间主卡（聊过的消息）更大更高带强调色，
+        //   两侧小卡（记得的事/陪你的天数）错落排列；玻璃 2.0 锐化 + 浮起投影（空间分层）
         Appear3D(
           delay: 300,
           dy: 10,
           fromAngle: 0.10,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(30, 0, 30, navSpace(context) + 10),
-            child: GlassSurface(
-              radius: 22,
-              blur: kBlur,
-              pad: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-              child: Row(children: [
-                _StatCell(v: '$_msgCount', t: '聊过的消息'),
-                const _StatDivider(),
-                _StatCell(v: '$_memCount', t: '记得的事'),
-                const _StatDivider(),
-                _StatCell(v: '$_dayCount', t: '陪你的天数'),
-              ]),
+            padding: EdgeInsets.fromLTRB(24, 0, 24, navSpace(context) + 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _BentoStat(
+                      v: '$_memCount',
+                      t: '记得的事',
+                      icon: Icons.auto_awesome_outlined),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 7,
+                  child: _BentoStat(
+                      v: '$_msgCount',
+                      t: '聊过的消息',
+                      icon: Icons.chat_bubble_outline,
+                      primary: true),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 5,
+                  child: _BentoStat(
+                      v: '$_dayCount',
+                      t: '陪你的天数',
+                      icon: Icons.favorite_outline),
+                ),
+              ],
             ),
           ),
         ),
@@ -227,30 +246,58 @@ class _BaonaHomeState extends State<BaonaHome> {
   }
 }
 
-class _StatCell extends StatelessWidget {
-  const _StatCell({required this.v, required this.t});
+/// Bento 便当盒统计卡（v27.0.14.9）：中间主卡更大更高带强调色，两侧小卡错落。
+/// 玻璃 2.0：更实的填充 + 锐利高光描边 + 浮起软投影（空间分层）。
+class _BentoStat extends StatelessWidget {
+  const _BentoStat(
+      {required this.v, required this.t, required this.icon, this.primary = false});
   final String v;
   final String t;
+  final IconData icon;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(children: [
+    return Container(
+      height: primary ? 106 : 88,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(primary ? 24 : 20),
+        gradient: primary
+            ? LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [kAccent.withValues(alpha: 0.48), kAccent.withValues(alpha: 0.24)])
+            : const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [kFillA, kFillB]),
+        border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+        boxShadow: primary
+            ? [
+                BoxShadow(
+                    color: kAccent.withValues(alpha: 0.28),
+                    blurRadius: 22,
+                    offset: const Offset(0, 8)),
+              ]
+            : [
+                BoxShadow(
+                    color: const Color(0x42000000),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6)),
+              ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: primary ? 20 : 16, color: primary ? kText : kSub),
+        const SizedBox(height: 6),
         Text(v,
-            style: const TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w700, color: kText)),
+            style: TextStyle(
+                fontSize: primary ? 24 : 17,
+                fontWeight: FontWeight.w800,
+                color: kText)),
         const SizedBox(height: 3),
-        Text(t, style: const TextStyle(fontSize: 11.5, color: kSub)),
+        Text(t, style: const TextStyle(fontSize: 10.5, color: kSub)),
       ]),
     );
-  }
-}
-
-class _StatDivider extends StatelessWidget {
-  const _StatDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 0.8, height: 30, color: const Color(0x22FFFFFF));
   }
 }
