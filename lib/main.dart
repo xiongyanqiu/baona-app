@@ -212,6 +212,25 @@ final app = AppCtl.i;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ★27.0.14.15 诊断：build/渲染异常不再空白闪退 —— 直接显示错误文本（并写进 crashLog）
+  ErrorWidget.builder = (FlutterErrorDetails d) {
+    final s = '${d.exception}';
+    try {
+      final brief = s.length > 220 ? s.substring(0, 220) : s;
+      Store.setCrashLog('render: $brief');
+    } catch (_) {}
+    return ColoredBox(
+      color: const Color(0xFF1C1C1E),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('渲染错误：$s',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 13)),
+        ),
+      ),
+    );
+  };
   // ★27.0.14.14 崩溃留痕：Dart 未捕获异常记到本地，下次启动锁页面能看到（定位闪退用）
   FlutterError.onError = (d) {
     try {
@@ -343,11 +362,22 @@ class _BootState extends State<Boot> {
     if (!_unlocked) {
       // 没设过密码 → 首次引导设置；设过 → 冷启动解锁门（开启人脸会自动识别）
       if (Store.lockHash.isEmpty) {
-        return LockSetupPage(onDone: () => setState(() => _unlocked = true));
+        return LockSetupPage(onDone: () => _enterHome());
       }
-      return LockGatePage(onUnlocked: () => setState(() => _unlocked = true));
+      return LockGatePage(onUnlocked: () => _enterHome());
     }
     return const HomePage();
+  }
+
+  /// 解锁/设完密码 → 切主页。顺手记一条诊断（壁纸/头像状态），崩了好定位
+  void _enterHome() {
+    try {
+      final bg = app.bg;
+      final herAv = '${app.herSet['herAvatar'] ?? ''}';
+      Store.setCrashLog(
+          'enter: bg[${bg.length}]${bg.length > 40 ? '' : '=$bg'} herAv[${herAv.length}]');
+    } catch (_) {}
+    setState(() => _unlocked = true);
   }
 }
 

@@ -1,15 +1,16 @@
-// lock.dart — 包娜 App v27.0.14.13 启动锁：Face ID 人脸识别 + 密码
+// lock.dart — 包娜 App v27.0.14.16 启动锁（纯密码）
 // 规则：
-//   1) 第一次打开 App → LockSetupPage：设密码（≥4 位）+ 可选开启人脸识别；
-//   2) 之后每次打开（冷启动）→ LockGatePage：开启过人脸就自动调 Face ID，
-//      识别失败 / 取消 / 设备不支持 → 落回密码输入；密码对才放行；
-//   3) 挂在后台再切回来（resume）→ 不重新锁（锁只在冷启动出现一次）。
+//   1) 第一次打开 App → LockSetupPage：设密码（≥4 位，输两遍一致）；
+//   2) 之后每次冷启动 → LockGatePage：输对密码才放行；
+//   3) 挂在后台再切回来（resume）→ 不重新锁，只有冷启动才验证；
+//   4) ★自签(侧载) App 不支持 Face ID（local_auth 会崩）→ 人脸识别整个去掉，
+//      只保留密码，不依赖任何原生能力，自签环境完全可靠。
+//   5) 密码只存 SHA-256 哈希，不存明文。
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:local_auth/local_auth.dart';
 
 import 'api.dart';
 import 'theme.dart';
@@ -17,34 +18,7 @@ import 'theme.dart';
 /// 密码 SHA-256 哈希（本地只存哈希，不存明文）
 String _hash(String pwd) => sha256.convert(utf8.encode('v27.$pwd')).toString();
 
-/// 设备是否支持生物识别（Face ID / Touch ID）
-Future<bool> _biometricsAvailable() async {
-  try {
-    final a = LocalAuthentication();
-    if (!await a.canCheckBiometrics) return false;
-    return await a.isDeviceSupported();
-  } catch (_) {
-    return false;
-  }
-}
-
-/// 调起系统人脸识别，返回是否通过
-Future<bool> _tryFace() async {
-  try {
-    final a = LocalAuthentication();
-    return await a.authenticate(
-      localizedReason: '用 Face ID 解锁包娜',
-      options: const AuthenticationOptions(
-        biometricOnly: true,
-        stickyAuth: true,
-      ),
-    );
-  } catch (_) {
-    return false;
-  }
-}
-
-/* ================= 首次设置：设密码 + 可选开人脸 ================= */
+/* ================= 首次设置：设密码 ================= */
 class LockSetupPage extends StatefulWidget {
   const LockSetupPage({super.key, required this.onDone});
   final VoidCallback onDone;
@@ -55,42 +29,14 @@ class LockSetupPage extends StatefulWidget {
 class _LockSetupPageState extends State<LockSetupPage> {
   final TextEditingController _p1 = TextEditingController();
   final TextEditingController _p2 = TextEditingController();
-  bool _face = false;
-  bool _faceAvail = false;
-  bool _faceAvailChecked = false; // ★.14.14 设备能力是否已确认（避免和"完成"竞态丢开关）
   bool _err = false;
   bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _biometricsAvailable().then((v) {
-      if (!mounted) return;
-      setState(() {
-        _faceAvail = v;
-        _faceAvailChecked = true;
-      });
-    });
-  }
 
   @override
   void dispose() {
     _p1.dispose();
     _p2.dispose();
     super.dispose();
-  }
-
-  /// 保存前确保设备能力已确认（最多等 1.5s，不让开关设置被竞态丢掉）
-  Future<bool> _ensureFaceAvail() async {
-    if (_faceAvailChecked) return _faceAvail;
-    final v = await _biometricsAvailable().timeout(const Duration(milliseconds: 1500), onTimeout: () => false);
-    if (mounted) {
-      setState(() {
-        _faceAvail = v;
-        _faceAvailChecked = true;
-      });
-    }
-    return v;
   }
 
   Future<void> _save() async {
@@ -106,9 +52,7 @@ class _LockSetupPageState extends State<LockSetupPage> {
       _err = false;
     });
     try {
-      final avail = await _ensureFaceAvail();
       await Store.setLockHash(_hash(p1));
-      await Store.setLockFace(_face && avail);
     } catch (e) {
       try { Store.setCrashLog('setup: $e'); } catch (_) {}
       if (mounted) setState(() {
@@ -191,32 +135,6 @@ class _LockSetupPageState extends State<LockSetupPage> {
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, color: kBad)),
                   ),
-                const SizedBox(height: 16),
-                if (_faceAvail)
-                  SwitchListTile(
-                    value: _face,
-                    onChanged: _busy ? null : (v) => setState(() => _face = v),
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('开启人脸识别', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('打开时自动 Face ID 解锁，识别不了再输密码', style: TextStyle(fontSize: 12, color: kSub)),
-                    secondary: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: _face ? kAccent.withValues(alpha: 0.18) : kBg2,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.face_retouching_natural, size: 22,
-                          color: _face ? kAccent : kSub),
-                    ),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 6),
-                    child: Text('这台设备不支持人脸识别，将只用密码解锁',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: kSub)),
-                  ),
                 const SizedBox(height: 18),
                 FilledButton(
                   onPressed: _busy ? null : _save,
@@ -234,7 +152,7 @@ class _LockSetupPageState extends State<LockSetupPage> {
   }
 }
 
-/* ================= 冷启动解锁门 ================= */
+/* ================= 冷启动解锁门（纯密码） ================= */
 class LockGatePage extends StatefulWidget {
   const LockGatePage({super.key, required this.onUnlocked});
   final VoidCallback onUnlocked;
@@ -246,38 +164,11 @@ class _LockGatePageState extends State<LockGatePage> {
   final TextEditingController _p = TextEditingController();
   bool _busy = false;
   bool _err = false;
-  bool _faceTried = false; // 这次冷启动已经试过人脸（避免循环弹）
 
   @override
-  void initState() {
-    super.initState();
-    // 开启过人脸 & 设备支持 → 自动调起
-    if (Store.lockFace) {
-      _autoFace();
-    }
-  }
-
-  Future<void> _autoFace() async {
-    if (_faceTried || _busy) return;
-    _faceTried = true;
-    // 等页面转场稳定再调 Face ID（转场期调用容易失败/异常）
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    try {
-      final avail = await _biometricsAvailable();
-      if (!avail || !mounted) return;
-      setState(() => _busy = true);
-      final ok = await _tryFace();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      if (ok) {
-        try { HapticFeedback.mediumImpact(); } catch (_) {}
-        widget.onUnlocked();
-      }
-    } catch (e) {
-      try { Store.setCrashLog('face: $e'); } catch (_) {}
-      if (mounted) setState(() => _busy = false);
-    }
+  void dispose() {
+    _p.dispose();
+    super.dispose();
   }
 
   Future<void> _unlock() async {
@@ -311,12 +202,6 @@ class _LockGatePageState extends State<LockGatePage> {
   }
 
   @override
-  void dispose() {
-    _p.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Wall(
       url: '',
@@ -342,17 +227,15 @@ class _LockGatePageState extends State<LockGatePage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: 4)),
                 const SizedBox(height: 6),
-                Text(
-                  _busy ? '正在验证…' : '输入密码解锁',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13.5, color: kSub),
-                ),
+                const Text('输入密码解锁',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13.5, color: kSub)),
                 const SizedBox(height: 26),
                 TextField(
                   controller: _p,
                   obscureText: true,
                   maxLength: 16,
-                  autofocus: !Store.lockFace, // 开了人脸就等人脸，不抢键盘
+                  autofocus: true,
                   enableSuggestions: false,
                   autocorrect: false,
                   keyboardType: TextInputType.visiblePassword,
@@ -379,18 +262,13 @@ class _LockGatePageState extends State<LockGatePage> {
                   ),
                   child: Text(_busy ? '验证中…' : '解锁', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
-                if (Store.lockFace)
-                  TextButton(
-                    onPressed: _busy ? null : _autoFace,
-                    child: const Text('用人脸识别解锁', style: TextStyle(fontSize: 14, color: kAccent)),
-                  ),
                 // ★.14.14 崩溃留痕：上次异常会显示在这里（定位闪退用）
                 if (Store.crashLog.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 14),
                     child: Text('上次异常：${Store.crashLog}',
                         textAlign: TextAlign.center,
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: kSub)),
                   ),

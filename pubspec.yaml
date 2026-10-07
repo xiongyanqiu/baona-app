@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 27.0.14+27
+version: 27.0.14+29
 environment:
   sdk: ^3.13.4
 
@@ -49,8 +49,9 @@ dependencies:
   photo_manager: ^3.6.0                # ★26.2.20 相册/视频双写系统相册（重装 App 也不丢）
   sqflite: ^2.3.0                      # ★27.0.8 超长期记忆：记忆落 SQLite（SP 兜底）
   path: ^1.9.0                         # ★27.0.8 sqflite 路径拼接
-  local_auth: ^2.3.0                   # ★27.0.14.13 启动锁：Face ID 人脸识别解锁
   crypto: ^3.0.3                       # ★27.0.14.13 启动锁：密码 SHA-256 哈希存储
+  # ★27.0.14.16 移除 local_auth：自签(侧载) App 不支持 Face ID，且其 SPM 集成会拖垮整个 App
+  #   （.14.13/14 主页空白+闪退疑似它引起）。启动锁只保留密码，自签环境完全可靠。
 
 dev_dependencies:
   flutter_test:
