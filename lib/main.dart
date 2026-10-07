@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'alib.dart';
 import 'brain.dart';
 import 'home.dart';
 import 'msg.dart';
@@ -12,6 +13,7 @@ import 'my.dart';
 import 'notify.dart';
 import 'photos.dart';
 import 'theme.dart';
+import 'vlib.dart';
 
 /// 全局状态（一个 App 就一个连接、一份设置）
 class AppCtl extends ChangeNotifier {
@@ -621,8 +623,8 @@ class _HomePageState extends State<HomePage> {
                           photoTab: _photoTab,
                           onPhotoTab: (i) => setState(() => _photoTab = i),
                         ))),
-                        Page3D(ctrl: _pageCtrl, index: 2, child: KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思'))),
-                        Page3D(ctrl: _pageCtrl, index: 3, child: KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思'))),
+                        Page3D(ctrl: _pageCtrl, index: 2, child: KeepAliveWrapper(child: VideoLibPage())),
+                        Page3D(ctrl: _pageCtrl, index: 3, child: KeepAliveWrapper(child: AudioLibPage())),
                         Page3D(ctrl: _pageCtrl, index: 4, child: KeepAliveWrapper(child: MyPage())),
                       ],
                     ),
@@ -662,39 +664,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       );
-}
-
-/// ★27.0 占位页：照片 / 视频 / 音频 / 我的 —— 先做入口，功能等用户想好再填
-class _PlacePage extends StatelessWidget {
-  const _PlacePage(this.title, this.icon, this.hint);
-  final String title;
-  final IconData icon;
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              color: kBg2,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0x26FFFFFF), width: 0.8),
-            ),
-            child: Icon(icon, size: 34, color: kSub),
-          ),
-          const SizedBox(height: 18),
-          Text(title,
-              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-          const SizedBox(height: 7),
-          Text(hint, style: const TextStyle(fontSize: 13.5, color: kSub)),
-        ]),
-      ),
-    );
-  }
 }
 
 class _Nav extends StatelessWidget {

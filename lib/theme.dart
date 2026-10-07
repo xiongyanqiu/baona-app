@@ -19,7 +19,10 @@ import 'package:flutter/material.dart';
 /* ------------------------------- 基础色板 ------------------------------- */
 // ★27.0 全新版：全部改用 iOS 系统色（深色模式 UIColor 语义色），彻底去掉紫色
 const Color kBg = Color(0xFF000000); // systemBackground
-const Color kBg2 = Color(0xFF1C1C1E); // secondarySystemBackground
+// ★v27.0.14.11 从全不透明改成半透明深玻璃（54%）：App 全局背景是壁纸（Wall），
+//   原来 0xFF1C1C1E 的不透明黑块在壁纸上非常突兀（图标底/输入框/气泡/分组卡）。
+//   现在半透明 → 壁纸透出来，符合液态玻璃设计语言；纯黑背景观感几乎不变。
+const Color kBg2 = Color(0x8A1C1C1E); // secondarySystemBackground（半透明玻璃）
 const Color kAccent = Color(0xFF0A84FF); // systemBlue
 const Color kAccent2 = Color(0xFF409CFF); // systemBlue（渐变亮端）
 const Color kText = Color(0xFFFFFFFF); // label
@@ -35,7 +38,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.10'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.11'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
