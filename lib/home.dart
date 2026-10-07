@@ -101,80 +101,107 @@ class _BaonaHomeState extends State<BaonaHome> {
         ),
         const Spacer(flex: 2),
         // 她：大头像（点她就开始聊天）+ 名字 + 在线
-        GestureDetector(
-          onTap: widget.onOpenChat,
-          child: Container(
-            width: 196,
-            height: 196,
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
+        // ★v27.0.14.5 Tilt3D：手指在她脸上滑动时，头像像悬浮的玻璃片跟着轻微 3D 转动
+        Appear3D(
+          fromAngle: 0.16,
+          child: Tilt3D(
+            max: 0.12,
+            child: GestureDetector(
+              onTap: widget.onOpenChat,
+              child: Container(
+                width: 196,
+                height: 196,
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                        color: kAccent.withValues(alpha: 0.30),
+                        blurRadius: 32,
+                        offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: const BoxDecoration(shape: BoxShape.circle),
+                  child: avatarWidget,
+                ),
               ),
-              boxShadow: [
-                BoxShadow(
-                    color: kAccent.withValues(alpha: 0.30),
-                    blurRadius: 32,
-                    offset: const Offset(0, 10)),
-              ],
-            ),
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: avatarWidget,
             ),
           ),
         ),
         const SizedBox(height: 22),
-        Text(herName,
-            style: const TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+        Appear3D(
+          delay: 90,
+          dy: 10,
+          fromAngle: 0.10,
+          child: Text(herName,
+              style: const TextStyle(
+                  fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+        ),
         const SizedBox(height: 8),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-                color: Color(0xFF34C759), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          const Text('在线',
-              style: TextStyle(fontSize: 13, color: kSub, fontWeight: FontWeight.w500)),
-        ]),
+        Appear3D(
+          delay: 160,
+          dy: 8,
+          fromAngle: 0.08,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                  color: Color(0xFF34C759), shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            const Text('在线',
+                style: TextStyle(fontSize: 13, color: kSub, fontWeight: FontWeight.w500)),
+          ]),
+        ),
         const SizedBox(height: 10),
         // 轻提示：点她 / 点下方按钮都能开聊
-        GestureDetector(
-          onTap: widget.onOpenChat,
-          child: GlassSurface(
-            radius: 16,
-            blur: kBlur,
-            pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
-              SizedBox(width: 6),
-              Text('开始聊天',
-                  style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
-            ]),
+        Appear3D(
+          delay: 230,
+          dy: 8,
+          fromAngle: 0.08,
+          child: GestureDetector(
+            onTap: widget.onOpenChat,
+            child: GlassSurface(
+              radius: 16,
+              blur: kBlur,
+              pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
+                SizedBox(width: 6),
+                Text('开始聊天',
+                    style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+              ]),
+            ),
           ),
         ),
         const Spacer(flex: 3),
         // 底部统计条 ★v27.0.14 底部留 navSpace 让位 —— 之前少这一层，统计条被玻璃底栏盖住
-        Padding(
-          padding: EdgeInsets.fromLTRB(30, 0, 30, navSpace(context) + 10),
-          child: GlassSurface(
-            radius: 22,
-            blur: kBlur,
-            pad: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-            child: Row(children: [
-              _StatCell(v: '$_msgCount', t: '聊过的消息'),
-              const _StatDivider(),
-              _StatCell(v: '$_memCount', t: '记得的事'),
-              const _StatDivider(),
-              _StatCell(v: '$_dayCount', t: '陪你的天数'),
-            ]),
+        Appear3D(
+          delay: 300,
+          dy: 10,
+          fromAngle: 0.10,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(30, 0, 30, navSpace(context) + 10),
+            child: GlassSurface(
+              radius: 22,
+              blur: kBlur,
+              pad: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+              child: Row(children: [
+                _StatCell(v: '$_msgCount', t: '聊过的消息'),
+                const _StatDivider(),
+                _StatCell(v: '$_memCount', t: '记得的事'),
+                const _StatDivider(),
+                _StatCell(v: '$_dayCount', t: '陪你的天数'),
+              ]),
+            ),
           ),
         ),
       ]),

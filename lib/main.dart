@@ -612,17 +612,18 @@ class _HomePageState extends State<HomePage> {
                       },
                       children: [
                         // ★v27.0.11 启动主页面 = 包娜主页；对话从主页"聊天"卡片 push 全屏进入
-                        KeepAliveWrapper(child: BaonaHome(
+                        // ★v27.0.14.5 每页包 Page3D：横滑切页 = 三维空间翻页（当前页立起、两侧转远）
+                        Page3D(ctrl: _pageCtrl, index: 0, child: KeepAliveWrapper(child: BaonaHome(
                           onOpenChat: _openChat,
                           onGoTab: _switchTab,
-                        )),
-                        KeepAliveWrapper(child: PhotosPage(
+                        ))),
+                        Page3D(ctrl: _pageCtrl, index: 1, child: KeepAliveWrapper(child: PhotosPage(
                           photoTab: _photoTab,
                           onPhotoTab: (i) => setState(() => _photoTab = i),
-                        )),
-                        KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思')),
-                        KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思')),
-                        KeepAliveWrapper(child: MyPage()),
+                        ))),
+                        Page3D(ctrl: _pageCtrl, index: 2, child: KeepAliveWrapper(child: _PlacePage('视频', Icons.videocam_outlined, '视频区 · 功能等你构思'))),
+                        Page3D(ctrl: _pageCtrl, index: 3, child: KeepAliveWrapper(child: _PlacePage('音频', Icons.audiotrack_outlined, '音频区 · 功能等你构思'))),
+                        Page3D(ctrl: _pageCtrl, index: 4, child: KeepAliveWrapper(child: MyPage())),
                       ],
                     ),
                   ),

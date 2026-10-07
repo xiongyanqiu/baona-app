@@ -33,6 +33,7 @@ class _MsgPageState extends State<MsgPage> {
   int _cidSeq = 0;
   String _myAv = ''; // ★v27.0.1 我的头像本地兜底（双写：SP + brain._herSet，重装也不丢）
   bool _drawerOpen = false; // ★v27.0.10 对话功能区（输入框左边箭头呼出/收起）
+  final Set<String> _fresh = {}; // ★v27.0.14.5 新消息标记：刚到的消息 3D 翻入，播完移除
   final TextEditingController _inp = TextEditingController();
   final ScrollController _sc = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _sub;
@@ -89,7 +90,10 @@ class _MsgPageState extends State<MsgPage> {
       if (m is Map) {
         final msg = Msg.fromJson(Map<String, dynamic>.from(m));
         // 防重复：本地 pending 是自己画的那条（cid 不同），assistant 广播直接加
-        setState(() => _msgs.add(msg));
+        setState(() {
+          _msgs.add(msg);
+          _fresh.add(_mkey(msg)); // ★v27.0.14.5 新消息 3D 翻入
+        });
         _jumpBottom();
       }
     } else if (t == 'typing') {
@@ -123,7 +127,10 @@ class _MsgPageState extends State<MsgPage> {
     } catch (_) {}
     final cid = 'c${DateTime.now().millisecondsSinceEpoch}-${++_cidSeq}';
     final m = Msg(role: 'me', content: t, st: 'pending', time: DateTime.now().millisecondsSinceEpoch, cid: cid);
-    setState(() => _msgs.add(m));
+    setState(() {
+      _msgs.add(m);
+      _fresh.add(cid); // ★v27.0.14.5 自己发的消息也从远处翻入
+    });
     await MsgsLocal.save('baona', _msgs);
     // ★v27.0.9 发送时不再追键盘动画：键盘收起过程中列表高度一直在变，
     //   animateTo 追着变动的 maxScrollExtent 跑 → 页面乱弹。改成瞬时定位两次：
@@ -601,7 +608,19 @@ class _MsgPageState extends State<MsgPage> {
                         itemCount: _msgs.length + (_typing ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i >= _msgs.length) return _TypingRow();
-                          return _row(_msgs[i], herAv, myAv);
+                          final m = _msgs[i];
+                          final row = _row(m, herAv, myAv);
+                          final k = _mkey(m);
+                          // ★v27.0.14.5 新消息 3D 翻入：只播一次（播完从 _fresh 移除，滚动重建不再播）
+                          if (_fresh.contains(k)) {
+                            return Appear3D(
+                              fromAngle: 0.10,
+                              dy: 10,
+                              onDone: () => setState(() => _fresh.remove(k)),
+                              child: row,
+                            );
+                          }
+                          return row;
                         },
                       ),
           ),
@@ -729,6 +748,12 @@ class _MsgPageState extends State<MsgPage> {
       ),
       ),
     );
+  }
+
+  /// 消息唯一 key：本地消息用 cid，assistant 消息没 cid 用 time
+  String _mkey(Msg m) {
+    final c = m.cid;
+    return (c != null && c.isNotEmpty) ? c : 't${m.time}';
   }
 
   Widget _row(Msg m, String herAv, String myAv) {

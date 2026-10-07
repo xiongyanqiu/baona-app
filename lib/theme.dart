@@ -33,7 +33,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.4'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.5'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -873,4 +873,180 @@ void toast(BuildContext c, String t) {
     margin: const EdgeInsets.fromLTRB(16, 0, 16, 92),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRCapsule)),
   ));
+}
+
+/* ======================= ★v27.0.14.5 三维空间动效 ======================= */
+/// 统一动效时长/曲线（3D 系）
+const Duration kD3 = Duration(milliseconds: 420);
+const Duration kD3Short = Duration(milliseconds: 200);
+const Curve k3In = Curves.easeOutCubic;
+const Curve k3Spring = Curves.easeOutBack;
+
+/// 3D 入场：从远处翻入（rotationY 透视）+ 上浮 + 淡入，弹簧收尾。
+/// 用法：新消息气泡 / 主页元素 / 首屏卡片 —— 兄弟之间用 delay 错开 = 空间纵深进场。
+class Appear3D extends StatefulWidget {
+  const Appear3D({super.key, required this.child, this.delay = 0, this.dy = 16, this.fromAngle = 0.18, this.onDone});
+
+  final Widget child;
+  final int delay; // 毫秒，后面的兄弟错开一点（stagger）
+  final double dy; // 起点上浮距离（px）
+  final double fromAngle; // 起始旋转弧度（默认约 10°）
+  final VoidCallback? onDone; // 播完回调（列表用它清"新消息"标记，防止滚动重建重复播）
+
+  @override
+  State<Appear3D> createState() => _Appear3DState();
+}
+
+class _Appear3DState extends State<Appear3D> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: kD3);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.delay > 0) {
+      Future.delayed(Duration(milliseconds: widget.delay), () {
+        if (mounted) _c.forward().whenComplete(() => widget.onDone?.call());
+      });
+    } else {
+      _c.forward().whenComplete(() => widget.onDone?.call());
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) {
+        final v = CurvedAnimation(parent: _c, curve: k3In).value;
+        return Opacity(
+          opacity: v,
+          child: Transform(
+            alignment: Alignment.bottomCenter,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0011)
+              ..rotateY(widget.fromAngle * (1 - v))
+              ..translate(0.0, widget.dy * (1 - v)),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 触摸跟随 3D 倾斜：手指按住/滑动时，卡片像悬浮的玻璃片一样跟着转动
+/// （Apple 官网卡片手感）。松手弹性归零。包一层在头像/主卡片上。
+class Tilt3D extends StatefulWidget {
+  const Tilt3D({super.key, required this.child, this.max = 0.14});
+
+  final Widget child;
+  final double max; // 最大倾斜弧度（默认约 8°）
+
+  @override
+  State<Tilt3D> createState() => _Tilt3DState();
+}
+
+class _Tilt3DState extends State<Tilt3D> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: kD3Short);
+  double _rx = 0, _ry = 0; // 当前显示角度（动画插值）
+  double _tx = 0, _ty = 0; // 目标角度
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _go() {
+    final fx = _rx, fy = _ry, tx = _tx, ty = _ty;
+    _c.stop();
+    _c.reset();
+    _c.addListener(() {
+      final t = Curves.easeOutCubic.transform(_c.value);
+      setState(() {
+        _rx = fx + (tx - fx) * t;
+        _ry = fy + (ty - fy) * t;
+      });
+    });
+    _c.forward();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanDown: (_) {},
+      onPanUpdate: (d) {
+        final box = context.findRenderObject();
+        if (box is! RenderBox || box.size.isEmpty) return;
+        final local = box.globalToLocal(d.globalPosition);
+        final dx = ((local.dx / box.size.width) * 2 - 1).clamp(-1.0, 1.0);
+        final dy = ((local.dy / box.size.height) * 2 - 1).clamp(-1.0, 1.0);
+        _tx = dx * widget.max;
+        _ty = -dy * widget.max;
+        _go();
+      },
+      onPanEnd: (_) {
+        _tx = 0;
+        _ty = 0;
+        _go();
+      },
+      onPanCancel: () {
+        _tx = 0;
+        _ty = 0;
+        _go();
+      },
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.0013)
+          ..rotateX(_rx)
+          ..rotateY(_ry),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// PageView 三维透视翻页：滑动时页面像在三维空间里翻转 ——
+/// 当前页立起，滑走的页向后转远缩小，滑入的页从侧面转进来。
+/// 包在 PageView 每个 child 外面，用 controller 的 page 偏移算角度。
+class Page3D extends StatelessWidget {
+  const Page3D({super.key, required this.ctrl, required this.index, required this.child});
+
+  final PageController ctrl;
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ctrl,
+      child: child,
+      builder: (context, child) {
+        final pos = ctrl.hasClients
+            ? (ctrl.page ?? index.toDouble())
+            : index.toDouble();
+        final diff = (pos - index).clamp(-1.0, 1.0);
+        final angle = diff * 0.24; // 最大约 13.8°
+        final z = 1 - diff.abs() * 0.10; // 最大缩小 10%
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.0012)
+            ..rotateY(angle)
+            ..scale(z),
+          child: child,
+        );
+      },
+    );
+  }
 }
