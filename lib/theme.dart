@@ -9,6 +9,7 @@
 //  6) 文字用系统字重分层：大标题 w700 / 正文 w400 / 说明 kSub
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -33,7 +34,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.5'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.6'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -1049,4 +1050,221 @@ class Page3D extends StatelessWidget {
       },
     );
   }
+}
+
+/* ======================= ★v27.0.14.6 宇宙元素动画 ======================= */
+/// 宇宙星尘背景：缓慢漂移 + 明暗闪烁的星星，可选偶发流星。
+/// 轻量 CustomPaint 纯绘制（不建 widget 树），真机不卡、不耗电。
+/// 用法：垫在页面内容下面一层，Positioned.fill + IgnorePointer 包住。
+class StarField extends StatefulWidget {
+  const StarField({super.key, this.count = 48, this.dim = false, this.shooting = false});
+
+  final int count; // 星星数量（主页多一点、对话页少一点）
+  final bool dim; // 更淡模式（阅读场景用）
+  final bool shooting; // 是否偶发流星
+
+  @override
+  State<StarField> createState() => _StarFieldState();
+}
+
+class _StarFieldState extends State<StarField> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(seconds: 60))..repeat();
+  final List<_Star> _stars = [];
+  final math.Random _rnd = math.Random();
+  _Shoot? _shoot;
+  Timer? _shootTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    for (var i = 0; i < widget.count; i++) {
+      _stars.add(_Star(
+        x: _rnd.nextDouble(),
+        y: _rnd.nextDouble(),
+        r: 0.4 + _rnd.nextDouble() * 1.3,
+        base: 0.15 + _rnd.nextDouble() * 0.60,
+        phase: _rnd.nextDouble() * 6.28,
+        tw: 0.25 + _rnd.nextDouble() * 0.50,
+        vx: (0.008 + _rnd.nextDouble() * 0.018) * (_rnd.nextBool() ? 1 : -1),
+        vy: (0.005 + _rnd.nextDouble() * 0.014) * (_rnd.nextBool() ? 1 : -1),
+      ));
+    }
+    if (widget.shooting) _scheduleShoot();
+  }
+
+  void _scheduleShoot() {
+    _shootTimer = Timer(Duration(seconds: 3 + _rnd.nextInt(6)), () {
+      if (!mounted) return;
+      setState(() {
+        _shoot = _Shoot(
+          sx: 0.12 + _rnd.nextDouble() * 0.72,
+          sy: 0.02 + _rnd.nextDouble() * 0.30,
+          dx: 0.20 + _rnd.nextDouble() * 0.32,
+          dy: 0.10 + _rnd.nextDouble() * 0.18,
+          start: _c.value,
+        );
+      });
+      _scheduleShoot();
+    });
+  }
+
+  @override
+  void dispose() {
+    _shootTimer?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      child: const SizedBox.expand(),
+      builder: (context, child) => CustomPaint(
+        painter: _StarPainter(
+          t: _c.value,
+          stars: _stars,
+          shoot: _shoot,
+          dim: widget.dim,
+          shooting: widget.shooting,
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _Star {
+  _Star({required this.x, required this.y, required this.r, required this.base, required this.phase, required this.tw, required this.vx, required this.vy});
+  double x, y, r, base, phase, tw, vx, vy;
+}
+
+class _Shoot {
+  _Shoot({required this.sx, required this.sy, required this.dx, required this.dy, required this.start});
+  double sx, sy, dx, dy, start;
+}
+
+class _StarPainter extends CustomPainter {
+  _StarPainter({required this.t, required this.stars, this.shoot, this.dim = false, this.shooting = false});
+  final double t;
+  final List<_Star> stars;
+  final _Shoot? shoot;
+  final bool dim;
+  final bool shooting;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final mul = dim ? 0.55 : 1.0;
+    for (final s in stars) {
+      // 缓慢漂移（60s 一个来回，几乎不可察觉但画面是活的）
+      final x = (s.x + s.vx * t) % 1.0;
+      final y = (s.y + s.vy * t) % 1.0;
+      // 明暗闪烁（sin 呼吸）
+      final a = (s.base + s.tw * (0.5 + 0.5 * math.sin(2 * 3.14159 * (t + s.phase))))
+          .clamp(0.0, 1.0) * mul;
+      canvas.drawCircle(
+        Offset(x * w, y * h),
+        s.r,
+        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: a),
+      );
+    }
+    // 偶发流星：斜向拖尾 + 头部亮点
+    if (shooting && shoot != null) {
+      final p = (t - shoot!.start) / 0.012; // 约 0.72s 划过（60s 周期换算）
+      if (p >= 0 && p <= 1) {
+        final px = (shoot!.sx + shoot!.dx * p) * w;
+        final py = (shoot!.sy + shoot!.dy * p) * h;
+        final tx = px - shoot!.dx * 0.07 * w;
+        final ty = py - shoot!.dy * 0.07 * h;
+        final grad = Paint()
+          ..shader = Gradient.linear(
+              Offset(tx, ty),
+              Offset(px, py),
+              [const Color(0x00FFFFFF), const Color(0xB3FFFFFF)]);
+        canvas.drawLine(Offset(tx, ty), Offset(px, py), grad..strokeWidth = 1.3);
+        canvas.drawCircle(Offset(px, py), 1.5, Paint()..color = const Color(0xE6FFFFFF));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StarPainter old) => old.t != t;
+}
+
+/// 星光光环：绕着物体缓慢旋转的光点环 + 柔光圆环（配大头像，像她自带一圈星光）。
+/// 用法：Stack 里 Positioned.fill 包住，child 传占位；实际物体叠在它上面。
+class StarHalo extends StatefulWidget {
+  const StarHalo({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<StarHalo> createState() => _StarHaloState();
+}
+
+class _StarHaloState extends State<StarHalo> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(seconds: 12))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) => CustomPaint(
+        painter: _HaloPainter(_c.value),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _HaloPainter extends CustomPainter {
+  _HaloPainter(this.t);
+  final double t; // 0..1 旋转周期
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final R = size.width / 2 - 4;
+    // 柔光圆环（两层，蓝系星光色）
+    canvas.drawCircle(c, R,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = const Color(0x4DA8C8FF));
+    canvas.drawCircle(c, R - 4,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2
+          ..color = const Color(0x1A8FBFFF));
+    // 环绕光点：径向起伏 + 亮度脉动，整体缓慢旋转
+    const n = 16;
+    for (var i = 0; i < n; i++) {
+      final ang = i * 2 * 3.14159 / n + t * 2 * 3.14159;
+      final rr = R + math.sin(i * 1.9) * 2.5;
+      final px = c.dx + math.cos(ang) * rr;
+      final py = c.dy + math.sin(ang) * rr;
+      final a = (0.20 + 0.35 * (0.5 + 0.5 * math.sin(i * 2.7 + t * 2 * 3.14159)))
+          .clamp(0.0, 1.0);
+      final r = 0.8 + 0.9 * (0.5 + 0.5 * math.sin(i * 2.3));
+      canvas.drawCircle(Offset(px, py), r,
+          Paint()..color = const Color(0xFFCFE6FF).withValues(alpha: a));
+    }
+    // 顶部钻石亮斑（呼吸）
+    final topA = (0.25 + 0.20 * math.sin(t * 2 * 3.14159)).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset(c.dx, c.dy - R + 2), 2.2,
+        Paint()..color = const Color(0xE6FFFFFF).withValues(alpha: topA));
+  }
+
+  @override
+  bool shouldRepaint(covariant _HaloPainter old) => old.t != t;
 }

@@ -547,7 +547,11 @@ class _MsgPageState extends State<MsgPage> {
       url: app.bg,
       blur: app.bgBlur,
       opacity: app.bgOpacity,
-      child: Material(
+      // ★v27.0.14.6 宇宙元素：对话页垫一层淡星尘（不影响阅读），消息浮在星空上
+      child: Stack(children: [
+        const Positioned.fill(
+            child: IgnorePointer(child: StarField(count: 30, dim: true))),
+        Material(
         type: MaterialType.transparency,
         child: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -746,6 +750,7 @@ class _MsgPageState extends State<MsgPage> {
         ]),
         ),
       ),
+      ]),
       ),
     );
   }

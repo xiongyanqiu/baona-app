@@ -76,7 +76,11 @@ class _BaonaHomeState extends State<BaonaHome> {
                           fontSize: 72, fontWeight: FontWeight.w700, color: kText))),
             ),
           );
-    return SafeArea(
+    // ★v27.0.14.6 宇宙元素：背景星尘（缓慢漂移闪烁 + 偶发流星），垫在内容下面
+    return Stack(children: [
+      const Positioned.fill(
+          child: IgnorePointer(child: StarField(count: 55, shooting: true))),
+      SafeArea(
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
@@ -102,10 +106,16 @@ class _BaonaHomeState extends State<BaonaHome> {
         const Spacer(flex: 2),
         // 她：大头像（点她就开始聊天）+ 名字 + 在线
         // ★v27.0.14.5 Tilt3D：手指在她脸上滑动时，头像像悬浮的玻璃片跟着轻微 3D 转动
+        // ★v27.0.14.6 StarHalo：头像外圈一圈缓慢旋转的星光光环（她自带一片星空）
         Appear3D(
           fromAngle: 0.16,
-          child: Tilt3D(
-            max: 0.12,
+          child: SizedBox(
+            width: 244,
+            height: 244,
+            child: Stack(alignment: Alignment.center, children: [
+              const Positioned.fill(child: StarHalo(child: SizedBox.shrink())),
+              Tilt3D(
+                max: 0.12,
             child: GestureDetector(
               onTap: widget.onOpenChat,
               child: Container(
@@ -133,6 +143,8 @@ class _BaonaHomeState extends State<BaonaHome> {
                 ),
               ),
             ),
+            ),
+            ]),
           ),
         ),
         const SizedBox(height: 22),
@@ -205,7 +217,8 @@ class _BaonaHomeState extends State<BaonaHome> {
           ),
         ),
       ]),
-    );
+      ),
+    ]);
   }
 }
 
