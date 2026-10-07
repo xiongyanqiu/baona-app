@@ -105,46 +105,51 @@ class _BaonaHomeState extends State<BaonaHome> {
         ),
         const Spacer(flex: 2),
         // 她：大头像（点她就开始聊天）+ 名字 + 在线
-        // ★v27.0.14.5 Tilt3D：手指在她脸上滑动时，头像像悬浮的玻璃片跟着轻微 3D 转动
-        // ★v27.0.14.6 StarHalo：头像外圈一圈缓慢旋转的星光光环（她自带一片星空）
+        // ★v27.0.14.7 万物互联主视觉：中间主星 = 她，外面一圈小星辰设备 = 聊天/照片/视频/音频/我的，
+        //   轨道缓慢公转 + 发光连接线；点小星辰 = 进对应功能，点她 = 开始聊天
         Appear3D(
           fromAngle: 0.16,
-          child: SizedBox(
-            width: 244,
-            height: 244,
-            child: Stack(alignment: Alignment.center, children: [
-              const Positioned.fill(child: StarHalo(child: SizedBox.shrink())),
-              Tilt3D(
-                max: 0.12,
-            child: GestureDetector(
-              onTap: widget.onOpenChat,
-              child: Container(
-                width: 196,
-                height: 196,
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                        color: kAccent.withValues(alpha: 0.30),
-                        blurRadius: 32,
-                        offset: const Offset(0, 10)),
-                  ],
-                ),
+          child: UniverseHub(
+            size: 330,
+            coreSize: 176,
+            orbitR: 128,
+            core: Tilt3D(
+              max: 0.12,
+              child: GestureDetector(
+                onTap: widget.onOpenChat,
                 child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: const BoxDecoration(shape: BoxShape.circle),
-                  child: avatarWidget,
+                  width: 176,
+                  height: 176,
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [kAccent.withValues(alpha: 0.55), kAccent.withValues(alpha: 0.15)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                          color: kAccent.withValues(alpha: 0.30),
+                          blurRadius: 32,
+                          offset: const Offset(0, 10)),
+                    ],
+                  ),
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    child: avatarWidget,
+                  ),
                 ),
               ),
             ),
-            ),
-            ]),
+            nodes: [
+              {'icon': Icons.chat_bubble_outline, 'label': '聊天', 'onTap': widget.onOpenChat},
+              {'icon': Icons.photo_outlined, 'label': '照片', 'onTap': () => widget.onGoTab(1)},
+              {'icon': Icons.videocam_outlined, 'label': '视频', 'onTap': () => widget.onGoTab(2)},
+              {'icon': Icons.audiotrack_outlined, 'label': '音频', 'onTap': () => widget.onGoTab(3)},
+              {'icon': Icons.person_outline, 'label': '我的', 'onTap': () => widget.onGoTab(4)},
+            ],
           ),
         ),
         const SizedBox(height: 22),

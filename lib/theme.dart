@@ -35,7 +35,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.6'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.7'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -1270,4 +1270,197 @@ class _HaloPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HaloPainter old) => old.t != t;
+}
+
+/* ================== ★v27.0.14.7 万物互联主视觉（星辰中枢） ================== */
+/// 万物互联式主视觉：中心一颗主星（她的头像），外面一圈小星辰设备节点
+/// 沿轨道缓慢公转，中心发出光线连到每个节点 —— 像 IoT 中枢拓扑 / 星系图。
+///
+/// 结构：
+///   · 中心光晕（径向渐变）＋ 主星（core，可放头像）
+///   · 轨道环两圈（装饰）+ 节点轨道一圈
+///   · 节点 = 玻璃小圆 + 图标 + 标签，30s 一圈缓慢公转
+///   · 发光连接线：中心主星边缘 → 每个节点（跟随公转）
+class UniverseHub extends StatefulWidget {
+  const UniverseHub({
+    super.key,
+    required this.core,
+    required this.nodes,
+    this.size = 330,
+    this.coreSize = 176,
+    this.orbitR = 128,
+    this.period = 30,
+  });
+
+  final Widget core; // 中心主星（她的头像）
+  final List<Map<String, dynamic>> nodes; // [{icon, label, onTap}]
+  final double size; // 星系总直径
+  final double coreSize; // 中心主星直径
+  final double orbitR; // 节点轨道半径
+  final int period; // 公转周期（秒）
+
+  @override
+  State<UniverseHub> createState() => _UniverseHubState();
+}
+
+class _UniverseHubState extends State<UniverseHub>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: Duration(seconds: widget.period))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.nodes.length;
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.core,
+      builder: (context, core) {
+        final cx = widget.size / 2;
+        final cy = widget.size / 2;
+        return SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Stack(alignment: Alignment.center, children: [
+            // 轨道 + 中心光晕 + 连接线（与节点同步旋转）
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _UniversePainter(
+                  t: _c.value,
+                  orbitR: widget.orbitR,
+                  trackR2: widget.orbitR + 26,
+                  nodes: n,
+                  coreR: widget.coreSize / 2,
+                ),
+              ),
+            ),
+            // 中心主星
+            core,
+            // 环绕公转的小星辰设备
+            for (var i = 0; i < n; i++) _node(i, cx, cy),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _node(int i, double cx, double cy) {
+    final n = widget.nodes.length;
+    final ang = i * 2 * math.pi / n + _c.value * 2 * math.pi;
+    final px = cx + math.cos(ang) * widget.orbitR;
+    final py = cy + math.sin(ang) * widget.orbitR;
+    final item = widget.nodes[i];
+    return Positioned(
+      left: px - 32,
+      top: py - 18,
+      width: 64,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: item['onTap'] as VoidCallback?,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0x59FFFFFF), Color(0x1FFFFFFF)],
+              ),
+              border: Border.all(color: const Color(0x4DFFFFFF), width: 0.8),
+              boxShadow: [
+                BoxShadow(
+                    color: kAccent.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Icon(item['icon'] as IconData,
+                size: 16, color: Colors.white.withValues(alpha: 0.92)),
+          ),
+          const SizedBox(height: 2),
+          Text('${item['label']}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 9.5, color: kSub)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _UniversePainter extends CustomPainter {
+  _UniversePainter(
+      {required this.t,
+      required this.orbitR,
+      required this.trackR2,
+      required this.nodes,
+      required this.coreR});
+
+  final double t;
+  final double orbitR;
+  final double trackR2;
+  final int nodes;
+  final double coreR;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final c = Offset(cx, cy);
+    // 中心光晕：径向渐变（主星的光，照亮整个星系核心）
+    final glow = Paint()
+      ..shader = RadialGradient(
+        colors: const [Color(0x45A8C8FF), Color(0x18A8C8FF), Color(0x00A8C8FF)],
+      ).createShader(Rect.fromCircle(center: c, radius: orbitR + 14));
+    canvas.drawCircle(c, orbitR + 14, glow);
+    // 节点轨道环
+    final tp = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..color = const Color(0x2EFFFFFF);
+    canvas.drawCircle(c, orbitR, tp);
+    // 外圈装饰轨道（更淡）
+    final tp2 = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.6
+      ..color = const Color(0x1AFFFFFF);
+    canvas.drawCircle(c, trackR2, tp2);
+    // 虚线感：轨道上画几段小弧（模拟分段轨道）
+    final dash = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..color = const Color(0x338FBFFF);
+    const seg = 14;
+    for (var s = 0; s < seg; s++) {
+      final a0 = s * 2 * math.pi / seg + t * 0.06;
+      final a1 = a0 + 2 * math.pi / seg * 0.32;
+      canvas.drawArc(Rect.fromCircle(center: c, radius: orbitR), a0, a1 - a0, false, dash);
+    }
+    // 发光连接线：中心主星边缘 → 每个节点（跟随公转）
+    for (var i = 0; i < nodes; i++) {
+      final ang = i * 2 * math.pi / nodes + t * 2 * math.pi;
+      final sx = cx + math.cos(ang) * coreR;
+      final sy = cy + math.sin(ang) * coreR;
+      final ex = cx + math.cos(ang) * orbitR;
+      final ey = cy + math.sin(ang) * orbitR;
+      final line = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: const [Color(0x00FFFFFF), Color(0x52FFFFFF), Color(0x99FFFFFF)],
+        ).createShader(Rect.fromPoints(Offset(sx, sy), Offset(ex, ey)));
+      canvas.drawLine(Offset(sx, sy), Offset(ex, ey), line..strokeWidth = 1.0);
+      // 节点底部的微光星点
+      canvas.drawCircle(
+          Offset(ex, ey), 3.2, Paint()..color = const Color(0x8CA8C8FF));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _UniversePainter old) => old.t != t;
 }
