@@ -718,7 +718,27 @@ class _VideoLibPageState extends State<VideoLibPage>
                   ..scale(scale),
                 child: Opacity(
                   opacity: op,
-                  child: _Cover(video: list[i], cur: i == cur),
+                  child: Stack(children: [
+                    Positioned.fill(
+                        child: _Cover(video: list[i], cur: i == cur)),
+                    // ★v27.0.15 封面右上角删除按钮（不依赖长按手势，保证一定能删）
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () => _delVideo(i),
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.delete_outline_rounded,
+                              color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
             ),
