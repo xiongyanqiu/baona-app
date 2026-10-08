@@ -137,40 +137,6 @@ class _VideoLibPageState extends State<VideoLibPage> {
               builder: (_) => _PlayerPage(path: f.path, title: e.title ?? '视频')));
         } catch (_) {}
       },
-      // ★v27.0.14.12 长按删除视频（从系统相册删除）
-      onLongPress: () async {
-        HapticFeedback.mediumImpact();
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (cc) => AlertDialog(
-            backgroundColor: kBg2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-            title: const Text('删除视频',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            content: Text('确定删除「${e.title ?? '视频'}」吗？\n将从系统相册中删除。',
-                style: const TextStyle(fontSize: 14.5, height: 1.4)),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(cc, false),
-                  child: const Text('取消', style: TextStyle(color: kSub))),
-              TextButton(
-                  onPressed: () => Navigator.pop(cc, true),
-                  child: const Text('删除',
-                      style: TextStyle(color: kBad, fontWeight: FontWeight.w600))),
-            ],
-          ),
-        );
-        if (ok != true) return;
-        try {
-          await PhotoManager.editor.deleteWithIds([e.id]);
-        } catch (_) {}
-        if (mounted) {
-          setState(() {
-            _videos.removeWhere((v) => v.id == e.id);
-            _thumbs.remove(e.id);
-          });
-        }
-      },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Container(

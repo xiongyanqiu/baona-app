@@ -288,25 +288,21 @@ class _BaonaAppState extends State<BaonaApp> with WidgetsBindingObserver {
 }
 
 /// 一进来：本地大脑直接可用（不依赖电脑）；有电脑地址才额外连电脑（商城/游戏/相册用）
-/// ★27.0.14.19 完全恢复 .14.12 的 Boot（Stateless + 直接建主页）——锁/诊断浮层全部摘除，
-///   先回到"用户验证过正常"的架构；锁功能确认稳定后再重新设计
 class Boot extends StatelessWidget {
   const Boot({super.key});
 
   @override
   Widget build(BuildContext context) {
-    try {
-      final brain = LocalBrain();
-      app.attachBrain(brain);
-      // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
-      final base = Store.baseUrl;
-      if (base.isNotEmpty && Store.token.isNotEmpty) {
-        try {
-          final a = Api(base)..token = Store.token;
-          app.attach(a);
-        } catch (_) {/* 连不上电脑不影响本地聊天 */}
-      }
-    } catch (_) {/* 大脑初始化失败也不挡主页 */}
+    final brain = LocalBrain();
+    app.attachBrain(brain);
+    // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
+    final base = Store.baseUrl;
+    if (base.isNotEmpty && Store.token.isNotEmpty) {
+      try {
+        final a = Api(base)..token = Store.token;
+        app.attach(a);
+      } catch (_) {/* 连不上电脑不影响本地聊天 */}
+    }
     return const HomePage();
   }
 }

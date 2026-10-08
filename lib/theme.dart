@@ -31,11 +31,6 @@ const Color kLine = Color(0xFF38383A); // separator
 const Color kGlass = Color(0x1FFFFFFF); // 玻璃填充（systemFill 观感）
 const Color kGlass2 = Color(0x2EFFFFFF);
 
-/* --------------------------- ★27.0.14.17 低资源模式 --------------------------- */
-/// 主页持续动画/玻璃渲染全部静态化（画面保留），用于定位"进主页卡死+杀后台"。
-/// ★27.0.14.18 恢复：对比 .14.12（动画全开且正常）→ 动画不是根因，主页构建时机才是。
-const bool kLowRes = false;
-
 /* --------------------------- Liquid Glass 材质 --------------------------- */
 const double kBlur = 28; // 主玻璃模糊（导航/输入栏）
 const double kBlurSoft = 16; // 卡片玻璃模糊（轻一点，省电）
@@ -43,7 +38,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.14.19'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.14.20'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -239,8 +234,7 @@ class GlassSurface extends StatelessWidget {
 
     // 内容下面是「真模糊」——这才是玻璃，不是半透明贴纸
     // ★26.2.22：blur<=0 跳过 BackdropFilter —— 列表卡片用纯渐变（实时模糊每行一个太耗电）
-    // ★27.0.14.17 低资源模式：全局关闭 BackdropFilter（GPU 重开销，多块叠加+动画会卡死老设备）
-    if (blur > 0 && !kLowRes) {
+    if (blur > 0) {
       core = ClipRRect(
         borderRadius: BorderRadius.circular(radius - 1),
         child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: core),
@@ -959,7 +953,6 @@ class _Appear3DState extends State<Appear3D> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    if (kLowRes) return widget.child; // ★27.0.14.17 低资源：入场动画静态化
     return AnimatedBuilder(
       animation: _c,
       child: widget.child,
@@ -1384,7 +1377,6 @@ class _UniverseHubState extends State<UniverseHub>
           arcSeed: rnd.nextInt(10000),
         ),
     ];
-    if (kLowRes) _c.stop(); // ★27.0.14.17 低资源：公转动画静态化（画面保留）
   }
 
   @override
