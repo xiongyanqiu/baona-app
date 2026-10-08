@@ -918,6 +918,144 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
+                // ★27.0.16.6 思考强度：轻（快）/ 中（默认）/ 强（深入思考）
+                if (Store.thinkingMode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                    child: Row(children: [
+                      const Text('思考强度', style: TextStyle(fontSize: 13, color: kSub)),
+                      const SizedBox(width: 12),
+                      _pill('轻', Store.thinkLevel == 1, () {
+                        Store.setThinkLevel(1);
+                        setState(() {});
+                      }),
+                      const SizedBox(width: 6),
+                      _pill('中', Store.thinkLevel == 2, () {
+                        Store.setThinkLevel(2);
+                        setState(() {});
+                      }),
+                      const SizedBox(width: 6),
+                      _pill('强', Store.thinkLevel == 3, () {
+                        Store.setThinkLevel(3);
+                        setState(() {});
+                      }),
+                    ]),
+                  ),
+              ]),
+              // ★27.0.16.6 主动消息：随机时间范围 + 睡眠时间，完全自定义无预设限制
+              _group([
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: Text('她会在你设定的时间范围内随机主动给你发消息，像真人一样。'
+                      '睡眠时间内不打扰。时间完全由你定，没有预设限制。',
+                      style: const TextStyle(fontSize: 12.5, color: kSub, height: 1.4)),
+                ),
+                _row(
+                  icon: Icons.notifications_active_outlined,
+                  title: '主动消息',
+                  sub: Store.autoChatEnabled ? '开着：她会主动找你' : '关闭：只在你说话时回',
+                  onTap: () {},
+                  trailing: Switch(
+                    value: Store.autoChatEnabled,
+                    activeColor: kAccent,
+                    activeTrackColor: kAccent.withValues(alpha: 0.35),
+                    onChanged: (v) async {
+                      await Store.setAutoChatEnabled(v);
+                      if (v) Store.setNextAutoAt(0); // 重新随机
+                      setState(() {});
+                    },
+                  ),
+                ),
+                if (Store.autoChatEnabled) ...[
+                  // 随机触发范围（分钟）
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    child: Row(children: [
+                      Expanded(
+                        child: _numField(Store.autoMin, '最少间隔(分钟)', (v) {
+                          Store.setAutoMin(v);
+                          setState(() {});
+                        }),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _numField(Store.autoMax, '最多间隔(分钟)', (v) {
+                          Store.setAutoMax(v);
+                          setState(() {});
+                        }),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
+                  // 睡眠时间起止
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+                    child: Row(children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                                context: context,
+                                initialTime: _parseHm(Store.sleepStart, const TimeOfDay(hour: 23, minute: 0)));
+                            if (t != null) {
+                              await Store.setSleepStart('${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                              setState(() {});
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0x0FFFFFFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.bedtime_outlined, size: 16, color: kSub),
+                              const SizedBox(width: 8),
+                              Text('睡眠 ${Store.sleepStart}',
+                                  style: const TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                                context: context,
+                                initialTime: _parseHm(Store.sleepEnd, const TimeOfDay(hour: 8, minute: 0)));
+                            if (t != null) {
+                              await Store.setSleepEnd('${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                              setState(() {});
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0x0FFFFFFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.wb_sunny_outlined, size: 16, color: kSub),
+                              const SizedBox(width: 8),
+                              Text('醒来 ${Store.sleepEnd}',
+                                  style: const TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  if (Store.nextAutoAt > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+                      child: Text('下次她主动找你在：${_fmtNext(Store.nextAutoAt)}',
+                          style: const TextStyle(fontSize: 12.5, color: kSub)),
+                    ),
+                ],
               ]),
               // ★27.0.16.2 万物互联：设备连接（贝锐蒲公英组网 → 主页星辰图外圈卫星）
               _group([
@@ -1234,5 +1372,78 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  // ★27.0.16.6 思考强度 pill（轻/中/强）
+  Widget _pill(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? kAccent.withValues(alpha: 0.16) : const Color(0x0FFFFFFF),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: active ? kAccent.withValues(alpha: 0.5) : const Color(0x14FFFFFF), width: 0.8),
+        ),
+        child: Text(label,
+            style: TextStyle(fontSize: 12.5, color: active ? kAccent : kSub, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  // ★27.0.16.6 主动消息：分钟数步进（步长 5，完全自定义）
+  Widget _numField(int value, String label, void Function(int) onChanged) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11.5, color: kSub)),
+      const SizedBox(height: 4),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0x0FFFFFFF),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+        ),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () => onChanged(value > 5 ? value - 5 : 1),
+            child: Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(color: const Color(0x14FFFFFF), shape: BoxShape.circle),
+              child: const Icon(Icons.remove, size: 16, color: kAccent),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Text('$value', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText)),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => onChanged(value + 5),
+            child: Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(color: const Color(0x14FFFFFF), shape: BoxShape.circle),
+              child: const Icon(Icons.add, size: 16, color: kAccent),
+            ),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  TimeOfDay _parseHm(String s, TimeOfDay dft) {
+    final p = s.split(':');
+    if (p.length != 2) return dft;
+    final h = int.tryParse(p[0]);
+    final m = int.tryParse(p[1]);
+    if (h == null || m == null) return dft;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _fmtNext(int ms) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    final hm = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    if (d.day == now.day && d.month == now.month) return '今天 $hm';
+    return '${d.month}月${d.day}日 $hm';
   }
 }

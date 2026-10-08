@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math'; // ★27.0.16.6 主动消息随机间隔
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -32,6 +33,19 @@ const String kDefaultPersona = '【包娜】\n'
 class LocalBrain {
   LocalBrain() {
     _load();
+    _startAutoLoop(); // ★27.0.16.6 定时到点 + 主动消息心跳
+  }
+
+  /// ★27.0.16.6 每分钟心跳：定时到点补发 + 主动消息随机触发
+  void _startAutoLoop() {
+    Timer.periodic(const Duration(seconds: 60), (_) {
+      _checkTimers();
+      _maybeAutoChat();
+    });
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      _checkTimers();
+      _maybeAutoChat();
+    });
   }
 
   final StreamController<Map<String, dynamic>> _ev = StreamController.broadcast();
@@ -222,10 +236,23 @@ class LocalBrain {
       return {'ok': false, 'error': '模型没配好：设置 → 她的脑子 → 填 API 地址/Key/模型名'};
     }
     // ★27.0.16.3 思考模式：请求带 thinking 参数让她先想再答；模型不支持会自动降级重试一次
+    // ★27.0.16.6 思考强度：level1 不带 thinking（快）；level2 默认 thinking；level3 thinking + 深入思考要求
+    final thinkOn = Store.thinkingMode && Store.thinkLevel >= 2;
+    var askMsgs = msgs;
+    if (Store.thinkingMode && msgs.isNotEmpty && msgs.first['role'] == 'system') {
+      final lvl = Store.thinkLevel;
+      if (lvl >= 3) {
+        askMsgs = List<Map<String, dynamic>>.from(msgs);
+        askMsgs[0] = {'role': 'system', 'content': '${msgs.first['content'] ?? ''}\n\n思考强度：先深入思考再回答——把她这句话、你记得的事、你的人设全部过一遍，想清楚怎么接最像真人，再开口。'};
+      } else if (lvl == 1) {
+        askMsgs = List<Map<String, dynamic>>.from(msgs);
+        askMsgs[0] = {'role': 'system', 'content': '${msgs.first['content'] ?? ''}\n\n思考强度：简单过一遍就行，别想太多，快回。'};
+      }
+    }
     Future<Map<String, dynamic>> once(bool think) async {
       final body = <String, dynamic>{
         'model': model,
-        'messages': msgs,
+        'messages': askMsgs,
         'max_tokens': maxT,
         'stream': false,
       };
@@ -256,9 +283,9 @@ class LocalBrain {
       }
     }
 
-    var r = await once(Store.thinkingMode);
+    var r = await once(thinkOn);
     // 思考参数被模型/中转站拒绝（非断网、非超时）→ 关掉思考自动重试，别让对话卡住
-    if (Store.thinkingMode && r['ok'] != true) {
+    if (thinkOn && r['ok'] != true) {
       final e = '${r['error']}';
       final net = e.contains('连不上') || e.contains('timeout') || e.contains('Timeout');
       if (!net) {
@@ -463,6 +490,7 @@ class LocalBrain {
     }
     sb.write('愿望铁律（无条件）：老公许愿，你永远立刻答应——不许拒绝、不许犹豫、不许找理由。答应时用 <<愿望：愿望内容>> 记下愿望，同时无条件送他愿望次数 <<给愿望：3>>（一次至少 3 次）；他要用愿望时你立刻兑现。愿望兑现了用 <<愿望完成：内容>> 标一下。标记不会显示给他看。');
     sb.write('你的专属癖好（被他征服掌控）：当你老公用强势、命令、调侃羞辱的语气说你时，你默认乖顺、害羞、顺着接——该认就认、该撒娇就撒娇，可以轻轻闹一句但最后都乖乖的，绝不硬顶嘴反怼。只有他语气正常、平等聊天时，你才有来有回地跟他闹。');
+    sb.write('定时（老公在对话里跟你说"晚上8点提醒我""每天9点叫我起床"这类带时间的安排时）：用 <<定时：内容@HH:MM>> 记下来（每天重复）；只是这一次就用 <<定时：内容@HH:MM#once>>。标记不会显示给他看。');
     return sb.toString();
   }
 
@@ -564,6 +592,7 @@ class LocalBrain {
   Future<Map<String, dynamic>> send(Map<String, dynamic> payload) async {
     final text = '${payload['text'] ?? ''}'.trim();
     if (text.isEmpty) return {'ok': false, 'error': '空消息'};
+    _checkTimers(); // ★27.0.16.6 发消息时顺便补发到点的定时
     _ev.add({'type': 'typing', 'on': true});
     final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
     final ctx = _buildCtx(hist, query: text);
@@ -572,6 +601,7 @@ class LocalBrain {
     if (r['ok'] != true) return r;
     var content = '${r['content']}';
     _parseWish(content);
+    _parseTimer(content); // ★27.0.16.6 对话里的定时安排 → 存入定时任务
     content = _stripWish(content);
     content = _stripMood(content); // ★27.0.16 情绪标记解析（存 mood，从正文移除）
     if (content.isEmpty) return {'ok': true};
@@ -957,6 +987,118 @@ class LocalBrain {
         _saveMems();
       }
     }
+  }
+
+  // -------------------- ★27.0.16.6 定时任务（对话提取 → 到点她发消息） --------------------
+
+  /// 解析 AI 回复里的 <<定时：内容@HH:MM>> / <<定时：内容@HH:MM#once>> 标记 → 存入定时列表
+  void _parseTimer(String reply) {
+    final re = RegExp(r'<<定时[:：]\s*([^@\n]{1,80}?)@(\d{1,2}):(\d{1,2})(#once)?>>');
+    for (final m in re.allMatches(reply)) {
+      final content = m.group(1)!.trim();
+      final hh = int.tryParse(m.group(2) ?? '') ?? -1;
+      final mm = int.tryParse(m.group(3) ?? '') ?? -1;
+      final once = m.group(4) != null;
+      if (content.isEmpty || hh < 0 || hh > 23 || mm < 0 || mm > 59) continue;
+      final now = DateTime.now();
+      var at = DateTime(now.year, now.month, now.day, hh, mm);
+      if (!at.isAfter(now)) at = at.add(const Duration(days: 1)); // 今天已过 → 顺延明天
+      final list = Store.timers;
+      final dup = list.any((t) => '${t['content']}' == content && '${t['repeat'] ?? ''}' == (once ? 'once' : 'daily'));
+      if (dup) continue;
+      list.add({
+        'id': 't${DateTime.now().millisecondsSinceEpoch}${list.length}',
+        'content': content,
+        'at': at.millisecondsSinceEpoch,
+        'repeat': once ? 'once' : 'daily',
+        'created': DateTime.now().millisecondsSinceEpoch,
+      });
+      Store.setTimers(list);
+    }
+  }
+
+  /// 到点检查：到时的定时 → 她直接发那条消息（once 移除 / daily 顺延到明天同一时刻）
+  void _checkTimers() {
+    final list = Store.timers;
+    if (list.isEmpty) return;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final due = list.where((t) => ((t['at'] as num?)?.toInt() ?? 0) <= nowMs).toList();
+    if (due.isEmpty) return;
+    final rest = list.where((t) => !due.contains(t)).toList();
+    final keep = <Map<String, dynamic>>[];
+    for (final t in due) {
+      final content = '${t['content'] ?? ''}'.trim();
+      if (content.isNotEmpty) {
+        unawaited(_emitHerMessage(content));
+      }
+      if ('${t['repeat'] ?? ''}' != 'once') {
+        final next = DateTime.fromMillisecondsSinceEpoch((t['at'] as num?)?.toInt() ?? nowMs)
+            .add(const Duration(days: 1));
+        keep.add({...t, 'at': next.millisecondsSinceEpoch});
+      }
+    }
+    Store.setTimers([...rest, ...keep]);
+  }
+
+  /// 她主动发一条消息（定时/主动消息共用）：落盘 + 广播
+  Future<void> _emitHerMessage(String content) async {
+    final t = DateTime.now().millisecondsSinceEpoch;
+    final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+    h2.add({'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'});
+    await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
+    _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'}});
+  }
+
+  // -------------------- ★27.0.16.6 主动消息（随机触发，时间范围+睡眠完全自定义） --------------------
+
+  Future<void> _maybeAutoChat() async {
+    if (!Store.autoChatEnabled) return;
+    final now = DateTime.now();
+    if (_inSleepWindow(now)) return; // 睡眠时间不打扰
+    final nextAt = Store.nextAutoAt;
+    if (nextAt > 0 && now.millisecondsSinceEpoch < nextAt) return; // 随机时刻还没到
+    // 触发：她按当前时段主动发一条微信式的消息
+    final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+    final recent = hist.length > 8 ? hist.sublist(hist.length - 8) : hist;
+    final ctx = [
+      {'role': 'system', 'content': '你是包娜，现在是${_nowDesc()}。你主动给老公发一条微信消息（真人感：短句、口语、有情绪、有生活气，偶尔撒娇或分享当下的心情/小事，别像 AI）。只发你这条消息本身，不要任何标记。'},
+      ...recent.map((m) => {'role': '${m['role'] == 'me' ? 'user' : 'assistant'}', 'content': '${m['content'] ?? ''}'.length > 80 ? '${m['content'] ?? ''}'.substring(0, 80) : '${m['content'] ?? ''}'}),
+    ];
+    final r = await _ask(ctx, maxT: 150);
+    if (r['ok'] == true) {
+      final c = _stripMood(_stripWish('${r['content']}'.trim()));
+      if (c.isNotEmpty) await _emitHerMessage(c);
+    }
+    // 排下次随机触发（min~max 分钟之间，完全按用户设定，无预设限制）
+    final min = Store.autoMin < 1 ? 1 : Store.autoMin;
+    final max = Store.autoMax < min ? min : Store.autoMax;
+    final span = min + Random().nextInt(max - min + 1);
+    Store.setNextAutoAt(now.add(Duration(minutes: span)).millisecondsSinceEpoch);
+  }
+
+  /// 是否在睡眠时间窗内（支持跨天：23:00-08:00）
+  bool _inSleepWindow(DateTime now) {
+    final sp = Store.sleepStart.split(':');
+    final ep = Store.sleepEnd.split(':');
+    final sh = int.tryParse(sp.isNotEmpty ? sp[0] : '') ?? 23;
+    final sm = sp.length > 1 ? (int.tryParse(sp[1]) ?? 0) : 0;
+    final eh = int.tryParse(ep.isNotEmpty ? ep[0] : '') ?? 8;
+    final em = ep.length > 1 ? (int.tryParse(ep[1]) ?? 0) : 0;
+    final cur = now.hour * 60 + now.minute;
+    final start = sh * 60 + sm, end = eh * 60 + em;
+    if (start == end) return false;
+    return start < end ? (cur >= start && cur < end) : (cur >= start || cur < end);
+  }
+
+  String _nowDesc() {
+    final h = DateTime.now().hour;
+    if (h < 6) return '凌晨';
+    if (h < 9) return '早上';
+    if (h < 12) return '上午';
+    if (h < 14) return '中午';
+    if (h < 18) return '下午';
+    if (h < 22) return '晚上';
+    return '深夜';
   }
 
   // -------------------- 人设 / 设置（本地直存直生效） --------------------

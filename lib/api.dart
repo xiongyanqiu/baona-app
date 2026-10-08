@@ -82,6 +82,38 @@ class Store {
   static bool get thinkingMode => _p.getBool('local.thinking') ?? true;
   static Future<void> setThinkingMode(bool v) => _p.setBool('local.thinking', v);
 
+  // ★27.0.16.6 思考强度：1 轻（快，不带 thinking）/ 2 中（默认 thinking）/ 3 强（thinking + 深入思考要求）
+  static int get thinkLevel => _p.getInt('local.thinkLevel') ?? 2;
+  static Future<void> setThinkLevel(int v) => _p.setInt('local.thinkLevel', v);
+
+  // ★27.0.16.6 定时任务（对话里 AI 提取，到点她自动发消息）
+  // [{id, content, at(epochMs 下次触发), repeat:'once'|'daily', created}]
+  static List<Map<String, dynamic>> get timers {
+    try {
+      final s = _p.getString('local.timers');
+      if (s == null || s.isEmpty) return [];
+      final j = jsonDecode(s);
+      if (j is List) return j.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {}
+    return [];
+  }
+  static Future<void> setTimers(List<Map<String, dynamic>> v) =>
+      _p.setString('local.timers', jsonEncode(v));
+
+  // ★27.0.16.6 主动消息：开关 + 随机触发范围（分钟，完全自定义无预设限制）+ 睡眠时间（HH:mm）
+  static bool get autoChatEnabled => _p.getBool('local.autoChat') ?? false;
+  static Future<void> setAutoChatEnabled(bool v) => _p.setBool('local.autoChat', v);
+  static int get autoMin => _p.getInt('local.autoMin') ?? 30; // 多少分钟后起可能触发
+  static Future<void> setAutoMin(int v) => _p.setInt('local.autoMin', v);
+  static int get autoMax => _p.getInt('local.autoMax') ?? 120; // 多少分钟内触发
+  static Future<void> setAutoMax(int v) => _p.setInt('local.autoMax', v);
+  static String get sleepStart => _p.getString('local.sleepStart') ?? '23:00';
+  static Future<void> setSleepStart(String v) => _p.setString('local.sleepStart', v);
+  static String get sleepEnd => _p.getString('local.sleepEnd') ?? '08:00';
+  static Future<void> setSleepEnd(String v) => _p.setString('local.sleepEnd', v);
+  static int get nextAutoAt => _p.getInt('local.nextAutoAt') ?? 0; // 下次主动触发时间戳
+  static Future<void> setNextAutoAt(int v) => _p.setInt('local.nextAutoAt', v);
+
   // ★27.0.16.2 万物互联：可连接设备（贝锐蒲公英组网），{pc:{name,ip,port,online}, android:{...}}
   static Map<String, dynamic> get devices {
     try {

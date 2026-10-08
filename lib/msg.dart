@@ -75,7 +75,7 @@ class _MsgPageState extends State<MsgPage> {
         _msgs = list.map((m) => Msg.fromJson(Map<String, dynamic>.from(m))).toList();
         _loading = false;
       });
-      _jumpBottom(instant: true, times: 3); // ★v27.0.16.2 打开对话锁定最新消息（多阶段补偿）
+      _jumpBottom(instant: true, times: 4); // ★27.0.16.6 打开对话锁定最新消息（4 阶段补偿）
     }
     try {
       final mr = await a.memories();
@@ -107,6 +107,7 @@ class _MsgPageState extends State<MsgPage> {
     if (!mounted) return; // ★v27.0.9 页面已销毁就别再碰滚动条（发送后延迟补偿可能晚于退出）
     // ★v27.0.16.2 打开/加载后多次补偿贴底：头像图片加载会让列表高度变化，
     //   只跳一次容易停在中间，分 0/250/500ms 三次追到底
+    // ★27.0.16.6 加强到 4 次（0/250/500/800ms）+ 首帧，进对话页必达最新消息
     for (var i = 0; i < times; i++) {
       Future.delayed(Duration(milliseconds: i * 250), () {
         if (!mounted) return;
@@ -196,6 +197,105 @@ class _MsgPageState extends State<MsgPage> {
   }
 
   // ---------- 设置弹窗（对话 / 记忆 / 头像） ----------
+  /// ★27.0.16.6 定时任务管理（隐藏底栏「定时」入口）
+  Future<void> _openTimers() async {
+    final a = _a;
+    if (a == null) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: kBg2,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (c) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(c).size.height * 0.9),
+          child: StatefulBuilder(
+            builder: (c, setSt) {
+              final timers = Store.timers;
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    const Text('定时任务',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(c),
+                      child: Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(color: const Color(0x33FFFFFF), shape: BoxShape.circle),
+                        child: const Icon(Icons.close, size: 16, color: kSub),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text('对话里跟她说「晚上8点提醒我」「每天9点叫我」这类带时间的安排，她会自动记下来；到点她主动发消息给你。',
+                      style: TextStyle(fontSize: 13, color: kSub, height: 1.4)),
+                  const SizedBox(height: 14),
+                  if (timers.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0x0FFFFFFF),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Text('还没有定时任务\n\n试试在对话里说：\n「晚上 8 点提醒我喝水」',
+                          style: TextStyle(fontSize: 14, color: kSub, height: 1.6)),
+                    )
+                  else
+                    ...timers.map((t) {
+                      final at = DateTime.fromMillisecondsSinceEpoch((t['at'] as num?)?.toInt() ?? 0);
+                      final hm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+                      final rep = '${t['repeat'] ?? ''}' == 'once' ? '单次' : '每天';
+                      final day = '${at.month}月${at.day}日';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0x0FFFFFFF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+                        ),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('${t['content'] ?? ''}',
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 3),
+                              Text(rep == '每天' ? '$hm 每天' : '$day $hm · 单次',
+                                  style: const TextStyle(fontSize: 12, color: kSub)),
+                            ]),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              final l = Store.timers;
+                              l.removeWhere((x) => x['id'] == t['id']);
+                              Store.setTimers(l);
+                              setSt(() {});
+                            },
+                            child: Container(
+                              width: 34, height: 34,
+                              decoration: BoxDecoration(color: const Color(0x14FF3B30), shape: BoxShape.circle),
+                              child: const Icon(Icons.delete_outline, size: 17, color: Color(0xFFFF6B66)),
+                            ),
+                          ),
+                        ]),
+                      );
+                    }),
+                  const SizedBox(height: 10),
+                  _TimerAddBar(onAdded: () => setSt(() {})),
+                  const SizedBox(height: 4),
+                ]),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openSettings() async {
     final a = _a;
     if (a == null) return;
@@ -666,6 +766,13 @@ class _MsgPageState extends State<MsgPage> {
                         ),
                         Expanded(
                           child: _DrawerBtn(
+                            icon: Icons.schedule_outlined,
+                            label: '定时',
+                            onTap: () => _openTimers(),
+                          ),
+                        ),
+                        Expanded(
+                          child: _DrawerBtn(
                             icon: Icons.settings_outlined,
                             label: '对话设置',
                             onTap: () => _openSettings(),
@@ -926,6 +1033,122 @@ class _DrawerBtn extends StatelessWidget {
               style: const TextStyle(fontSize: 11, color: kSub, fontWeight: FontWeight.w500)),
         ]),
       ),
+    );
+  }
+}
+
+/// ★27.0.16.6 定时新建条：内容 + 时间 + 每天/单次 + 添加
+class _TimerAddBar extends StatefulWidget {
+  const _TimerAddBar({required this.onAdded});
+  final VoidCallback onAdded;
+  @override
+  State<_TimerAddBar> createState() => _TimerAddBarState();
+}
+
+class _TimerAddBarState extends State<_TimerAddBar> {
+  final TextEditingController _c = TextEditingController();
+  TimeOfDay _time = const TimeOfDay(hour: 20, minute: 0);
+  bool _daily = true;
+
+  Future<void> _pickTime() async {
+    final t = await showTimePicker(context: context, initialTime: _time);
+    if (t != null) setState(() => _time = t);
+  }
+
+  void _add() {
+    final content = _c.text.trim();
+    if (content.isEmpty) return;
+    final now = DateTime.now();
+    var at = DateTime(now.year, now.month, now.day, _time.hour, _time.minute);
+    if (!at.isAfter(now)) at = at.add(const Duration(days: 1));
+    final list = Store.timers;
+    list.add({
+      'id': 't${DateTime.now().millisecondsSinceEpoch}${list.length}',
+      'content': content,
+      'at': at.millisecondsSinceEpoch,
+      'repeat': _daily ? 'daily' : 'once',
+      'created': DateTime.now().millisecondsSinceEpoch,
+    });
+    Store.setTimers(list);
+    _c.clear();
+    widget.onAdded();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0x0FFFFFFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _c,
+              style: const TextStyle(fontSize: 15, color: kText),
+              decoration: const InputDecoration(
+                hintText: '提醒内容，如：提醒我喝水',
+                hintStyle: TextStyle(fontSize: 14, color: kSub),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _pickTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: kAccent.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(fontSize: 14, color: kAccent, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Row(children: [
+          GestureDetector(
+            onTap: () => setState(() => _daily = true),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _daily ? kAccent.withValues(alpha: 0.16) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('每天', style: TextStyle(fontSize: 12, color: _daily ? kAccent : kSub)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () => setState(() => _daily = false),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: !_daily ? kAccent.withValues(alpha: 0.16) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('只一次', style: TextStyle(fontSize: 12, color: !_daily ? kAccent : kSub)),
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: _add,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              decoration: BoxDecoration(
+                color: kAccent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('添加', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 }
