@@ -317,17 +317,19 @@ class LocalBrain {
     return '【现在】现在是$part。就当是普通一天里自然聊天，节奏像平时一样。';
   }
 
-  /// 解析情绪标记 <<情绪：xx>> → 存 herSet（下轮注入），返回移除标记后的正文
+  /// 解析情绪标记（兼容 <<情绪：害羞>> 和模型爱用的 <<害羞>> 两种写法）
+  /// → 存 herSet（下轮注入），返回移除标记后的正文
   String _stripMood(String reply) {
-    final m = RegExp(r'<<情绪[：:]\s*([^>]{1,12}?)>>').firstMatch(reply);
+    final m = RegExp(r'<<([^>]{1,16})>>').firstMatch(reply);
     if (m != null) {
-      final mood = m.group(1)!.trim();
+      var mood = m.group(1)!.trim();
+      mood = mood.replaceFirst(RegExp(r'^情绪[：:]\s*'), '').trim();
       if (mood.isNotEmpty) {
         _herSet['mood'] = mood.length > 8 ? mood.substring(0, 8) : mood;
         _saveHerSet();
       }
     }
-    return reply.replaceAll(RegExp(r'<<情绪[：:][^>]*>>'), '').trim();
+    return reply.replaceAll(RegExp(r'<<[^>]{1,16}>>'), '').trim();
   }
 
   // ★27.0.8 Step1 记忆打分：importance × 时间衰减，按分数取 top（不再只取最新）
