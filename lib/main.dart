@@ -1,7 +1,5 @@
 // 包娜 · 手机端 App 主入口：连电脑 → 登录 → 主界面（聊天/商城/游戏/我们）
 import 'dart:convert';
-import 'dart:io' show ProcessInfo;
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +8,6 @@ import 'api.dart';
 import 'alib.dart';
 import 'brain.dart';
 import 'home.dart';
-import 'lock.dart';
 import 'msg.dart';
 import 'my.dart';
 import 'notify.dart';
@@ -213,40 +210,6 @@ final app = AppCtl.i;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // ★27.0.14.15 诊断：build/渲染异常不再空白闪退 —— 直接显示错误文本（并写进 crashLog）
-  ErrorWidget.builder = (FlutterErrorDetails d) {
-    final s = '${d.exception}';
-    try {
-      final brief = s.length > 220 ? s.substring(0, 220) : s;
-      Store.setCrashLog('render: $brief');
-    } catch (_) {}
-    return ColoredBox(
-      color: const Color(0xFF1C1C1E),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('渲染错误：$s',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 13)),
-        ),
-      ),
-    );
-  };
-  // ★27.0.14.14 崩溃留痕：Dart 未捕获异常记到本地，下次启动锁页面能看到（定位闪退用）
-  FlutterError.onError = (d) {
-    try {
-      final s = d.exception.toString();
-      Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
-    } catch (_) {}
-    FlutterError.presentError(d);
-  };
-  PlatformDispatcher.instance.onError = (e, st) {
-    try {
-      final s = '$e';
-      Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
-    } catch (_) {}
-    return true;
-  };
   await Store.init();
   await Notify.i.init();
   app.cfg = Store.cfg;
@@ -325,19 +288,13 @@ class _BaonaAppState extends State<BaonaApp> with WidgetsBindingObserver {
 }
 
 /// 一进来：本地大脑直接可用（不依赖电脑）；有电脑地址才额外连电脑（商城/游戏/相册用）
-/// ★v27.0.14.13 启动锁：冷启动先进 设密码/解锁门，过了才进主界面；挂后台回来不重锁
-class Boot extends StatefulWidget {
+/// ★27.0.14.19 完全恢复 .14.12 的 Boot（Stateless + 直接建主页）——锁/诊断浮层全部摘除，
+///   先回到"用户验证过正常"的架构；锁功能确认稳定后再重新设计
+class Boot extends StatelessWidget {
   const Boot({super.key});
-  @override
-  State<Boot> createState() => _BootState();
-}
-
-class _BootState extends State<Boot> {
-  bool _unlocked = false;
 
   @override
-  void initState() {
-    super.initState();
+  Widget build(BuildContext context) {
     try {
       final brain = LocalBrain();
       app.attachBrain(brain);
@@ -349,46 +306,8 @@ class _BootState extends State<Boot> {
           app.attach(a);
         } catch (_) {/* 连不上电脑不影响本地聊天 */}
       }
-    } catch (e) {
-      // 大脑初始化失败也不能让 App 白屏 —— 记录后仍进主页（对话会提示模型没接好）
-      try {
-        final s = '$e';
-        Store.setCrashLog(s.length > 180 ? s.substring(0, 180) : s);
-      } catch (_) {}
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // ★27.0.14.18 锁页改为"浮层覆盖"：HomePage 与 .14.12 一样立即构建（大脑边加载边建主页，
-    //   之前 .14.13 改成"大脑加载完才建主页"后进主页空白闪退/卡死——恢复原构建时机，锁页盖在上面）
-    return Stack(children: [
-      const HomePage(),
-      if (!_unlocked)
-        Positioned.fill(
-          child: Store.lockHash.isEmpty
-              ? LockSetupPage(onDone: () => _enterHome())
-              : LockGatePage(onUnlocked: () => _enterHome()),
-        ),
-    ]);
-  }
-
-  /// 解锁/设完密码 → 切主页。顺手记一条诊断（壁纸/头像状态），崩了好定位
-  void _enterHome() {
-    try {
-      final bg = app.bg;
-      final herAv = '${app.herSet['herAvatar'] ?? ''}';
-      Store.setCrashLog(
-          'enter: bg[${bg.length}]${bg.length > 40 ? '' : '=$bg'} herAv[${herAv.length}]');
-    } catch (_) {}
-    setState(() => _unlocked = true);
-    // ★27.0.14.17 诊断：进主页 3 秒后记录内存占用（判断是不是内存爆炸卡死）
-    Future.delayed(const Duration(seconds: 3), () {
-      try {
-        final mb = ProcessInfo.currentRss ~/ (1024 * 1024);
-        Store.setCrashLog('mem3s: ${mb}MB');
-      } catch (_) {}
-    });
+    } catch (_) {/* 大脑初始化失败也不挡主页 */}
+    return const HomePage();
   }
 }
 
