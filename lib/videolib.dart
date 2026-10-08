@@ -69,6 +69,7 @@ class _VideoLibPageState extends State<VideoLibPage>
   String _cat = '全部';
   int _cur = 0;
   bool _loaded = false;
+  bool _edit = false; // ★v27.0.15 编辑模式：顶栏删除按钮进入，卡片删除按钮放大变红
   String _avatar = '';
 
   static const _dbKey = 'vl.db';
@@ -354,6 +355,16 @@ class _VideoLibPageState extends State<VideoLibPage>
                         color: Colors.white38,
                         fontSize: 11)),
                 const Spacer(),
+                // ★v27.0.15 删除（编辑模式开关）
+                IconButton(
+                  onPressed: () => setState(() => _edit = !_edit),
+                  icon: Icon(
+                      _edit
+                          ? Icons.delete_rounded
+                          : Icons.delete_outline_rounded,
+                      color: _edit ? const Color(0xFFFF6B6B) : Colors.white70,
+                      size: 21),
+                ),
                 // 管理分类
                 IconButton(
                   onPressed: _manageCats,
@@ -721,20 +732,32 @@ class _VideoLibPageState extends State<VideoLibPage>
                   child: Stack(children: [
                     Positioned.fill(
                         child: _Cover(video: list[i], cur: i == cur)),
-                    // ★v27.0.15 封面右上角删除按钮（不依赖长按手势，保证一定能删）
+                    // ★v27.0.15 封面右上角删除按钮（编辑模式 = 大红色，普通模式 = 小黑点）
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: _edit ? 14 : 8,
+                      right: _edit ? 14 : 8,
                       child: GestureDetector(
                         onTap: () => _delVideo(i),
-                        child: Container(
-                          padding: const EdgeInsets.all(7),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: EdgeInsets.all(_edit ? 14 : 7),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.45),
+                            color: _edit
+                                ? const Color(0xFFFF4D4F)
+                                : Colors.black.withOpacity(0.45),
                             shape: BoxShape.circle,
+                            boxShadow: _edit
+                                ? [
+                                    BoxShadow(
+                                        color: const Color(0xFFFF4D4F)
+                                            .withOpacity(0.5),
+                                        blurRadius: 10)
+                                  ]
+                                : null,
                           ),
-                          child: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.white, size: 16),
+                          child: Icon(Icons.delete_outline_rounded,
+                              color: Colors.white,
+                              size: _edit ? 22 : 16),
                         ),
                       ),
                     ),
