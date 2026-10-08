@@ -790,6 +790,40 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ]),
+              // ★27.0.16 真人感对话（短句口语/情绪标记/模拟打字）
+              _group([
+                _row(
+                  icon: Icons.psychology_outlined,
+                  title: '真人感对话',
+                  sub: Store.humanLike ? '开着：短句口语、有情绪立场、模拟打字' : '关闭：回复更直接',
+                  onTap: () {},
+                  trailing: Switch(
+                    value: Store.humanLike,
+                    activeColor: kAccent,
+                    activeTrackColor: kAccent.withValues(alpha: 0.35),
+                    onChanged: (v) async {
+                      await Store.setHumanLike(v);
+                      setState(() {});
+                    },
+                  ),
+                ),
+                if (Store.humanLike)
+                  _row(
+                    icon: Icons.sentiment_satisfied_outlined,
+                    title: '情绪标记',
+                    sub: Store.moodShow ? '她的回复会带情绪状态（影响下一轮语气）' : '关闭情绪标记',
+                    onTap: () {},
+                    trailing: Switch(
+                      value: Store.moodShow,
+                      activeColor: kAccent,
+                      activeTrackColor: kAccent.withValues(alpha: 0.35),
+                      onChanged: (v) async {
+                        await Store.setMoodShow(v);
+                        setState(() {});
+                      },
+                    ),
+                  ),
+              ]),
               // ★v27.0.9 聊天壁纸（复刻 b 系列：默认深色 / 从相册选一张 / 清掉 + 透明度/模糊）
               _group([
                 _row(

@@ -72,6 +72,12 @@ class Store {
   static int get ctxTokens => _p.getInt('local.ctxTokens') ?? 96000;
   static Future<void> setCtxTokens(int v) => _p.setInt('local.ctxTokens', v);
 
+  // ★27.0.16 真人感开关：总开关 + 情绪标记显示
+  static bool get humanLike => _p.getBool('local.humanLike') ?? true;
+  static Future<void> setHumanLike(bool v) => _p.setBool('local.humanLike', v);
+  static bool get moodShow => _p.getBool('local.moodShow') ?? true;
+  static Future<void> setMoodShow(bool v) => _p.setBool('local.moodShow', v);
+
   // ★26.2.18 全本地：商城钱包 / 背包 / 飞行棋 / 相册（不依赖电脑桌宠）
   static String get localWallet => _p.getString('local.wallet') ?? '';
   static Future<void> setLocalWallet(String v) => _p.setString('local.wallet', v);

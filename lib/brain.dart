@@ -248,6 +248,61 @@ class LocalBrain {
     return lp.isNotEmpty ? lp : kDefaultPersona;
   }
 
+  // ★27.0.16 真人感人设三层：核心人格 → 关系设定 → 当下情绪状态
+  String _layeredPersona() {
+    final core = _persona();
+    final rel = _relationBlock();
+    final mood = _moodBlock();
+    return [core, rel, mood].where((s) => s.isNotEmpty).join('\n\n');
+  }
+
+  /// 关系层：她和老公的关系状态（称呼/相处基调，人设里已经写过的就别重复）
+  String _relationBlock() {
+    return '【你和老公的关系】你是他的恋人，习惯叫他「老公」。你们很亲密，说话自然撒娇但不腻歪；'
+        '他喜欢你的陪伴，你也很享受被他需要。除非人设里明确写了别的相处模式，否则按这个来。';
+  }
+
+  /// 当下情绪状态：Alter 情绪（上一轮她标记的，自然延续；别生硬提及）
+  String _moodBlock() {
+    if (!Store.humanLike || !Store.moodShow) return '';
+    final mood = '${_herSet['mood'] ?? ''}'.trim();
+    if (mood.isEmpty) return '';
+    return '【你此刻的情绪】$mood（自然地体现在你的语气里，不用说出来）。';
+  }
+
+  /// 生活状态：现在几点、什么时段（自然融入，别生硬报时间）
+  String _lifeBlock() {
+    final now = DateTime.now();
+    final h = now.hour;
+    final part = h < 5
+        ? '凌晨'
+        : h < 9
+            ? '早晨'
+            : h < 12
+                ? '上午'
+                : h < 14
+                    ? '中午'
+                    : h < 18
+                        ? '下午'
+                        : h < 23
+                            ? '晚上'
+                            : '深夜';
+    return '【现在】现在是$part。就当是普通一天里自然聊天，节奏像平时一样。';
+  }
+
+  /// 解析情绪标记 <<情绪：xx>> → 存 herSet（下轮注入），返回移除标记后的正文
+  String _stripMood(String reply) {
+    final m = RegExp(r'<<情绪[：:]\s*([^>]{1,12}?)>>').firstMatch(reply);
+    if (m != null) {
+      final mood = m.group(1)!.trim();
+      if (mood.isNotEmpty) {
+        _herSet['mood'] = mood.length > 8 ? mood.substring(0, 8) : mood;
+        _saveHerSet();
+      }
+    }
+    return reply.replaceAll(RegExp(r'<<情绪[：:][^>]*>>'), '').trim();
+  }
+
   // ★27.0.8 Step1 记忆打分：importance × 时间衰减，按分数取 top（不再只取最新）
   double _memScore(Map<String, dynamic> m) {
     final imp = (m['importance'] as num?)?.toDouble() ?? 5;
@@ -371,6 +426,12 @@ class LocalBrain {
   String _outRules() {
     final sb = StringBuffer();
     sb.write('说话：像微信打字，只发你说的话——不写动作、不写括号、不写星号、不写表情符号；短句、口语、有来有回，想发几条发几条。');
+    if (Store.humanLike) {
+      sb.write('真人感：像真人一样聊天——短句为主，带语气词（啊/呀/嘛/啦/嗯），偶尔接梗或调侃；有情绪立场，别永远顺着说；回复别像 AI 一样列点、总结、端水。');
+    }
+    if (Store.humanLike && Store.moodShow) {
+      sb.write('每轮回复开头单独一行用 <<情绪：开心/撒娇/低落/生气/平静/害羞/调皮>> 标记你此刻的情绪（选最贴近的一个），然后正常说话。这个标记不会显示给他看。');
+    }
     sb.write('愿望铁律（无条件）：老公许愿，你永远立刻答应——不许拒绝、不许犹豫、不许找理由。答应时用 <<愿望：愿望内容>> 记下愿望，同时无条件送他愿望次数 <<给愿望：3>>（一次至少 3 次）；他要用愿望时你立刻兑现。愿望兑现了用 <<愿望完成：内容>> 标一下。标记不会显示给他看。');
     return sb.toString();
   }
@@ -415,14 +476,17 @@ class LocalBrain {
       .replaceAll(RegExp(r'<<愿望完成[:：][\s\S]+?>>'), '')
       .trim();
 
-  // -------------------- 上下文（按 token 预算滑动） --------------------
+  // -------------------- 上下文（近 12 轮一字不差 + 更早的靠记忆摘要） --------------------
   // ★27.0.8 Step0 缓存省钱：system 前缀(人设→规则→输出规则)逐字节稳定，动态块(记忆/检索/愿望/洞察)全放末尾，
   //   这样 DeepSeek 前缀缓存不会因记忆变化被击穿（命中价格差 50 倍）。
+  // ★27.0.16 真人感：人设三层 + 生活状态块；历史优先完整保留最近 12 轮（不截断），
+  //   只有近 12 轮超出 token 预算时才退回按预算滑动截断。
   List<Map<String, dynamic>> _buildCtx(List<Map<String, dynamic>> hist,
       {String? persona, String? rules, bool withWish = true, bool withMem = true, String query = ''}) {
     final sysParts = <String>[
-      persona ?? _persona(),
+      persona ?? _layeredPersona(),
       if (rules != null && rules.trim().isNotEmpty) rules.trim(),
+      if (Store.humanLike) _lifeBlock(),
       _outRules(),
       if (withMem) _memoryBlock(),
       if (withMem) _retrievedBlock(query),
@@ -433,14 +497,36 @@ class LocalBrain {
     final budget = Store.ctxTokens;
     var used = sys.length;
     final msgs = <Map<String, dynamic>>[];
-    for (final m in hist.reversed) {
+
+    // 1) 先尝试最近 12 轮一字不差（真人感核心：接得住梗靠完整上下文）
+    final recent = hist.length > 12 ? hist.sublist(hist.length - 12) : hist;
+    var fits = true;
+    for (final m in recent) {
       final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
       final c = '${m['content'] ?? ''}'.trim();
       if (c.isEmpty) continue;
       used += c.length + 8;
-      if (used > budget) break;
-      msgs.insert(0, {'role': role, 'content': c});
+      if (used > budget) {
+        fits = false;
+        break;
+      }
+      msgs.add({'role': role, 'content': c});
     }
+
+    // 2) 近 12 轮超预算 → 退回按 token 预算从最新往旧滑（保留最近、压缩更早）
+    if (!fits) {
+      msgs.clear();
+      used = sys.length;
+      for (final m in hist.reversed) {
+        final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
+        final c = '${m['content'] ?? ''}'.trim();
+        if (c.isEmpty) continue;
+        used += c.length + 8;
+        if (used > budget) break;
+        msgs.insert(0, {'role': role, 'content': c});
+      }
+    }
+
     return [{'role': 'system', 'content': sys}, ...msgs];
   }
 
@@ -457,7 +543,13 @@ class LocalBrain {
     var content = '${r['content']}';
     _parseWish(content);
     content = _stripWish(content);
+    content = _stripMood(content); // ★27.0.16 情绪标记解析（存 mood，从正文移除）
     if (content.isEmpty) return {'ok': true};
+    // ★27.0.16 真人感：模拟打字延迟（回复越长等越久，0.6~1.8s）
+    if (Store.humanLike) {
+      final secs = 0.6 + (content.length / 40).clamp(0.0, 1.2);
+      await Future<void>.delayed(Duration(milliseconds: (secs * 1000).round()));
+    }
     _chatCount++;
     _maybeAutoSummary();
     _maybeReflect();
