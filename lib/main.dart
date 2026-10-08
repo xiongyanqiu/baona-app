@@ -360,14 +360,17 @@ class _BootState extends State<Boot> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_unlocked) {
-      // 没设过密码 → 首次引导设置；设过 → 冷启动解锁门（开启人脸会自动识别）
-      if (Store.lockHash.isEmpty) {
-        return LockSetupPage(onDone: () => _enterHome());
-      }
-      return LockGatePage(onUnlocked: () => _enterHome());
-    }
-    return const HomePage();
+    // ★27.0.14.18 锁页改为"浮层覆盖"：HomePage 与 .14.12 一样立即构建（大脑边加载边建主页，
+    //   之前 .14.13 改成"大脑加载完才建主页"后进主页空白闪退/卡死——恢复原构建时机，锁页盖在上面）
+    return Stack(children: [
+      const HomePage(),
+      if (!_unlocked)
+        Positioned.fill(
+          child: Store.lockHash.isEmpty
+              ? LockSetupPage(onDone: () => _enterHome())
+              : LockGatePage(onUnlocked: () => _enterHome()),
+        ),
+    ]);
   }
 
   /// 解锁/设完密码 → 切主页。顺手记一条诊断（壁纸/头像状态），崩了好定位
