@@ -105,16 +105,15 @@ class _MsgPageState extends State<MsgPage> {
 
   void _jumpBottom({bool instant = false, int times = 1}) {
     if (!mounted) return; // ★v27.0.9 页面已销毁就别再碰滚动条（发送后延迟补偿可能晚于退出）
-    // ★v27.0.16.2 打开/加载后多次补偿贴底：头像图片加载会让列表高度变化，
-    //   只跳一次容易停在中间，分 0/250/500ms 三次追到底
-    // ★27.0.16.6 加强到 4 次（0/250/500/800ms）+ 首帧，进对话页必达最新消息
+    // ★27.0.16.7 消息列表已改 reverse:true —— 视觉底部=最新消息=offset 0，直接回 0 即最新
+    //   保留多阶段补偿防头像图片加载造成的高度变化
     for (var i = 0; i < times; i++) {
       Future.delayed(Duration(milliseconds: i * 250), () {
         if (!mounted) return;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!_sc.hasClients) return;
           try {
-            _sc.animateTo(_sc.position.maxScrollExtent,
+            _sc.animateTo(0,
                 duration: instant ? Duration.zero : const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic);
           } catch (_) {}
@@ -127,7 +126,8 @@ class _MsgPageState extends State<MsgPage> {
   void _followNew() {
     if (!mounted || !_sc.hasClients) return;
     try {
-      if (_sc.position.maxScrollExtent - _sc.position.pixels < 120) _jumpBottom();
+      // ★27.0.16.7 reverse 列表：offset 0=最新消息；在底部附近(pixels<120)才跟着走，翻历史不打扰
+      if (_sc.position.pixels < 120) _jumpBottom();
     } catch (_) {}
   }
 
@@ -721,13 +721,19 @@ class _MsgPageState extends State<MsgPage> {
                     ? const _EmptyHint()
                     : ListView.builder(
                         controller: _sc,
+                        // ★27.0.16.7 根治对话定位：reverse 列表——offset 0=视觉底部=最新消息，
+                        //   进对话页天然停在最新消息，不需要滚动跳转；头像图片加载再多也不会弹回顶部
+                        reverse: true,
                         // ★v27.0.10 对话页没有主界面底栏了：底部不再留 navSpace 让位，
                         //   列表直接贴输入框，最新消息始终紧跟输入框（键盘弹起也跟着动）
-                        padding: const EdgeInsets.only(top: 10, bottom: 8),
+                        padding: const EdgeInsets.only(top: 8, bottom: 10),
                         itemCount: _msgs.length + (_typing ? 1 : 0),
                         itemBuilder: (_, i) {
-                          if (i >= _msgs.length) return _TypingRow();
-                          final m = _msgs[i];
+                          // reverse：i=0 是视觉最底部 → 放"正在输入"
+                          if (_typing && i == 0) return const _TypingRow();
+                          final idx = _typing ? i - 1 : i;
+                          if (idx >= _msgs.length) return const SizedBox.shrink();
+                          final m = _msgs[_msgs.length - 1 - idx]; // 反转：最新在 i=0 之后
                           final row = _row(m, herAv, myAv);
                           final k = _mkey(m);
                           // ★v27.0.14.5 新消息 3D 翻入：只播一次（播完从 _fresh 移除，滚动重建不再播）
