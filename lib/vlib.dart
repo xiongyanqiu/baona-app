@@ -154,7 +154,7 @@ class _VideoLibPageState extends State<VideoLibPage> {
     );
     if (ok != true || !mounted) return;
     try {
-      await e.delete();
+      await PhotoManager.editor.deleteWithIds(<String>[e.id]);
       if (!mounted) return;
       setState(() {
         _videos.removeWhere((x) => x.id == e.id);
