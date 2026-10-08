@@ -845,9 +845,7 @@ class Wall extends StatelessWidget {
             opacity: opacity.clamp(0.0, 1.0),
             // ★2026-10-02 闪屏修复：gaplessPlayback —— 切页/全局 rebuild 时背景保留上一帧，
             //   新帧就绪前不闪回空白/渐变（之前每次 rebuild 都先清空再绘制 → 画面闪）
-            // ★27.0.14.18 内存修复：cacheWidth 强制解码降采样到 1080 —— 壁纸如果是相册
-            //   高清大图（12M/48M），不降采样直接解码 = 数百 MB 内存 = 进主页卡死+杀后台
-            child: Image(image: p, fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: 1080, errorBuilder: (_, __, ___) => base),
+            child: Image(image: p, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => base),
           ),
         // 透明的地方露出底下的深色底；再压一点点暗角（★2026-09-29 老公说照片看不清 → 从 0.30 降到 0.14）
         Opacity(opacity: (1 - opacity.clamp(0.0, 1.0)) * 0.9, child: base),

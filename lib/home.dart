@@ -68,7 +68,6 @@ class _BaonaHomeState extends State<BaonaHome> {
             image: herImg,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            cacheWidth: 600, // ★27.0.14.18 头像解码降采样（显示 176 逻辑px，3x≈528，600 足够）
             errorBuilder: (_, __, ___) => Container(
               color: kBg2,
               child: const Center(
