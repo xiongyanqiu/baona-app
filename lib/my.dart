@@ -2,6 +2,7 @@
 // 设计：iOS 27 风格（大标题 + 分组圆角卡片 + 系统色板，无紫色底板）
 // 内容：模型接入（配好就能对话）/ 人设（可编辑）/ 设置（二级页）
 import 'dart:convert';
+import 'dart:io'; // ★27.0.16.2 设备连通测试 HttpClient
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -602,6 +603,12 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _useMem = true;
+  // ★27.0.16.2 万物互联：设备连接（贝锐蒲公英组网，电脑端跑 Agent / 安卓端）
+  final TextEditingController _pcIp = TextEditingController();
+  final TextEditingController _pcPort = TextEditingController();
+  final TextEditingController _adIp = TextEditingController();
+  final TextEditingController _adPort = TextEditingController();
+  bool _pcOn = false, _adOn = false, _devBusy = false;
 
   @override
   void initState() {
@@ -616,10 +623,82 @@ class _SettingsPageState extends State<SettingsPage> {
     final s = (r['s'] as Map?) ?? {};
     // ★v27.0.14.10 玻璃强度恢复（液态玻璃 2.0：iOS 27 透明度滑块）
     gGlassStrength = (app.cfg['glassStrength'] as num?)?.toDouble() ?? 0.75;
+    // ★27.0.16.2 恢复设备配置
+    final dev = Store.devices;
+    final pc = dev['pc'];
+    if (pc is Map) {
+      _pcIp.text = '${pc['ip'] ?? ''}';
+      _pcPort.text = '${pc['port'] ?? ''}';
+      _pcOn = pc['online'] == true;
+    }
+    final ad = dev['android'];
+    if (ad is Map) {
+      _adIp.text = '${ad['ip'] ?? ''}';
+      _adPort.text = '${ad['port'] ?? ''}';
+      _adOn = ad['online'] == true;
+    }
     if (mounted) {
       setState(() => _useMem = s['useMemories'] != false);
     }
   }
+
+  @override
+  void dispose() {
+    _pcIp.dispose();
+    _pcPort.dispose();
+    _adIp.dispose();
+    _adPort.dispose();
+    super.dispose();
+  }
+
+  // ★27.0.16.2 测试设备连通性（HTTP GET /ping，2s 超时），结果写回 Store 并点亮主页卫星
+  Future<void> _testDev(String key, String ip, String port) async {
+    if (ip.trim().isEmpty || port.trim().isEmpty) return;
+    setState(() => _devBusy = true);
+    var ok = false;
+    try {
+      final c = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+      try {
+        final r = await c
+            .getUrl(Uri.parse('http://${ip.trim()}:${port.trim()}/ping'))
+            .timeout(const Duration(seconds: 2));
+        final resp = await r.close();
+        ok = resp.statusCode == 200;
+      } finally {
+        c.close(force: true);
+      }
+    } catch (_) {
+      ok = false;
+    }
+    final dev = Map<String, dynamic>.from(Store.devices);
+    dev[key] = {
+      'name': key == 'pc' ? '电脑端' : '安卓端',
+      'ip': ip.trim(),
+      'port': port.trim(),
+      'online': ok,
+    };
+    await Store.setDevices(dev);
+    if (mounted) {
+      setState(() {
+        if (key == 'pc') {
+          _pcOn = ok;
+        } else {
+          _adOn = ok;
+        }
+        _devBusy = false;
+      });
+    }
+  }
+
+  // ★27.0.16.2 设备状态灯
+  Widget _devDot(bool on) => Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: on ? const Color(0xFF34C759) : kSub.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+        ),
+      );
 
   Future<void> _rename() async {
     final b = app.brain;
@@ -823,6 +902,105 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                   ),
+              ]),
+              // ★27.0.16.2 万物互联：设备连接（贝锐蒲公英组网 → 主页星辰图外圈卫星）
+              _group([
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: Text('用贝锐蒲公英把设备组到同一虚拟网后，填各设备的虚拟 IP 和端口。'
+                      '电脑端跑 Agent（聊天控制）；安卓端以后做终端软件。',
+                      style: const TextStyle(fontSize: 12.5, color: kSub, height: 1.4)),
+                ),
+                _row(
+                  icon: Icons.computer_outlined,
+                  title: '电脑端 · Agent',
+                  sub: _pcOn ? '在线' : '未连接',
+                  onTap: () {},
+                  trailing: _devDot(_pcOn),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _pcIp,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        style: const TextStyle(fontSize: 14.5),
+                        decoration: const InputDecoration(
+                            hintText: '虚拟 IP（如 10.0.0.1）', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 74,
+                      child: TextField(
+                        controller: _pcPort,
+                        keyboardType: TextInputType.number,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        style: const TextStyle(fontSize: 14.5),
+                        decoration: const InputDecoration(
+                            hintText: '端口', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _devBusy ? null : () => _testDev('pc', _pcIp.text, _pcPort.text),
+                      child: Text(_devBusy ? '…' : '测试', style: const TextStyle(fontSize: 14)),
+                    ),
+                  ]),
+                ),
+                _row(
+                  icon: Icons.smartphone_outlined,
+                  title: '安卓端',
+                  sub: _adOn ? '在线' : '未连接',
+                  onTap: () {},
+                  trailing: _devDot(_adOn),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _adIp,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        style: const TextStyle(fontSize: 14.5),
+                        decoration: const InputDecoration(
+                            hintText: '虚拟 IP（如 10.0.0.2）', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 74,
+                      child: TextField(
+                        controller: _adPort,
+                        keyboardType: TextInputType.number,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        style: const TextStyle(fontSize: 14.5),
+                        decoration: const InputDecoration(
+                            hintText: '端口', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _devBusy ? null : () => _testDev('android', _adIp.text, _adPort.text),
+                      child: Text(_devBusy ? '…' : '测试', style: const TextStyle(fontSize: 14)),
+                    ),
+                  ]),
+                ),
               ]),
               // ★v27.0.9 聊天壁纸（复刻 b 系列：默认深色 / 从相册选一张 / 清掉 + 透明度/模糊）
               _group([

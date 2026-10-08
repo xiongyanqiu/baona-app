@@ -5,6 +5,7 @@
 //   主页只负责"她"，点她的大头像 = 开始聊天，画面和点击逻辑都简洁。
 import 'package:flutter/material.dart';
 
+import 'api.dart';
 import 'main.dart';
 import 'theme.dart';
 
@@ -37,8 +38,7 @@ class _BaonaHomeState extends State<BaonaHome> {
     if (!mounted) return;
     final ok = s['ok'] == true;
     setState(() {
-      _msgCount = ok ? ((s['msgCount'] as num?)?.toInt() ?? 0) : _msgCount;
-      _memCount = ok ? ((s['memCount'] as num?)?.toInt() ?? 0) : _memCount;
+      _msgCount = ok ? ((s['msgCount'] as num?)?.toInt() ?? 0) : _msgCount;      _memCount = ok ? ((s['memCount'] as num?)?.toInt() ?? 0) : _memCount;
       _dayCount = ok ? ((s['dayCount'] as num?)?.toInt() ?? 0) : _dayCount;
     });
   }
@@ -47,6 +47,21 @@ class _BaonaHomeState extends State<BaonaHome> {
     final n = DateTime.now();
     const wd = ['一', '二', '三', '四', '五', '六', '日'];
     return '${n.month}月${n.day}日 · 星期${wd[n.weekday - 1]}';
+  }
+
+  // ★27.0.16.2 万物互联：外圈卫星 = 设置里配置过的可连接设备（电脑/安卓），在线亮青绿、离线灰
+  List<Map<String, dynamic>> _satellites() {
+    final d = Store.devices;
+    final out = <Map<String, dynamic>>[];
+    final pc = d['pc'];
+    if (pc is Map) {
+      out.add({'id': 'pc', 'label': '电脑', 'online': pc['online'] == true, 'onTap': () {}});
+    }
+    final ad = d['android'];
+    if (ad is Map) {
+      out.add({'id': 'android', 'label': '安卓', 'online': ad['online'] == true, 'onTap': () {}});
+    }
+    return out;
   }
 
   @override
@@ -150,6 +165,8 @@ class _BaonaHomeState extends State<BaonaHome> {
               {'icon': Icons.audiotrack_outlined, 'label': '音频', 'onTap': () => widget.onGoTab(3)},
               {'icon': Icons.person_outline, 'label': '我的', 'onTap': () => widget.onGoTab(4)},
             ],
+            // ★27.0.16.2 万物互联：外圈卫星 = 已配置的可连接设备（贝锐蒲公英组网，设置里配）
+            satellites: _satellites(),
           ),
         ),
         const SizedBox(height: 22),

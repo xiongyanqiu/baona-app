@@ -78,6 +78,18 @@ class Store {
   static bool get moodShow => _p.getBool('local.moodShow') ?? true;
   static Future<void> setMoodShow(bool v) => _p.setBool('local.moodShow', v);
 
+  // ★27.0.16.2 万物互联：可连接设备（贝锐蒲公英组网），{pc:{name,ip,port,online}, android:{...}}
+  static Map<String, dynamic> get devices {
+    try {
+      final s = _p.getString('local.devices');
+      if (s == null || s.isEmpty) return {};
+      final j = jsonDecode(s);
+      if (j is Map) return Map<String, dynamic>.from(j);
+    } catch (_) {}
+    return {};
+  }
+  static Future<void> setDevices(Map<String, dynamic> v) => _p.setString('local.devices', jsonEncode(v));
+
   // ★26.2.18 全本地：商城钱包 / 背包 / 飞行棋 / 相册（不依赖电脑桌宠）
   static String get localWallet => _p.getString('local.wallet') ?? '';
   static Future<void> setLocalWallet(String v) => _p.setString('local.wallet', v);

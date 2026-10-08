@@ -75,7 +75,7 @@ class _MsgPageState extends State<MsgPage> {
         _msgs = list.map((m) => Msg.fromJson(Map<String, dynamic>.from(m))).toList();
         _loading = false;
       });
-      _jumpBottom(instant: true);
+      _jumpBottom(instant: true, times: 3); // ★v27.0.16.2 打开对话锁定最新消息（多阶段补偿）
     }
     try {
       final mr = await a.memories();
@@ -94,7 +94,7 @@ class _MsgPageState extends State<MsgPage> {
           _msgs.add(msg);
           _fresh.add(_mkey(msg)); // ★v27.0.14.5 新消息 3D 翻入
         });
-        _jumpBottom();
+        _followNew(); // ★v27.0.16.2 新消息：底部附近才跟着走（翻历史不打扰）
       }
     } else if (t == 'typing') {
       setState(() => _typing = e['on'] == true);
@@ -103,16 +103,31 @@ class _MsgPageState extends State<MsgPage> {
     }
   }
 
-  void _jumpBottom({bool instant = false}) {
+  void _jumpBottom({bool instant = false, int times = 1}) {
     if (!mounted) return; // ★v27.0.9 页面已销毁就别再碰滚动条（发送后延迟补偿可能晚于退出）
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_sc.hasClients) return;
-      try {
-        _sc.animateTo(_sc.position.maxScrollExtent,
-            duration: instant ? Duration.zero : const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic);
-      } catch (_) {}
-    });
+    // ★v27.0.16.2 打开/加载后多次补偿贴底：头像图片加载会让列表高度变化，
+    //   只跳一次容易停在中间，分 0/250/500ms 三次追到底
+    for (var i = 0; i < times; i++) {
+      Future.delayed(Duration(milliseconds: i * 250), () {
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_sc.hasClients) return;
+          try {
+            _sc.animateTo(_sc.position.maxScrollExtent,
+                duration: instant ? Duration.zero : const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic);
+          } catch (_) {}
+        });
+      });
+    }
+  }
+
+  // ★v27.0.16.2 新消息条件锁定：正在底部附近（120px 内）才跟着走，翻历史时不打扰
+  void _followNew() {
+    if (!mounted || !_sc.hasClients) return;
+    try {
+      if (_sc.position.maxScrollExtent - _sc.position.pixels < 120) _jumpBottom();
+    } catch (_) {}
   }
 
   Future<void> _send() async {

@@ -38,7 +38,7 @@ const double kRSheet = 30; // 抽屉大圆角
 const double kRCard = 22; // 卡片圆角
 const double kRCell = 14; // 列表格子
 const double kRCapsule = 999; // 胶囊（按钮/导航）
-const String kAppVer = '27.0.16.1'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
+const String kAppVer = '27.0.16.2'; // App 版本（跟 pubspec 对齐，装上能一眼看出是不是新的）
 /// 底栏悬浮时给内容留的高度（各页滚动到底部要多留这么多，不然最后一条被玻璃压住看不见）
 /// ★2026-09-30 彻底改成固定值：之前读 padding/viewPadding 都不可靠（Scaffold、键盘、不同机型
 ///   给的数不一样，输入框一会儿被盖住一会儿被顶到半空）。底栏玻璃是固定高度：
@@ -1317,6 +1317,7 @@ class UniverseHub extends StatefulWidget {
     super.key,
     required this.core,
     required this.nodes,
+    this.satellites = const [], // ★27.0.16.2 外圈卫星（可连接设备）：[{id,label,online,onTap}]
     this.size = 340,
     this.coreSize = 176,
     this.orbitR = 128,
@@ -1326,6 +1327,7 @@ class UniverseHub extends StatefulWidget {
 
   final Widget core; // 中心主星（她的头像）
   final List<Map<String, dynamic>> nodes; // [{icon, label, onTap}]
+  final List<Map<String, dynamic>> satellites; // 外圈卫星（设备），比节点更靠外、公转更慢
   final double size; // 星系总直径
   final double coreSize; // 中心主星直径
   final double orbitR; // 节点基准轨道半径
@@ -1360,6 +1362,7 @@ class _UniverseHubState extends State<UniverseHub>
       vsync: this, duration: Duration(seconds: widget.basePeriod))..repeat();
 
   late final List<_StarSpec> _specs;
+  late final List<_StarSpec> _satSpecs; // ★27.0.16.2 外圈卫星轨道（更外、更慢、相位独立）
 
   @override
   void initState() {
@@ -1375,6 +1378,19 @@ class _UniverseHubState extends State<UniverseHub>
           size: 30 + rnd.nextDouble() * 12,
           glow: glows[rnd.nextInt(glows.length)],
           arcSeed: rnd.nextInt(10000),
+        ),
+    ];
+    // 卫星：不同种子 → 轨道独立；半径更外（orbitR 之外）、公转更慢（像远处绕行的设备）
+    final rnd2 = math.Random(widget.seed + 777);
+    _satSpecs = [
+      for (var i = 0; i < widget.satellites.length; i++)
+        _StarSpec(
+          r: widget.orbitR * 1.26 + rnd2.nextDouble() * 12 - 6,
+          phase: rnd2.nextDouble() * 2 * math.pi,
+          speed: 0.28 + rnd2.nextDouble() * 0.18,
+          size: 16 + rnd2.nextDouble() * 5,
+          glow: const Color(0xFF5DF2D6),
+          arcSeed: rnd2.nextInt(10000),
         ),
     ];
   }
@@ -1412,9 +1428,67 @@ class _UniverseHubState extends State<UniverseHub>
             core ?? const SizedBox.shrink(),
             // 环绕公转的小星辰
             for (var i = 0; i < _specs.length; i++) _node(i, cx, cy),
+            // ★27.0.16.2 外圈卫星（可连接设备）：更外圈、公转更慢，在线亮青绿 / 离线灰
+            for (var i = 0; i < _satSpecs.length; i++) _satNode(i, cx, cy),
           ]),
         );
       },
+    );
+  }
+
+  Widget _satNode(int i, double cx, double cy) {
+    final s = _satSpecs[i];
+    final ang = s.phase + _c.value * 2 * math.pi * s.speed;
+    final px = cx + math.cos(ang) * s.r;
+    final py = cy + math.sin(ang) * s.r * 0.94;
+    final item = widget.satellites[i];
+    final online = item['online'] == true;
+    final d = s.size;
+    // 在线：青绿荧光呼吸；离线：灰暗
+    final c1 = online ? const Color(0xFF5DF2D6) : const Color(0xFF7E8898);
+    final breathe = online ? 0.30 + 0.25 * (0.5 + 0.5 * math.sin(_c.value * 2 * math.pi * 2)) : 0.12;
+    return Positioned(
+      left: px - d / 2,
+      top: py - d / 2,
+      width: d,
+      height: d,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: item['onTap'] as VoidCallback?,
+        child: Stack(alignment: Alignment.center, children: [
+          // 轨道光环
+          Container(
+            width: d * 2.7,
+            height: d * 2.7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: c1.withValues(alpha: breathe), width: 1),
+            ),
+          ),
+          // 卫星本体（白亮核心 + 青绿/灰光晕）
+          Container(
+            width: d,
+            height: d,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  online ? const Color(0xF2FFFFFF) : const Color(0xFFB0B9C6),
+                  c1.withValues(alpha: 0.85),
+                  c1.withValues(alpha: 0.06),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                    color: c1.withValues(alpha: online ? 0.55 : 0.15),
+                    blurRadius: d * 1.0,
+                    spreadRadius: 0.4),
+              ],
+            ),
+          ),
+        ]),
+      ),
     );
   }
 
