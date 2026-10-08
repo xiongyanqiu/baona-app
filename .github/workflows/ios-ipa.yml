@@ -11,8 +11,8 @@ jobs:
   ipa:
     # ★v27.0.14.1 锁定稳定编译机：之前用 macos-latest（滚动标签），GitHub 升级编译机后
     #   新 Xcode 编译产物在手机上启动闪退（v27.0.13 之前一直正常）。
-    # ★v27.0.14.16 macos-14 runner 不可用（连续分配失败）→ 换同级 macos-13（同为 Xcode 15 系列）。
-    runs-on: macos-13
+    # ★v27.0.14.16 macos-14 runner 下线、macos-13 排队 6 小时进不去 → 换 macos-15（当前主力池）。
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
