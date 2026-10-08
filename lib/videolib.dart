@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -249,11 +250,64 @@ class _VideoLibPageState extends State<VideoLibPage>
   void _openPlayer(int index) {
     final list = _shown;
     if (index < 0 || index >= list.length) return;
-    Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => _FullPlayer(
-              video: list[index],
-              catGrad: _catGrad[list[index].cat] ?? _catGrad['其他']!,
-            )));
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+            builder: (_) => _FullPlayer(
+                  video: list[index],
+                  catGrad: _catGrad[list[index].cat] ?? _catGrad['其他']!,
+                )))
+        .then((deleted) {
+      // 播放页里删了视频 → 回来同步移除列表
+      if (deleted == true && mounted) {
+        final v = list[index];
+        setState(() {
+          _vids.removeWhere((x) => x.path == v.path);
+          _cur = 0;
+        });
+        _save();
+      }
+    });
+  }
+
+  /// ★v27.0.15 视频长按删除（跟音频库一致）：删本地文件 + 移列表 + 保存
+  Future<void> _delVideo(int index) async {
+    final list = _shown;
+    if (index < 0 || index >= list.length) return;
+    final v = list[index];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF17181C),
+        title: const Text('删除视频',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700)),
+        content: Text('确定删除「${v.path.split('/').last}」吗？',
+            style: const TextStyle(color: Colors.white70, fontSize: 14.5)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('不删', style: TextStyle(color: Colors.white54))),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('删除',
+                  style: TextStyle(
+                      color: Color(0xFFFF6B6B),
+                      fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final f = File(v.path);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+    setState(() {
+      _vids.removeWhere((x) => x.path == v.path);
+      _cur = 0;
+    });
+    await _save();
   }
 
   @override
@@ -642,6 +696,7 @@ class _VideoLibPageState extends State<VideoLibPage>
           width: w,
           child: GestureDetector(
             onTap: () => _openPlayer(i),
+            onLongPress: () => _delVideo(i),
             onHorizontalDragStart: (_) {
               _anim?.dispose();
               _anim = null;
@@ -888,6 +943,10 @@ class _FullPlayerState extends State<_FullPlayer> {
   bool _ready = false;
   bool _showCtrl = true;
   Timer? _hideTimer;
+  // ★v27.0.15 横屏 + 长按快进
+  bool _land = false; // 是否横屏
+  Timer? _ffTimer;
+  bool _ff = false; // 长按快进中
 
   @override
   void initState() {
@@ -904,6 +963,70 @@ class _FullPlayerState extends State<_FullPlayer> {
             .showSnackBar(SnackBar(content: Text('视频打不开：$e')));
       }
     });
+  }
+
+  /// 横屏 ↔ 竖屏切换
+  void _toggleLand() {
+    setState(() => _land = !_land);
+    SystemChrome.setPreferredOrientations(_land
+        ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+        : [DeviceOrientation.portraitUp]);
+  }
+
+  /// 长按快进：按住期间每 250ms 前进 750ms（约 3x）
+  void _ffStart() {
+    if (!_ready || !_vc.value.isPlaying) return;
+    _ff = true;
+    setState(() {});
+    _ffTimer?.cancel();
+    _ffTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted || !_ff) return;
+      final now = _vc.value.position.inMilliseconds;
+      final dur = _vc.value.duration.inMilliseconds;
+      final nxt = (now + 750).clamp(0, dur);
+      _vc.seekTo(Duration(milliseconds: nxt));
+      setState(() {});
+    });
+  }
+
+  void _ffEnd() {
+    _ff = false;
+    _ffTimer?.cancel();
+    if (mounted) setState(() {});
+  }
+
+  /// 播放页删除：删本地文件 → pop(true) 通知列表同步
+  Future<void> _del() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF17181C),
+        title: const Text('删除视频',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700)),
+        content: Text('确定删除「${widget.video.path.split('/').last}」吗？',
+            style: const TextStyle(color: Colors.white70, fontSize: 14.5)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('不删', style: TextStyle(color: Colors.white54))),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('删除',
+                  style: TextStyle(
+                      color: Color(0xFFFF6B6B),
+                      fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final f = File(widget.video.path);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+    Navigator.pop(context, true);
   }
 
   void _armHide() {
@@ -924,7 +1047,9 @@ class _FullPlayerState extends State<_FullPlayer> {
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _ffTimer?.cancel();
     _vc.dispose();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); // 退出播放恢复竖屏
     super.dispose();
   }
 
@@ -940,6 +1065,9 @@ class _FullPlayerState extends State<_FullPlayer> {
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: _toggle,
+        onLongPressStart: (_) => _ffStart(),
+        onLongPressEnd: (_) => _ffEnd(),
+        onLongPressCancel: _ffEnd,
         child: Stack(children: [
           // 视频
           Center(
@@ -951,6 +1079,28 @@ class _FullPlayerState extends State<_FullPlayer> {
                 : const CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2),
           ),
+          // 长按快进浮层
+          if (_ff)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.fast_forward_rounded,
+                      color: Colors.white, size: 22),
+                  SizedBox(width: 8),
+                  Text('快进中 3x',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
           // 顶部控制（渐变遮罩）
           AnimatedOpacity(
             opacity: _showCtrl ? 1 : 0,
@@ -981,6 +1131,20 @@ class _FullPlayerState extends State<_FullPlayer> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: Colors.white, fontSize: 15)),
+                    ),
+                    // 横屏切换
+                    IconButton(
+                      onPressed: _toggleLand,
+                      icon: Icon(_land
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                          color: Colors.white, size: 22),
+                    ),
+                    // 删除
+                    IconButton(
+                      onPressed: _del,
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.white, size: 22),
                     ),
                   ]),
                 ),

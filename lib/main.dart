@@ -1,6 +1,7 @@
 // 包娜 · 手机端 App 主入口：连电脑 → 登录 → 主界面（聊天/商城/游戏/我们）
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -527,24 +528,13 @@ class _HomePageState extends State<HomePage> {
         duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
   }
 
-  /// ★v27.0.11 从主页进对话：push 全屏沉浸页（iOS 右滑入 + 侧滑返回），
-  ///   在里面"返回主界面" = pop 回主页；进去时置 chatVisible（来消息不攒红点）
+  /// ★v27.0.15 从主页进对话：CupertinoPageRoute（iOS 右滑入 + 支持边缘侧滑返回），
+  ///   在里面"返回主界面" = pop 回主页（也可边缘侧滑）；进去时置 chatVisible（来消息不攒红点）
   void _openChat() {
     HapticFeedback.selectionClick();
     app.chatVisible = true;
     Navigator.of(context)
-        .push(PageRouteBuilder(
-          opaque: true,
-          pageBuilder: (_, __, ___) => const MsgPage(),
-          transitionsBuilder: (_, anim, __, child) {
-            final slide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-                .chain(CurveTween(curve: Curves.easeOutCubic))
-                .animate(anim);
-            return SlideTransition(position: slide, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 320),
-          reverseTransitionDuration: const Duration(milliseconds: 260),
-        ))
+        .push(CupertinoPageRoute(builder: (_) => const MsgPage()))
         .then((_) => app.chatVisible = false);
   }
 
