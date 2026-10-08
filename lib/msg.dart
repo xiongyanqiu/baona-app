@@ -730,7 +730,7 @@ class _MsgPageState extends State<MsgPage> {
                         itemCount: _msgs.length + (_typing ? 1 : 0),
                         itemBuilder: (_, i) {
                           // reverse：i=0 是视觉最底部 → 放"正在输入"
-                          if (_typing && i == 0) return const _TypingRow();
+                          if (_typing && i == 0) return _TypingRow();
                           final idx = _typing ? i - 1 : i;
                           if (idx >= _msgs.length) return const SizedBox.shrink();
                           final m = _msgs[_msgs.length - 1 - idx]; // 反转：最新在 i=0 之后
