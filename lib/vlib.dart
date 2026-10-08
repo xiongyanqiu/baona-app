@@ -1,6 +1,7 @@
 // vlib.dart — 包娜 App v27.0.14.11 视频区：本地视频库
 // 设计：iOS 27 Liquid Glass（半透明玻璃卡片，壁纸透出）
 // 内容：系统相册视频网格（首帧封面）→ 点击全屏播放；右上「添加」从相册选视频入库
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -125,6 +126,49 @@ class _VideoLibPageState extends State<VideoLibPage> {
     ]);
   }
 
+  /// ★v27.0.15 删除视频：从系统相册删除（弹确认）
+  Future<void> _delVideo(AssetEntity e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF17181C),
+        title: const Text('删除视频',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700)),
+        content: Text('确定删除「${e.title ?? '视频'}」吗？将从系统相册移除。',
+            style: const TextStyle(color: Colors.white70, fontSize: 14.5)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('不删', style: TextStyle(color: Colors.white54))),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('删除',
+                  style: TextStyle(
+                      color: Color(0xFFFF6B6B),
+                      fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await e.delete();
+      if (!mounted) return;
+      setState(() {
+        _videos.removeWhere((x) => x.id == e.id);
+        _thumbs.remove(e.id);
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('删除失败，可能没有相册权限'),
+            behavior: SnackBarBehavior.floating));
+      }
+    }
+  }
+
   Widget _cell(AssetEntity e) {
     final b = _thumbs[e.id];
     return GestureDetector(
@@ -176,6 +220,23 @@ class _VideoLibPageState extends State<VideoLibPage> {
                     style: const TextStyle(fontSize: 9.5, color: Colors.white)),
               ),
             ),
+            // ★v27.0.15 删除按钮（右下角）
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => _delVideo(e),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xB3000000),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded,
+                      color: Colors.white, size: 15),
+                ),
+              ),
+            ),
           ]),
         ),
       ),
@@ -223,6 +284,10 @@ class _PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<_PlayerPage> {
   late VideoPlayerController _vc;
   bool _ok = false;
+  // ★v27.0.15 横屏 + 长按快进
+  bool _land = false;
+  Timer? _ffTimer;
+  bool _ff = false;
 
   @override
   void initState() {
@@ -238,8 +303,40 @@ class _PlayerPageState extends State<_PlayerPage> {
 
   @override
   void dispose() {
+    _ffTimer?.cancel();
     _vc.dispose();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
+  }
+
+  /// 横屏 ↔ 竖屏
+  void _toggleLand() {
+    setState(() => _land = !_land);
+    SystemChrome.setPreferredOrientations(_land
+        ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+        : [DeviceOrientation.portraitUp]);
+  }
+
+  /// 长按快进：250ms 前进 750ms（约 3x）
+  void _ffStart() {
+    if (!_ok || !_vc.value.isPlaying) return;
+    _ff = true;
+    setState(() {});
+    _ffTimer?.cancel();
+    _ffTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted || !_ff) return;
+      final now = _vc.value.position.inMilliseconds;
+      final dur = _vc.value.duration.inMilliseconds;
+      final nxt = (now + 750).clamp(0, dur);
+      _vc.seekTo(Duration(milliseconds: nxt));
+      setState(() {});
+    });
+  }
+
+  void _ffEnd() {
+    _ff = false;
+    _ffTimer?.cancel();
+    if (mounted) setState(() {});
   }
 
   String _fmt(int ms) {
@@ -255,7 +352,7 @@ class _PlayerPageState extends State<_PlayerPage> {
         child: Column(children: [
           // 顶栏
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 16, 0),
+            padding: const EdgeInsets.fromLTRB(4, 4, 8, 0),
             child: Row(children: [
               IconButton(
                 onPressed: () => Navigator.pop(context),
@@ -267,6 +364,14 @@ class _PlayerPageState extends State<_PlayerPage> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               ),
+              // ★v27.0.15 横屏切换
+              IconButton(
+                onPressed: _toggleLand,
+                icon: Icon(_land
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.fullscreen_rounded,
+                    size: 20, color: Colors.white),
+              ),
             ]),
           ),
           Expanded(
@@ -276,11 +381,35 @@ class _PlayerPageState extends State<_PlayerPage> {
                       onTap: () => setState(() {
                         _vc.value.isPlaying ? _vc.pause() : _vc.play();
                       }),
+                      onLongPressStart: (_) => _ffStart(),
+                      onLongPressEnd: (_) => _ffEnd(),
+                      onLongPressCancel: _ffEnd,
                       child: Stack(alignment: Alignment.center, children: [
                         AspectRatio(
                           aspectRatio: _vc.value.aspectRatio,
                           child: VideoPlayer(_vc),
                         ),
+                        if (_ff)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.55),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.fast_forward_rounded,
+                                      color: Colors.white, size: 20),
+                                  SizedBox(width: 6),
+                                  Text('快进中 3x',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                ]),
+                          ),
                         if (!_vc.value.isPlaying)
                           Container(
                             width: 62,
