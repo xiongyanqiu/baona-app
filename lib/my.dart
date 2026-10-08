@@ -902,6 +902,22 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                   ),
+                // ★27.0.16.3 思考模式：回复前先在脑子里过一遍（模型 thinking）
+                _row(
+                  icon: Icons.psychology_outlined,
+                  title: '思考模式',
+                  sub: Store.thinkingMode ? '回复前先在脑子里过一遍（更聪明，稍慢一点）' : '关闭思考（回复更快）',
+                  onTap: () {},
+                  trailing: Switch(
+                    value: Store.thinkingMode,
+                    activeColor: kAccent,
+                    activeTrackColor: kAccent.withValues(alpha: 0.35),
+                    onChanged: (v) async {
+                      await Store.setThinkingMode(v);
+                      setState(() {});
+                    },
+                  ),
+                ),
               ]),
               // ★27.0.16.2 万物互联：设备连接（贝锐蒲公英组网 → 主页星辰图外圈卫星）
               _group([

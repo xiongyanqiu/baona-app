@@ -78,6 +78,10 @@ class Store {
   static bool get moodShow => _p.getBool('local.moodShow') ?? true;
   static Future<void> setMoodShow(bool v) => _p.setBool('local.moodShow', v);
 
+  // ★27.0.16.3 思考模式：回复前先在脑子里过一遍（模型 thinking 参数），更聪明但稍慢
+  static bool get thinkingMode => _p.getBool('local.thinking') ?? true;
+  static Future<void> setThinkingMode(bool v) => _p.setBool('local.thinking', v);
+
   // ★27.0.16.2 万物互联：可连接设备（贝锐蒲公英组网），{pc:{name,ip,port,online}, android:{...}}
   static Map<String, dynamic> get devices {
     try {

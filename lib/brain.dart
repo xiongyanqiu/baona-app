@@ -221,25 +221,52 @@ class LocalBrain {
     if (base.isEmpty || key.isEmpty || model.isEmpty) {
       return {'ok': false, 'error': '模型没配好：设置 → 她的脑子 → 填 API 地址/Key/模型名'};
     }
-    try {
-      final r = await http
-          .post(Uri.parse('$base/chat/completions'),
-              headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
-              body: jsonEncode({'model': model, 'messages': msgs, 'max_tokens': maxT, 'stream': false}))
-          .timeout(const Duration(seconds: 150));
-      final j = jsonDecode(utf8.decode(r.bodyBytes));
-      if (j is Map && j['choices'] is List && (j['choices'] as List).isNotEmpty) {
-        final c = (j['choices'] as List).first;
-        final msg = (c is Map) ? (c['message'] is Map ? Map<String, dynamic>.from(c['message'] as Map) : null) : null;
-        final content = msg == null ? '' : '${msg['content'] ?? ''}'.trim();
-        if (content.isNotEmpty) return {'ok': true, 'content': content};
-        return {'ok': false, 'error': '模型返回了空内容（内容被拦了？换个不拦截的模型试试）'};
+    // ★27.0.16.3 思考模式：请求带 thinking 参数让她先想再答；模型不支持会自动降级重试一次
+    Future<Map<String, dynamic>> once(bool think) async {
+      final body = <String, dynamic>{
+        'model': model,
+        'messages': msgs,
+        'max_tokens': maxT,
+        'stream': false,
+      };
+      if (think) {
+        body['enable_thinking'] = true; // DeepSeek V3.2+
+        body['thinking'] = {'type': 'enabled'}; // OpenAI 兼容新写法
       }
-      final err = (j is Map && j['error'] is Map) ? '${(j['error'] as Map)['message'] ?? j['error']}' : '${j.toString().substring(0, 120)}';
-      return {'ok': false, 'error': '模型报错：$err'};
-    } catch (e) {
-      return {'ok': false, 'error': '连不上模型：$e'};
+      try {
+        final r = await http
+            .post(Uri.parse('$base/chat/completions'),
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
+                body: jsonEncode(body))
+            .timeout(const Duration(seconds: 150));
+        final j = jsonDecode(utf8.decode(r.bodyBytes));
+        if (j is Map && j['choices'] is List && (j['choices'] as List).isNotEmpty) {
+          final c = (j['choices'] as List).first;
+          final msg = (c is Map) ? (c['message'] is Map ? Map<String, dynamic>.from(c['message'] as Map) : null) : null;
+          final content = msg == null ? '' : '${msg['content'] ?? ''}'.trim();
+          if (content.isNotEmpty) return {'ok': true, 'content': content};
+          return {'ok': false, 'error': '模型返回了空内容（内容被拦了？换个不拦截的模型试试）'};
+        }
+        final err = (j is Map && j['error'] is Map)
+            ? '${(j['error'] as Map)['message'] ?? j['error']}'
+            : '${j.toString().substring(0, 120)}';
+        return {'ok': false, 'error': '模型报错：$err'};
+      } catch (e) {
+        return {'ok': false, 'error': '连不上模型：$e'};
+      }
     }
+
+    var r = await once(Store.thinkingMode);
+    // 思考参数被模型/中转站拒绝（非断网、非超时）→ 关掉思考自动重试，别让对话卡住
+    if (Store.thinkingMode && r['ok'] != true) {
+      final e = '${r['error']}';
+      final net = e.contains('连不上') || e.contains('timeout') || e.contains('Timeout');
+      if (!net) {
+        final r2 = await once(false);
+        if (r2['ok'] == true) return r2;
+      }
+    }
+    return r;
   }
 
   // -------------------- 人设 / 规则 / 记忆 / 愿望 --------------------
