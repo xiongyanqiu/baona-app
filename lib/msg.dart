@@ -791,13 +791,16 @@ class _MsgPageState extends State<MsgPage> {
       ]),
     );
     final avatar = _Av(av: me ? myAv : herAv, size: 34, fallback: me ? '我' : '娜');
+    // ★v27.0.16.1 气泡宽度修复：Flexible 必须 flex:0（否则默认 flex:1 跟 Spacer 平分宽度，气泡只占一半还往左偏）；
+    //   用 mainAxisAlignment 对齐代替 Spacer，气泡按内容取宽、最多到 0.78 屏幕宽
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: me ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: me
-            ? [const Spacer(), Flexible(child: bubble), const SizedBox(width: 8), avatar]
-            : [avatar, const SizedBox(width: 8), Flexible(child: bubble), const Spacer()],
+            ? [Flexible(flex: 0, child: bubble), const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), Flexible(flex: 0, child: bubble)],
       ),
     );
   }
