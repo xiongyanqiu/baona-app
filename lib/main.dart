@@ -1,5 +1,6 @@
 // 包娜 · 手机端 App 主入口：连电脑 → 登录 → 主界面（聊天/商城/游戏/我们）
 import 'dart:convert';
+import 'dart:io' show ProcessInfo;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
@@ -378,6 +379,13 @@ class _BootState extends State<Boot> {
           'enter: bg[${bg.length}]${bg.length > 40 ? '' : '=$bg'} herAv[${herAv.length}]');
     } catch (_) {}
     setState(() => _unlocked = true);
+    // ★27.0.14.17 诊断：进主页 3 秒后记录内存占用（判断是不是内存爆炸卡死）
+    Future.delayed(const Duration(seconds: 3), () {
+      try {
+        final mb = ProcessInfo.currentRss ~/ (1024 * 1024);
+        Store.setCrashLog('mem3s: ${mb}MB');
+      } catch (_) {}
+    });
   }
 }
 

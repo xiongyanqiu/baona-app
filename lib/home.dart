@@ -78,8 +78,9 @@ class _BaonaHomeState extends State<BaonaHome> {
           );
     // ★v27.0.14.6 宇宙元素：背景星尘（缓慢漂移闪烁 + 偶发流星），垫在内容下面
     return Stack(children: [
+      // ★v27.0.14.17 低资源模式：关掉流星 Timer（持续动画可能拖垮老设备）
       const Positioned.fill(
-          child: IgnorePointer(child: StarField(count: 55, shooting: true))),
+          child: IgnorePointer(child: StarField(count: 55, shooting: false))),
       SafeArea(
       child: Column(children: [
         Padding(
