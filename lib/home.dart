@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'main.dart';
+import 'novel.dart'; // ★27.0.16.8 番茄小说
 import 'theme.dart';
 
 /// 启动主页面：包娜主页。
@@ -37,8 +38,7 @@ class _BaonaHomeState extends State<BaonaHome> {
     final s = await b.stats();
     if (!mounted) return;
     final ok = s['ok'] == true;
-    setState(() {
-      _msgCount = ok ? ((s['msgCount'] as num?)?.toInt() ?? 0) : _msgCount;      _memCount = ok ? ((s['memCount'] as num?)?.toInt() ?? 0) : _memCount;
+    setState(() {      _msgCount = ok ? ((s['msgCount'] as num?)?.toInt() ?? 0) : _msgCount;      _memCount = ok ? ((s['memCount'] as num?)?.toInt() ?? 0) : _memCount;
       _dayCount = ok ? ((s['dayCount'] as num?)?.toInt() ?? 0) : _dayCount;
     });
   }
@@ -47,6 +47,11 @@ class _BaonaHomeState extends State<BaonaHome> {
     final n = DateTime.now();
     const wd = ['一', '二', '三', '四', '五', '六', '日'];
     return '${n.month}月${n.day}日 · 星期${wd[n.weekday - 1]}';
+  }
+
+  // ★27.0.16.8 番茄小说：push 全屏网页阅读页
+  void _openNovel() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NovelPage()));
   }
 
   // ★27.0.16.2 万物互联：外圈卫星 = 设置里配置过的可连接设备（电脑/安卓），在线亮青绿、离线灰
@@ -163,6 +168,7 @@ class _BaonaHomeState extends State<BaonaHome> {
               {'icon': Icons.photo_outlined, 'label': '照片', 'onTap': () => widget.onGoTab(1)},
               {'icon': Icons.videocam_outlined, 'label': '视频', 'onTap': () => widget.onGoTab(2)},
               {'icon': Icons.audiotrack_outlined, 'label': '音频', 'onTap': () => widget.onGoTab(3)},
+              {'icon': Icons.menu_book_outlined, 'label': '小说', 'onTap': _openNovel}, // ★27.0.16.8 番茄小说
               {'icon': Icons.person_outline, 'label': '我的', 'onTap': () => widget.onGoTab(4)},
             ],
             // ★27.0.16.2 万物互联：外圈卫星 = 已配置的可连接设备（贝锐蒲公英组网，设置里配）
