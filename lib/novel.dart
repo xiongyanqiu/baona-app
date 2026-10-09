@@ -294,7 +294,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                             return _SearchCard(
                               book: b,
                               onTap: () => Navigator.push(context,
-                                  MaterialPageRoute(builder: (_) => NovelDetailPage(book: b))),
+                                  MaterialPageRoute(builder: (_) => NovelDetailPage(book: Map<String, dynamic>.from(b)))),
                             );
                           },
                         ),
@@ -688,7 +688,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                 Expanded(
                   child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                     GestureDetector(
-                      onTap: () => setState(() => _fontSize = (_fontSize - 1.5).clamp(13.0, 26.0)),
+                      onTap: () => setState(() => _fontSize = (_fontSize - 1.5).clamp(13.0, 26.0).toDouble()),
                       child: Container(
                         width: 38, height: 42,
                         alignment: Alignment.center,
@@ -701,7 +701,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () => setState(() => _fontSize = (_fontSize + 1.5).clamp(13.0, 26.0)),
+                      onTap: () => setState(() => _fontSize = (_fontSize + 1.5).clamp(13.0, 26.0).toDouble()),
                       child: Container(
                         width: 38, height: 42,
                         alignment: Alignment.center,
