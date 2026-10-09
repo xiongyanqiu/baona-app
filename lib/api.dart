@@ -114,6 +114,23 @@ class Store {
   static int get nextAutoAt => _p.getInt('local.nextAutoAt') ?? 0; // 下次主动触发时间戳
   static Future<void> setNextAutoAt(int v) => _p.setInt('local.nextAutoAt', v);
 
+  // ★27.0.16.9 番茄阅读器：书源 API 地址（可配置，失效可换）+ 书架 + 章节缓存
+  static String get novelBase => _p.getString('local.novel.base') ?? 'http://101.35.133.34:5000';
+  static Future<void> setNovelBase(String v) => _p.setString('local.novel.base', v);
+  static List<Map<String, dynamic>> get novelShelf {
+    try {
+      final s = _p.getString('local.novel.shelf');
+      if (s == null || s.isEmpty) return [];
+      final j = jsonDecode(s);
+      if (j is List) return j.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {}
+    return [];
+  }
+  static Future<void> setNovelShelf(List<Map<String, dynamic>> v) =>
+      _p.setString('local.novel.shelf', jsonEncode(v));
+  static String get novelCache => _p.getString('local.novel.cache') ?? ''; // 最近阅读章节缓存 {bookId:{itemId:content}}
+  static Future<void> setNovelCache(String v) => _p.setString('local.novel.cache', v);
+
   // ★27.0.16.2 万物互联：可连接设备（贝锐蒲公英组网），{pc:{name,ip,port,online}, android:{...}}
   static Map<String, dynamic> get devices {
     try {
