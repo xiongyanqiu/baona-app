@@ -33,6 +33,7 @@ jobs:
       - name: 拉依赖
         run: |
           flutter --version
+          flutter config --no-enable-swift-package-manager   # ★27.0.16.11 onnxruntime 要 iOS16+静态链接，统一走 CocoaPods（ios/Podfile 已配）
           flutter pub get
 
       - name: 编未签名 iOS 包（xcodebuild 直编，绕开 flutter 的签名检查）
