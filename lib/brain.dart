@@ -435,7 +435,7 @@ class LocalBrain {
     return '【跟你们正在聊的事相关的往事】\n${lines.join('\n')}';
   }
 
-  // ★27.0.16.11 本地语义记忆检索：query 向量 → 余弦 Top-8（失败返回 null，bigram 兜底）
+  // ★27.0.16.12 本地语义记忆检索：query 向量 → 余弦 Top-8（bge-base fp32，阈值 0.22；失败返回 null，bigram 兜底）
   Future<String?> _semanticRetrieve(String query) async {
     try {
       final q = (query ?? '').trim();
@@ -459,7 +459,7 @@ class LocalBrain {
         final mv = Embd.fromB64(embStr);
         if (mv == null) continue;
         final c = Embd.cos(qv, mv);
-        if (c < 0.3) continue;
+        if (c < 0.22) continue;
         final imp = (m['importance'] as num?)?.toDouble() ?? 5;
         scored.add({'m': m, 'score': c * (0.3 + 0.7 * imp / 10)});
       }

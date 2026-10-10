@@ -1,12 +1,15 @@
-// embd.dart — ★27.0.16.11 本地语义记忆检索（bge-small-zh int8 @ flutter_onnxruntime）
+// embd.dart — ★27.0.16.12 本地语义记忆检索（bge-small-zh fp32 512 维 @ flutter_onnxruntime）
 // 完全离线：记忆向量在手机本地算、本地比，不联网不花钱。
-// 检索协议：query 加 bge 官方指令前缀，passage（记忆条目）不加；取 [CLS] 向量 512 维。
+// 检索协议：query 加 bge 官方指令前缀，passage（记忆条目）不加；取 [CLS] 向量（维度从 config.json hidden_size 读）。
+// 模型 96MB fp32 超过 GitHub 100MB 单文件上限 → 仓库存 model.onnx.gz（54MB），首次运行解压到 Documents 缓存，之后直接加载。
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:path_provider/path_provider.dart';
 
 class Embd {
   static OnnxRuntime? _ort;
@@ -15,6 +18,7 @@ class Embd {
   static int _clsId = 101;
   static int _sepId = 102;
   static int _unkId = 100;
+  static int _dim = 512; // 向量维度：config.json hidden_size（small=512）
   static bool _ready = false;
   static bool _failed = false;
 
@@ -23,12 +27,36 @@ class Embd {
 
   static bool get ready => _ready;
 
+  /// 确保本地有可加载的 model.onnx：首次从 asset 的两个 .gz 分片拼接解压到 Documents，之后复用。
+  static Future<String?> _ensureModelFile() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final target = File('${dir.path}/model.onnx');
+      if (target.existsSync() && target.lengthSync() > 90000000) return target.path;
+      final b1 = await rootBundle.load('assets/models/model.onnx.gz.part1');
+      final b2 = await rootBundle.load('assets/models/model.onnx.gz.part2');
+      final raw = Uint8List(b1.lengthInBytes + b2.lengthInBytes);
+      raw.setAll(0, b1.buffer.asUint8List(b1.offsetInBytes, b1.lengthInBytes));
+      raw.setAll(b1.lengthInBytes, b2.buffer.asUint8List(b2.offsetInBytes, b2.lengthInBytes));
+      final uncompressed = zlib.decode(raw, gzip: true);
+      await target.writeAsBytes(uncompressed, flush: true);
+      return target.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<bool> init() async {
     if (_ready) return true;
     if (_failed) return false;
     try {
+      final modelPath = await _ensureModelFile();
+      if (modelPath == null) {
+        _failed = true;
+        return false;
+      }
       _ort = OnnxRuntime();
-      _session = await _ort!.createSessionFromAsset('assets/models/model_int8.onnx');
+      _session = await _ort!.createSession(modelPath);
       final tj = jsonDecode(await rootBundle.loadString('assets/models/tokenizer.json'));
       final model = tj['model'];
       final v = model['vocab'];
@@ -58,6 +86,12 @@ class Embd {
         _failed = true;
         return false;
       }
+      // 向量维度：从 config.json 的 hidden_size 读（bge-small=512）
+      try {
+        final cfg = jsonDecode(await rootBundle.loadString('assets/models/config.json'));
+        final hs = (cfg['hidden_size'] as num?)?.toInt();
+        if (hs != null && hs > 0) _dim = hs;
+      } catch (_) {}
       _ready = true;
       return true;
     } catch (_) {
@@ -66,7 +100,7 @@ class Embd {
     }
   }
 
-  /// 文本 → 512 维归一化向量。query=true 加检索指令前缀。失败返回 null（调用方降级 bigram）。
+  /// 文本 → 归一化向量（维度=_dim，bge-base 768）。query=true 加检索指令前缀。失败返回 null（调用方降级 bigram）。
   static Future<Float32List?> embed(String text, {bool query = false}) async {
     if (!_ready && !await init()) return null;
     try {
@@ -94,9 +128,9 @@ class Embd {
       final flat = <double>[];
       _flatten(arr, flat);
       if (flat.length < 128) return null;
-      // last_hidden_state [1,seq,dim] → 取第一行（CLS）；pooled [1,dim] → 直接用
+      // [1,seq,dim] → 取第一行（CLS）= 前 _dim 个；[1,dim] pooled → 直接全用
       var vec = flat;
-      if (flat.length > 512) vec = flat.sublist(0, 512);
+      if (flat.length > _dim) vec = flat.sublist(0, _dim);
       // 归一化
       var sum = 0.0;
       for (final v in vec) {
