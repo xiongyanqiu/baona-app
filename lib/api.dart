@@ -86,6 +86,10 @@ class Store {
   static int get thinkLevel => _p.getInt('local.thinkLevel') ?? 2;
   static Future<void> setThinkLevel(int v) => _p.setInt('local.thinkLevel', v);
 
+  // ★27.0.16.11 本地语义记忆检索（bge-small-zh 本地推理，失败自动降级关键词）
+  static bool get embEnabled => _p.getBool('local.emb') ?? true;
+  static Future<void> setEmbEnabled(bool v) => _p.setBool('local.emb', v);
+
   // ★27.0.16.6 定时任务（对话里 AI 提取，到点她自动发消息）
   // [{id, content, at(epochMs 下次触发), repeat:'once'|'daily', created}]
   static List<Map<String, dynamic>> get timers {

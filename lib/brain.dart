@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'api.dart';
+import 'embd.dart';
 import 'msglocal.dart';
 import 'roles_data.dart';
 import 'shop_data.dart';
@@ -54,7 +55,7 @@ class LocalBrain {
   // -------------------- 内存态（全部有 Store 落盘） --------------------
   List<Map<String, dynamic>> _providers = [];
   String _activeId = '';
-  List<Map<String, dynamic>> _memories = []; // {id,t,text,cat,type,importance}
+  List<Map<String, dynamic>> _memories = []; // {id,t,text,cat,type,importance,emb?}
   Map<String, dynamic> _wishes = {'granted': 0, 'used': 0, 'done': 0, 'wishes': []};
   List<Map<String, dynamic>> _groups = []; // {id,name,members:[roleId]}
   List<Map<String, dynamic>> _roles = []; // 自建角色 {id,name,letter,persona,rules}
@@ -63,6 +64,8 @@ class LocalBrain {
   Map<String, dynamic> _roleMems = {}; // roleId -> [记忆 JSON]
   int _chatCount = 0; // 主对话累计条数（自动摘要触发）
   Database? _memDb; // ★27.0.8 超长期记忆：SQLite（SP 兜底）
+  String? _embRetrieval; // ★27.0.16.11 本轮语义检索结果（send 前算好，_retrievedBlock 优先用它）
+  bool _embBackfillRunning = false; // 后台补向量防重入
 
   // ★26.2.18 全本地娱乐：钱包/背包/飞行棋/相册
   Map<String, dynamic> _wallet = {'my': 9988848, 'her': 11500, 'log': []}; // 从桌宠迁移：我的钱包/她的钱包/流水
@@ -132,8 +135,12 @@ class LocalBrain {
 
   void _saveLlm() => Store.setLlmCfgJson(jsonEncode({'providers': _providers, 'activeId': _activeId}));
   // ★27.0.8 Step3：SP 兜底 + SQLite 异步镜像（超长期量级；DB 失败静默，功能不受影响）
+  // ★27.0.16.11：emb 向量只落 SQLite（SP 只存精简版，避免几 MB 大键拖慢启动）
   void _saveMems() {
-    Store.setLocalMemories(jsonEncode(_memories));
+    final slim = _memories
+        .map((m) => Map<String, dynamic>.from(m)..remove('emb'))
+        .toList();
+    Store.setLocalMemories(jsonEncode(slim));
     _syncDb();
   }
   Future<Database?> _openMemDb() async {
@@ -141,10 +148,16 @@ class LocalBrain {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final path = p.join(dir.path, 'baona_mem.db');
-      _memDb = await openDatabase(path, version: 1, onCreate: (db, v) async {
+      _memDb = await openDatabase(path, version: 2, onCreate: (db, v) async {
         await db.execute('CREATE TABLE memories('
             'id TEXT PRIMARY KEY, text TEXT NOT NULL, cat TEXT, type TEXT,'
-            'importance REAL DEFAULT 5, t INTEGER NOT NULL)');
+            'importance REAL DEFAULT 5, t INTEGER NOT NULL, emb TEXT)');
+      }, onUpgrade: (db, oldV, newV) async {
+        if (oldV < 2) {
+          try {
+            await db.execute('ALTER TABLE memories ADD COLUMN emb TEXT');
+          } catch (_) {}
+        }
       });
       return _memDb;
     } catch (_) {
@@ -165,12 +178,13 @@ class LocalBrain {
             'type': '${m['type'] ?? ''}',
             'importance': (m['importance'] as num?)?.toDouble() ?? 5,
             't': (m['t'] as num?)?.toInt() ?? 0,
+            'emb': '${m['emb'] ?? ''}',
           });
         }
       });
     } catch (_) {}
   }
-  /// SP 空但 DB 有 → 从 SQLite 补载（双保险）
+  /// SP 空但 DB 有 → 从 SQLite 补载（双保险；emb 向量在这里拿回）
   Future<void> _loadDbMemories() async {
     final db = await _openMemDb();
     if (db == null) return;
@@ -184,6 +198,7 @@ class LocalBrain {
             'cat': '${r['cat'] ?? ''}',
             'type': '${r['type'] ?? ''}',
             'importance': (r['importance'] as num?)?.toDouble() ?? 5,
+            if ('${r['emb'] ?? ''}'.isNotEmpty) 'emb': '${r['emb']}',
           }).toList();
       _saveMems();
     } catch (_) {}
@@ -389,7 +404,9 @@ class LocalBrain {
   }
 
   // ★27.0.8 Step2 按需检索：当前消息当 query，字符 bigram 相似度 + 重要性，Top-K 注入（与总述去重）
+  // ★27.0.16.11 本地语义优先：send 前算好的 _embRetrieval（bge 余弦）直接用；没算出来才走 bigram
   String _retrievedBlock(String query) {
+    if (_embRetrieval != null && _embRetrieval!.isNotEmpty) return _embRetrieval!;
     final q = (query ?? '').trim();
     if (q.length < 2) return '';
     final qg = _grams(q);
@@ -416,6 +433,86 @@ class LocalBrain {
     if (take.isEmpty) return '';
     final lines = take.map((e) => '· ${(e['m'] as Map)['text']}').toList();
     return '【跟你们正在聊的事相关的往事】\n${lines.join('\n')}';
+  }
+
+  // ★27.0.16.11 本地语义记忆检索：query 向量 → 余弦 Top-8（失败返回 null，bigram 兜底）
+  Future<String?> _semanticRetrieve(String query) async {
+    try {
+      final q = (query ?? '').trim();
+      if (q.length < 2) return null;
+      if (!Store.embEnabled) return null;
+      if (!await Embd.init()) return null;
+      final qv = await Embd.embed(q, query: true);
+      if (qv == null) return null;
+      final scored = <Map<String, dynamic>>[];
+      final used = <String>{};
+      var hasEmb = false;
+      for (final m in _memories) {
+        final id = '${m['id'] ?? ''}';
+        if (used.contains(id)) continue;
+        if ('${m['type'] ?? ''}' == 'insight') continue;
+        final text = '${m['text'] ?? ''}';
+        if (text.length < 4) continue;
+        final embStr = '${m['emb'] ?? ''}';
+        if (embStr.isEmpty) continue;
+        hasEmb = true;
+        final mv = Embd.fromB64(embStr);
+        if (mv == null) continue;
+        final c = Embd.cos(qv, mv);
+        if (c < 0.3) continue;
+        final imp = (m['importance'] as num?)?.toDouble() ?? 5;
+        scored.add({'m': m, 'score': c * (0.3 + 0.7 * imp / 10)});
+      }
+      if (scored.isEmpty) {
+        if (!hasEmb) _backfillEmb(); // 一条向量都没有 → 后台补算，本轮 bigram 兜底
+        return null;
+      }
+      scored.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+      final take = scored.length > 8 ? scored.sublist(0, 8) : scored;
+      final lines = take.map((e) => '· ${(e['m'] as Map)['text']}').toList();
+      return '【跟你们正在聊的事相关的往事】\n${lines.join('\n')}';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 后台给还没有向量的记忆补算（每轮最多 40 条，串行推理不阻塞 UI）
+  Future<void> _backfillEmb() async {
+    if (_embBackfillRunning) return;
+    _embBackfillRunning = true;
+    try {
+      if (!Store.embEnabled) return;
+      if (!await Embd.init()) return;
+      final need = _memories
+          .where((m) => '${m['emb'] ?? ''}'.isEmpty && '${m['type'] ?? ''}' != 'insight')
+          .toList();
+      if (need.isEmpty) return;
+      var done = 0;
+      for (final m in need) {
+        if (done >= 40) break;
+        final v = await Embd.embed('${m['text'] ?? ''}');
+        if (v != null) {
+          m['emb'] = Embd.toB64(v);
+          done++;
+        }
+      }
+      if (done > 0) _saveMems();
+    } catch (_) {} finally {
+      _embBackfillRunning = false;
+    }
+  }
+
+  /// 单条记忆补向量（入库后异步调）
+  Future<void> _fillEmbFor(Map<String, dynamic> m) async {
+    try {
+      if (!Store.embEnabled) return;
+      if (!await Embd.init()) return;
+      final v = await Embd.embed('${m['text'] ?? ''}');
+      if (v != null) {
+        m['emb'] = Embd.toB64(v);
+        _saveMems();
+      }
+    } catch (_) {}
   }
 
   /// 字符 bigram（中文友好：按相邻两个字符匹配，不管分词）
@@ -595,6 +692,12 @@ class LocalBrain {
     _checkTimers(); // ★27.0.16.6 发消息时顺便补发到点的定时
     _ev.add({'type': 'typing', 'on': true});
     final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+    // ★27.0.16.11 本地语义记忆检索：先算 query 向量和 Top-K，_buildCtx 拼 prompt 时直接用
+    _embRetrieval = null;
+    if (Store.embEnabled) {
+      _embRetrieval = await _semanticRetrieve(text);
+      _backfillEmb(); // 后台给没向量的记忆补算（不阻塞发送）
+    }
     final ctx = _buildCtx(hist, query: text);
     final r = await _ask(ctx);
     _ev.add({'type': 'typing', 'on': false});
@@ -941,8 +1044,15 @@ class LocalBrain {
   Future<Map<String, dynamic>> memoryAdd(String text) async {
     final t = text.trim();
     if (t.isEmpty) return {'ok': false, 'error': '空'};
-    _memories.add({'id': 'm${DateTime.now().millisecondsSinceEpoch}${_memories.length}', 't': DateTime.now().millisecondsSinceEpoch, 'text': t.length > 300 ? t.substring(0, 300) : t, 'cat': '手动'});
+    final m = <String, dynamic>{
+      'id': 'm${DateTime.now().millisecondsSinceEpoch}${_memories.length}',
+      't': DateTime.now().millisecondsSinceEpoch,
+      'text': t.length > 300 ? t.substring(0, 300) : t,
+      'cat': '手动',
+    };
+    _memories.add(m);
     _saveMems();
+    _fillEmbFor(m); // ★27.0.16.11 后台算向量（失败不影响入库）
     return {'ok': true};
   }
 
@@ -983,8 +1093,17 @@ class LocalBrain {
         if (n != null) imp = n.clamp(1, 10).toDouble();
       }
       if (s.isNotEmpty && !_memories.any((m) => '${m['text']}' == s)) {
-        _memories.add({'id': 's${DateTime.now().millisecondsSinceEpoch}', 't': DateTime.now().millisecondsSinceEpoch, 'text': s.length > 200 ? s.substring(0, 200) : s, 'cat': '对话', 'type': 'summary', 'importance': imp});
+        final m = <String, dynamic>{
+          'id': 's${DateTime.now().millisecondsSinceEpoch}',
+          't': DateTime.now().millisecondsSinceEpoch,
+          'text': s.length > 200 ? s.substring(0, 200) : s,
+          'cat': '对话',
+          'type': 'summary',
+          'importance': imp,
+        };
+        _memories.add(m);
         _saveMems();
+        _fillEmbFor(m); // ★27.0.16.11 后台算向量
       }
     }
   }
