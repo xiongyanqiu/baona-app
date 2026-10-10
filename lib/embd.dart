@@ -38,7 +38,7 @@ class Embd {
       final raw = Uint8List(b1.lengthInBytes + b2.lengthInBytes);
       raw.setAll(0, b1.buffer.asUint8List(b1.offsetInBytes, b1.lengthInBytes));
       raw.setAll(b1.lengthInBytes, b2.buffer.asUint8List(b2.offsetInBytes, b2.lengthInBytes));
-      final uncompressed = zlib.decode(raw, gzip: true);
+      final uncompressed = gzip.decode(raw);
       await target.writeAsBytes(uncompressed, flush: true);
       return target.path;
     } catch (_) {
