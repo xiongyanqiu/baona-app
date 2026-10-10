@@ -35,10 +35,11 @@ class Embd {
       if (v is Map) {
         _vocab = v.map((k, val) => MapEntry('$k', (val as num).toInt()));
       } else if (v is List) {
-        _vocab = <String, int>{};
+        final vocab = <String, int>{};
         for (var i = 0; i < v.length; i++) {
-          _vocab['${v[i]}'] = i;
+          vocab['${v[i]}'] = i;
         }
+        _vocab = vocab;
       }
       // special tokens 覆盖（added_tokens 里可能改了 id）
       final added = tj['added_tokens'];
