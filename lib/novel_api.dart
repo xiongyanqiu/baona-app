@@ -8,8 +8,8 @@ import 'package:http/http.dart' as http;
 import 'api.dart';
 
 class NovelApi {
-  /// 搜索书籍（tab_type: 3=小说）
-  /// data: {keyword, results:[{book_id, book_name, author, cover, abstract, total_words}]}
+  /// 搜索书籍（番茄模糊匹配；返回 search_tabs，书籍在 tab_type==3 的 tab.data 数组，每项 book_data[0]）
+  /// 兼容返回 {ok, data:{results:[{book_id, book_name, author, abstract, thumb_url, word_number, ...}]}}
   static Future<Map<String, dynamic>> search(String key, {int offset = 0}) async {
     final base = Store.novelBase;
     try {
@@ -17,7 +17,29 @@ class NovelApi {
           .get(Uri.parse('$base/api/search?key=${Uri.encodeQueryComponent(key)}&tab_type=3&offset=$offset'))
           .timeout(const Duration(seconds: 20));
       final j = jsonDecode(utf8.decode(r.bodyBytes));
-      if ((j['code'] as num?)?.toInt() == 200) return {'ok': true, 'data': j['data']};
+      if ((j['code'] as num?)?.toInt() == 200) {
+        final books = <dynamic>[];
+        final data = j['data'];
+        if (data is Map) {
+          final tabs = data['search_tabs'];
+          if (tabs is List) {
+            for (final t in tabs) {
+              if (t is Map && t['tab_type'] == 3) {
+                final arr = t['data'];
+                if (arr is List) {
+                  for (final e in arr) {
+                    if (e is Map) {
+                      final bd = e['book_data'];
+                      if (bd is List && bd.isNotEmpty) books.add(bd.first);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        return {'ok': true, 'data': {'results': books}};
+      }
       return {'ok': false, 'error': '${j['message'] ?? '搜索失败'} (${j['code']})'};
     } catch (e) {
       return {'ok': false, 'error': '网络错误：$e'};

@@ -345,7 +345,7 @@ class _NovelDetailPageState extends State<NovelDetailPage> {
       if (dir['ok'] == true) {
         final dd = dir['data'];
         if (dd is Map) {
-          final list = dd['chapter_list'] ?? dd['list'] ?? dd['chapters'];
+          final list = dd['chapter_list'] ?? dd['list'] ?? dd['lists'] ?? dd['chapters'];
           if (list is List) {
             _chapters = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
           }
@@ -363,7 +363,7 @@ class _NovelDetailPageState extends State<NovelDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cover = '${_detail?['cover'] ?? widget.book['cover'] ?? ''}';
+    final cover = '${_detail?['cover'] ?? _detail?['thumb_url'] ?? widget.book['cover'] ?? widget.book['thumb_url'] ?? ''}';
     final author = '${_detail?['author'] ?? widget.book['author'] ?? '未知作者'}';
     final abstract = '${_detail?['abstract'] ?? widget.book['abstract'] ?? ''}';
     return Scaffold(
@@ -787,7 +787,7 @@ class _ShelfCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(children: [
-            _Cover(url: '${book['cover'] ?? ''}', size: 54),
+            _Cover(url: '${book['cover'] ?? book['thumb_url'] ?? ''}', size: 54),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -833,7 +833,7 @@ class _SearchCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(children: [
-            _Cover(url: '${book['cover'] ?? ''}', size: 62),
+            _Cover(url: '${book['cover'] ?? book['thumb_url'] ?? ''}', size: 62),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
