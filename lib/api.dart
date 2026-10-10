@@ -90,6 +90,18 @@ class Store {
   static bool get embEnabled => _p.getBool('local.emb') ?? true;
   static Future<void> setEmbEnabled(bool v) => _p.setBool('local.emb', v);
 
+  // ★27.0.16.14 主动消息：她隔一段时间随机主动发一句（间隔分钟 ±50% 随机，睡眠时段不打扰）
+  static bool get proactiveOn => _p.getBool('local.proactive') ?? false;
+  static Future<void> setProactiveOn(bool v) => _p.setBool('local.proactive', v);
+  static int get proactiveGap => _p.getInt('local.proactiveGap') ?? 120; // 分钟
+  static Future<void> setProactiveGap(int v) => _p.setInt('local.proactiveGap', v);
+  static int get sleepStart => _p.getInt('local.sleepStart') ?? 0; // 0-1439 分钟（0:00）
+  static int get sleepEnd => _p.getInt('local.sleepEnd') ?? 0;
+  static Future<void> setSleep(int s, int e) async {
+    await _p.setInt('local.sleepStart', s);
+    await _p.setInt('local.sleepEnd', e);
+  }
+
   // ★27.0.16.6 定时任务（对话里 AI 提取，到点她自动发消息）
   // [{id, content, at(epochMs 下次触发), repeat:'once'|'daily', created}]
   static List<Map<String, dynamic>> get timers {

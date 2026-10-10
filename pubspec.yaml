@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 27.0.16+52
+version: 27.0.16+53
 environment:
   sdk: ^3.13.4
 
@@ -50,6 +50,7 @@ dependencies:
   sqflite: ^2.3.0                      # ★27.0.8 超长期记忆：记忆落 SQLite（SP 兜底）
   path: ^1.9.0                         # ★27.0.8 sqflite 路径拼接
   flutter_onnxruntime: ^1.8.1          # ★27.0.16.11 本地语义记忆检索：bge-small-zh 手机本地跑 ONNX
+  share_plus: ^7.2.2                   # ★27.0.16.14 记忆备份导出：分享 .json 到文件/微信等
 
 dev_dependencies:
   flutter_test:

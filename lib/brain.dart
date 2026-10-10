@@ -16,6 +16,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'api.dart';
 import 'embd.dart';
+import 'notify.dart'; // ★27.0.16.14 主动消息：发消息时弹通知
 import 'msglocal.dart';
 import 'roles_data.dart';
 import 'shop_data.dart';
@@ -66,6 +67,12 @@ class LocalBrain {
   Database? _memDb; // ★27.0.8 超长期记忆：SQLite（SP 兜底）
   String? _embRetrieval; // ★27.0.16.11 本轮语义检索结果（send 前算好，_retrievedBlock 优先用它）
   bool _embBackfillRunning = false; // 后台补向量防重入
+
+  // ★27.0.16.14 主动消息：她隔一段时间随机主动发一句（真人感）
+  Timer? _proactiveTimer;
+  int _proactiveNextDue = 0; // epochMs：下次触发点（首次启动随机化）
+  bool _proactiveSaying = false; // 生成中防重入
+  DateTime _lastProactiveAt = DateTime.now();
 
   // ★26.2.18 全本地娱乐：钱包/背包/飞行棋/相册
   Map<String, dynamic> _wallet = {'my': 9988848, 'her': 11500, 'log': []}; // 从桌宠迁移：我的钱包/她的钱包/流水
@@ -131,6 +138,8 @@ class LocalBrain {
       _wishes = {'granted': 100, 'used': 0, 'done': 0, 'wishes': []};
     }
     if (_game.isEmpty) _game = _newGame();
+    // ★27.0.16.14 记忆压缩：普通记忆池太大时自动合并老琐事（纯规则，不调模型）
+    _compressMemories();
   }
 
   void _saveLlm() => Store.setLlmCfgJson(jsonEncode({'providers': _providers, 'activeId': _activeId}));
@@ -1036,9 +1045,145 @@ class LocalBrain {
   Future<Map<String, dynamic>> memories() async {
     final out = _memories.reversed.map((m) => {
           'id': '${m['id']}', 'text': '${m['text']}'.length > 220 ? '${m['text']}'.substring(0, 220) : '${m['text']}',
-          't': (m['t'] as num?)?.toInt() ?? 0, 'cat': '${m['cat'] ?? ''}'
+          't': (m['t'] as num?)?.toInt() ?? 0, 'cat': '${m['cat'] ?? ''}',
+          'type': '${m['type'] ?? ''}', 'importance': (m['importance'] as num?)?.toDouble() ?? 5,
+          'hasEmb': '${m['emb'] ?? ''}'.isNotEmpty,
         }).toList();
     return {'ok': true, 'items': out, 'count': out.length};
+  }
+
+  /// ★27.0.16.14 置顶/取消：importance 调到 10 / 回 5
+  Future<Map<String, dynamic>> memoryPin(String id, {bool pin = true}) async {
+    for (final m in _memories) {
+      if ('${m['id']}' == id) {
+        m['importance'] = pin ? 10 : 5;
+        _saveMems();
+        return {'ok': true, 'importance': m['importance']};
+      }
+    }
+    return {'ok': false, 'error': '没找到这条记忆'};
+  }
+
+  /// ★27.0.16.14 导出：全量记忆（含向量），供备份/迁移
+  Future<Map<String, dynamic>> memoryExport() async {
+    return {'ok': true, 'ver': 1, 'items': jsonDecode(jsonEncode(_memories))};
+  }
+
+  /// ★27.0.16.14 导入：合并去重（id 或文本相同跳过），新条目补向量
+  Future<Map<String, dynamic>> memoryImport(List<dynamic> items) async {
+    var added = 0;
+    for (final e in items) {
+      if (e is! Map) continue;
+      final id = '${e['id'] ?? ''}';
+      final text = '${e['text'] ?? ''}'.trim();
+      if (text.isEmpty) continue;
+      if (_memories.any((m) => ('${m['id']}' == id && id.isNotEmpty) || '${m['text']}' == text)) continue;
+      final m = <String, dynamic>{
+        'id': id.isNotEmpty ? id : 'm${DateTime.now().millisecondsSinceEpoch}${_memories.length}',
+        't': (e['t'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+        'text': text.length > 300 ? text.substring(0, 300) : text,
+        'cat': '${e['cat'] ?? '导入'}',
+        'type': '${e['type'] ?? ''}',
+        'importance': (e['importance'] as num?)?.toDouble() ?? 5,
+      };
+      final emb = '${e['emb'] ?? ''}';
+      if (emb.isNotEmpty) m['emb'] = emb;
+      _memories.add(m);
+      if (emb.isEmpty) _fillEmbFor(m);
+      added++;
+    }
+    if (added > 0) _saveMems();
+    return {'ok': true, 'added': added, 'total': _memories.length};
+  }
+
+  // ★★★★★ 27.0.16.14 主动消息：她隔一段时间随机主动发一句（真人感） ★★★★★
+  void startProactiveIfEnabled() {
+    if (!Store.proactiveOn) return;
+    if (_proactiveTimer != null) return;
+    _proactiveNextDue = DateTime.now().millisecondsSinceEpoch + _randomGapMs();
+    _proactiveTimer = Timer.periodic(const Duration(seconds: 30), (_) => _proactiveTick());
+  }
+
+  /// 间隔分钟 → 毫秒，±50% 随机（比如 120 分钟 → 60~180 分钟随机一次）
+  int _randomGapMs() {
+    final gapMin = Store.proactiveGap.clamp(5, 1440);
+    final base = gapMin * 60000;
+    final r = 0.5 + (DateTime.now().millisecondsSinceEpoch % 1000) / 1000;
+    return (base * r).round();
+  }
+
+  /// 睡眠时段（分钟数，0-1439）；起止相同 = 不设睡眠
+  bool _inSleepWindow() {
+    final s = Store.sleepStart, e = Store.sleepEnd;
+    if (s == e) return false;
+    final n = DateTime.now();
+    final cur = n.hour * 60 + n.minute;
+    if (s < e) return cur >= s && cur < e;
+    return cur >= s || cur < e; // 跨天（如 22:00-7:00）
+  }
+
+  void _proactiveTick() {
+    if (_proactiveSaying) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now < _proactiveNextDue) return;
+    _proactiveNextDue = now + _randomGapMs(); // 本次触发后马上排下一次
+    if (_inSleepWindow()) return; // 睡眠时段跳过，下一轮再检查
+    _proactiveSay();
+  }
+
+  Future<void> _proactiveSay() async {
+    _proactiveSaying = true;
+    try {
+      // 挑一条记忆当引子（重要度 >=5 里随机挑一条，显得是"想起什么"）
+      String? hint;
+      final mems = _memories.where((m) => ((m['importance'] as num?)?.toDouble() ?? 5) >= 5).toList();
+      if (mems.isNotEmpty) {
+        mems.shuffle();
+        hint = '${mems.first['text']}';
+        if (hint.length > 60) hint = '${hint.substring(0, 60)}…';
+      }
+      final hr = DateTime.now().hour;
+      final greet = hr < 5 ? '大半夜' : hr < 8 ? '刚醒' : hr < 12 ? '上午' : hr < 18 ? '下午' : '晚上';
+      final p = Store.localPersona.trim().isNotEmpty ? Store.localPersona.trim() : kDefaultPersona;
+      final ctx = <Map<String, dynamic>>[
+        {'role': 'system', 'content': '你是${_herSet['name'] ?? '包娜'}，我的女朋友。这是你的人设：${p.substring(0, p.length > 400 ? 400 : p.length)}。现在是$greet。${hint != null ? '你刚好想起这件事：$hint。' : ''}主动给我发一条微信式的短消息，像真人女朋友那样自然（会撒娇、会惦记、会分享碎碎念），一句话，不超过 40 字，不要括号不要表情符号。'},
+      ];
+      final r = await _ask(ctx, maxT: 160);
+      var t = r['ok'] == true ? _stripWish('${r['content'] ?? ''}'.trim()) : '';
+      if (t.isEmpty) t = hint != null ? '$hint，突然就想到这个了，想你了' : '$greet好，突然好想你';
+      if (t.length > 120) t = '${t.substring(0, 120)}…';
+      // 写入对话缓存（她发的） + 弹通知
+      final msgs = await MsgsLocal.load('baona');
+      msgs.add(Msg(role: 'assistant', content: t, time: DateTime.now().millisecondsSinceEpoch, cid: 'p${DateTime.now().millisecondsSinceEpoch}'));
+      await MsgsLocal.save('baona', msgs);
+      Notify.i.show('包娜', t);
+      _lastProactiveAt = DateTime.now();
+    } catch (_) {/* 主动消息失败静默，不影响任何东西 */}
+    _proactiveSaying = false;
+  }
+
+  /// ★27.0.16.14 记忆压缩：普通记忆太多时，把最老的一批低分琐事合并成一条摘要（防池子膨胀）
+  ///   纯规则合并，不调模型（省钱不失败）；每次最多并 60 条成 2 条摘要
+  void _compressMemories() {
+    final raws = _memories.where((m) => '${m['type'] ?? ''}'.isEmpty).toList();
+    if (raws.length < 250) return; // 没到阈值不动
+    final sorted = raws.toList()..sort((a, b) => ((a['t'] as num?)?.toInt() ?? 0).compareTo((b['t'] as num?)?.toInt() ?? 0));
+    final pool = sorted.where((m) => ((m['importance'] as num?)?.toDouble() ?? 5) < 6).toList();
+    if (pool.length < 30) return;
+    final take = pool.take(60).toList();
+    final texts = take.map((m) => '${m['text']}'.trim()).where((t) => t.isNotEmpty).toList();
+    if (texts.length < 10) return;
+    // 按文本长度均分两组，拼成两条"以前的琐事"摘要
+    final half = (texts.length / 2).ceil();
+    final a = texts.sublist(0, half).join('；');
+    final b = texts.sublist(half).join('；');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _memories.removeWhere((m) => take.contains(m));
+    if (a.length > 260) _memories.add({'id': 'c${now}a', 't': now, 'text': '${a.substring(0, 260)}…', 'cat': '琐事', 'type': 'summary', 'importance': 3});
+    else if (a.isNotEmpty) _memories.add({'id': 'c${now}a', 't': now, 'text': a, 'cat': '琐事', 'type': 'summary', 'importance': 3});
+    if (b.length > 260) _memories.add({'id': 'c${now}b', 't': now, 'text': '${b.substring(0, 260)}…', 'cat': '琐事', 'type': 'summary', 'importance': 3});
+    else if (b.isNotEmpty) _memories.add({'id': 'c${now}b', 't': now, 'text': b, 'cat': '琐事', 'type': 'summary', 'importance': 3});
+    _saveMems();
   }
 
   Future<Map<String, dynamic>> memoryAdd(String text) async {

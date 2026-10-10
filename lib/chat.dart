@@ -726,7 +726,7 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
           ),
         if (text.isNotEmpty)
           ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.80),
             child: GlassSurface(
               radius: 20,
               blur: 14,

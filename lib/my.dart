@@ -11,6 +11,7 @@ import 'api.dart';
 import 'brain.dart';
 import 'embd.dart';
 import 'main.dart';
+import 'memlib.dart'; // ★27.0.16.14 记忆管理页
 import 'theme.dart';
 import 'us.dart'; // ★v27.0.9 壁纸：pickAlbumImage 从手机相册选背景图
 
@@ -24,6 +25,11 @@ class MyPage extends StatefulWidget {
 class _MyPageState extends State<MyPage> {
   Map<String, dynamic> _llm = {'activeId': '', 'providers': <dynamic>[]};
   String _personaPrev = '';
+  // ★27.0.16.14 主动消息设置（开关/间隔/睡眠时段）
+  bool _proactiveOn = Store.proactiveOn;
+  int _gap = Store.proactiveGap;
+  int _sleepS = Store.sleepStart;
+  int _sleepE = Store.sleepEnd;
 
   @override
   void initState() {
@@ -755,6 +761,68 @@ class _SettingsPageState extends State<SettingsPage> {
     if (ok == true) await fn();
   }
 
+  // ★27.0.16.14 主动消息设置
+  String get _sleepText {
+    if (_sleepS == _sleepE) return '不设（任何时间都可能找你）';
+    String fmt(int m) => '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+    return '${fmt(_sleepS)} - ${fmt(_sleepE)} 不打扰';
+  }
+
+  Future<void> _pickGap() async {
+    const opts = <int>[30, 60, 120, 180, 240, 360, 720];
+    final v = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(padding: EdgeInsets.only(top: 14, bottom: 6), child: Text('主动消息平均间隔', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+          ...opts.map((g) => ListTile(
+                leading: Icon(Icons.timer_outlined, color: g == _gap ? kAccent : kSub),
+                title: Text(g < 60 ? '$g 分钟' : '${g ~/ 60} 小时${g % 60 == 0 ? '' : ' ${g % 60} 分'}'),
+                subtitle: Text('实际 ${(g * 0.5).toStringAsFixed(0)}~${(g * 1.5).toStringAsFixed(0)} 分钟随机'),
+                trailing: g == _gap ? const Icon(Icons.check, color: kAccent) : null,
+                onTap: () => Navigator.pop(c, g),
+              )),
+        ]),
+      ),
+    );
+    if (v != null) {
+      setState(() => _gap = v);
+      await Store.setProactiveGap(v);
+    }
+  }
+
+  Future<void> _pickSleep() async {
+    TimeOfDay? s = _sleepS == 0 && _sleepE == 0 ? null : TimeOfDay(hour: _sleepS ~/ 60, minute: _sleepS % 60);
+    TimeOfDay? e = _sleepS == 0 && _sleepE == 0 ? null : TimeOfDay(hour: _sleepE ~/ 60, minute: _sleepE % 60);
+    // 先问是否设置/取消，再选时间（起止完全自由，不限制）
+    final act = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(padding: EdgeInsets.only(top: 14, bottom: 6), child: Text('睡眠时段', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+          ListTile(leading: const Icon(Icons.bedtime_outlined), title: const Text('设置睡眠时段（这个时间她不来打扰）'), onTap: () => Navigator.pop(c, 'set')),
+          if (_sleepS != _sleepE) ListTile(leading: const Icon(Icons.block), title: const Text('取消（任何时间都可能找你）'), onTap: () => Navigator.pop(c, 'off')),
+        ]),
+      ),
+    );
+    if (act == null) return;
+    if (act == 'off') {
+      setState(() { _sleepS = 0; _sleepE = 0; });
+      await Store.setSleep(0, 0);
+      return;
+    }
+    final sp = await showTimePicker(context: context, initialTime: s ?? const TimeOfDay(hour: 23, minute: 0));
+    if (sp == null) return;
+    final ep = await showTimePicker(context: context, initialTime: e ?? const TimeOfDay(hour: 7, minute: 0));
+    if (ep == null) return;
+    setState(() { _sleepS = sp.hour * 60 + sp.minute; _sleepE = ep.hour * 60 + ep.minute; });
+    await Store.setSleep(_sleepS, _sleepE);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -869,6 +937,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                   trailing: const Icon(Icons.refresh, size: 18),
                 ),
+                // ★27.0.16.14 记忆管理：查看全部 / 语义搜索 / 置顶删除 / 备份导出导入
+                _row(
+                  icon: Icons.folder_open_outlined,
+                  title: '记忆管理',
+                  sub: '查看、搜索、置顶/删除、备份导出/导入',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MemPage())),
+                ),
                 _row(
                   icon: Icons.delete_sweep,
                   title: '清掉她的长期记忆',
@@ -882,6 +957,40 @@ class _SettingsPageState extends State<SettingsPage> {
                     });
                   },
                 ),
+              ]),
+              // ★27.0.16.14 主动消息：她隔一段时间随机主动发一句（真人感）
+              _group([
+                _row(
+                  icon: Icons.notifications_active_outlined,
+                  title: '主动消息',
+                  sub: _proactiveOn ? '开着：她隔一会儿会自己找你说话' : '关着：只有你找她她才回',
+                  onTap: () {},
+                  trailing: Switch(
+                    value: _proactiveOn,
+                    activeColor: kAccent,
+                    activeTrackColor: kAccent.withValues(alpha: 0.35),
+                    onChanged: (v) async {
+                      setState(() => _proactiveOn = v);
+                      await Store.setProactiveOn(v);
+                      final b = app.brain;
+                      if (b != null) b.startProactiveIfEnabled();
+                    },
+                  ),
+                ),
+                if (_proactiveOn) ...[
+                  _row(
+                    icon: Icons.timer_outlined,
+                    title: '平均间隔',
+                    sub: '每 $_gap 分钟随机来一次（±50%，比如 120 就是 60~180 分钟）',
+                    onTap: () => _pickGap(),
+                  ),
+                  _row(
+                    icon: Icons.bedtime_outlined,
+                    title: '睡眠时段',
+                    sub: _sleepText,
+                    onTap: () => _pickSleep(),
+                  ),
+                ],
               ]),
               // ★27.0.16 真人感对话（短句口语/情绪标记/模拟打字）
               _group([
