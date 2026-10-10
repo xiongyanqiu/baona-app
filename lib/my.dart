@@ -25,11 +25,6 @@ class MyPage extends StatefulWidget {
 class _MyPageState extends State<MyPage> {
   Map<String, dynamic> _llm = {'activeId': '', 'providers': <dynamic>[]};
   String _personaPrev = '';
-  // ★27.0.16.14 主动消息设置（开关/间隔/睡眠时段）
-  bool _proactiveOn = Store.proactiveOn;
-  int _gap = Store.proactiveGap;
-  int _sleepS = Store.sleepStart;
-  int _sleepE = Store.sleepEnd;
 
   @override
   void initState() {
@@ -610,6 +605,11 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _useMem = true;
+  // ★27.0.16.14 主动消息设置（开关/间隔/睡眠时段）
+  bool _proactiveOn = Store.proactiveOn;
+  int _gap = Store.proactiveGap;
+  int _sleepS = Store.proSleepStart;
+  int _sleepE = Store.proSleepEnd;
   // ★27.0.16.2 万物互联：设备连接（贝锐蒲公英组网，电脑端跑 Agent / 安卓端）
   final TextEditingController _pcIp = TextEditingController();
   final TextEditingController _pcPort = TextEditingController();
@@ -812,7 +812,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (act == null) return;
     if (act == 'off') {
       setState(() { _sleepS = 0; _sleepE = 0; });
-      await Store.setSleep(0, 0);
+      await Store.setProSleep(0, 0);
       return;
     }
     final sp = await showTimePicker(context: context, initialTime: s ?? const TimeOfDay(hour: 23, minute: 0));
@@ -820,7 +820,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final ep = await showTimePicker(context: context, initialTime: e ?? const TimeOfDay(hour: 7, minute: 0));
     if (ep == null) return;
     setState(() { _sleepS = sp.hour * 60 + sp.minute; _sleepE = ep.hour * 60 + ep.minute; });
-    await Store.setSleep(_sleepS, _sleepE);
+    await Store.setProSleep(_sleepS, _sleepE);
   }
 
   @override

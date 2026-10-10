@@ -1113,8 +1113,8 @@ class LocalBrain {
   }
 
   /// 睡眠时段（分钟数，0-1439）；起止相同 = 不设睡眠
-  bool _inSleepWindow() {
-    final s = Store.sleepStart, e = Store.sleepEnd;
+  bool _proSleepNow() {
+    final s = Store.proSleepStart, e = Store.proSleepEnd;
     if (s == e) return false;
     final n = DateTime.now();
     final cur = n.hour * 60 + n.minute;
@@ -1127,7 +1127,7 @@ class LocalBrain {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now < _proactiveNextDue) return;
     _proactiveNextDue = now + _randomGapMs(); // 本次触发后马上排下一次
-    if (_inSleepWindow()) return; // 睡眠时段跳过，下一轮再检查
+    if (_proSleepNow()) return; // 睡眠时段跳过，下一轮再检查
     _proactiveSay();
   }
 
