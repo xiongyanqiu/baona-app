@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'brain.dart';
+import 'embd.dart';
 import 'main.dart';
 import 'theme.dart';
 import 'us.dart'; // ★v27.0.9 壁纸：pickAlbumImage 从手机相册选背景图
@@ -854,6 +855,19 @@ class _SettingsPageState extends State<SettingsPage> {
                       }
                     },
                   ),
+                ),
+                // ★27.0.16.13 本地语义记忆状态：一眼看清模型起没起来；点按重试/刷新
+                _row(
+                  icon: Icons.auto_awesome,
+                  title: '本地语义记忆',
+                  sub: Embd.statusText,
+                  onTap: () async {
+                    if (Embd.status == 'preparing') return; // 加载中别打断
+                    setState(() {});
+                    await Embd.init();
+                    if (mounted) setState(() {});
+                  },
+                  trailing: const Icon(Icons.refresh, size: 18),
                 ),
                 _row(
                   icon: Icons.delete_sweep,

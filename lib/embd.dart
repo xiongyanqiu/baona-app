@@ -21,11 +21,32 @@ class Embd {
   static int _dim = 512; // 向量维度：config.json hidden_size（small=512）
   static bool _ready = false;
   static bool _failed = false;
+  static Future<bool>? _initFuture; // 并发锁：多次 init 共享同一次加载
+
+  /// 可见状态：idle 未启动 / preparing 解压加载中 / ready 已就绪 / failed 不可用（降级关键词）
+  static String status = 'idle';
+  static String get statusText {
+    switch (status) {
+      case 'preparing':
+        return '准备中（首次解压模型约 10 秒）';
+      case 'ready':
+        return '已就绪 · 语义检索开启';
+      case 'failed':
+        return '不可用 · 已降级关键词检索（点按重试）';
+      default:
+        return '未启动';
+    }
+  }
 
   /// 记忆指令前缀（bge-zh 官方：检索 query 要加，库内 passage 不加）
   static const String queryPrefix = '为这个句子生成表示以用于检索相关文章：';
 
   static bool get ready => _ready;
+
+  /// 后台预热（App 启动时调，不阻塞 UI；失败静默，等首次用时重试）
+  static void warmup() {
+    init();
+  }
 
   /// 确保本地有可加载的 model.onnx：首次从 asset 的两个 .gz 分片拼接解压到 Documents，之后复用。
   static Future<String?> _ensureModelFile() async {
@@ -49,10 +70,22 @@ class Embd {
   static Future<bool> init() async {
     if (_ready) return true;
     if (_failed) return false;
+    // 并发锁：已有加载在进行就共享同一个 future，不重复解压
+    if (_initFuture != null) return _initFuture!;
+    final f = _doInit();
+    _initFuture = f;
+    final ok = await f;
+    _initFuture = null;
+    return ok;
+  }
+
+  static Future<bool> _doInit() async {
+    status = 'preparing';
     try {
       final modelPath = await _ensureModelFile();
       if (modelPath == null) {
         _failed = true;
+        status = 'failed';
         return false;
       }
       _ort = OnnxRuntime();
@@ -84,6 +117,7 @@ class Embd {
       }
       if (_vocab == null || _vocab!.isEmpty) {
         _failed = true;
+        status = 'failed';
         return false;
       }
       // 向量维度：从 config.json 的 hidden_size 读（bge-small=512）
@@ -93,9 +127,11 @@ class Embd {
         if (hs != null && hs > 0) _dim = hs;
       } catch (_) {}
       _ready = true;
+      status = 'ready';
       return true;
     } catch (_) {
       _failed = true;
+      status = 'failed';
       return false;
     }
   }

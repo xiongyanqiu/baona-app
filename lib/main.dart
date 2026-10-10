@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'alib.dart';
 import 'brain.dart';
+import 'embd.dart';
 import 'home.dart';
 import 'msg.dart';
 import 'my.dart';
@@ -296,6 +297,8 @@ class Boot extends StatelessWidget {
   Widget build(BuildContext context) {
     final brain = LocalBrain();
     app.attachBrain(brain);
+    // ★27.0.16.13 后台预热本地记忆模型（解压+建会话，不阻塞 UI；首次对话秒用）
+    if (Store.embEnabled) Embd.warmup();
     // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
     final base = Store.baseUrl;
     if (base.isNotEmpty && Store.token.isNotEmpty) {

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'api.dart';
+import 'embd.dart';
 import 'main.dart';
 import 'msglocal.dart';
 import 'imgsrv.dart';
@@ -39,6 +40,7 @@ class _ChatPageState extends State<ConversationPage> {
   StreamSubscription? _sub;
   bool _loading = true;
   bool _typing = false;
+  bool _embHintShown = false; // ★27.0.16.13 语义记忆降级提示只弹一次
   int _cidSeq = 0;   // ★2026-09-30 发一条出两条：本地这条自己带编号，服务端广播回来按编号认领
   bool _emojiPanel = false;
   bool _funPanel = false;
@@ -294,6 +296,15 @@ class _ChatPageState extends State<ConversationPage> {
     if (t.isEmpty) return;
     _inp.clear();
     HapticFeedback.lightImpact();
+    // ★27.0.16.13 语义记忆状态提示（只提示一次：failed 时告诉用户已降级）
+    if (!_embHintShown && Store.embEnabled && Embd.status == 'failed') {
+      _embHintShown = true;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('本地语义记忆不可用，已先用关键词记忆（可在 我的-本地语义记忆 重试）'),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
     _send({'text': t});
   }
 
