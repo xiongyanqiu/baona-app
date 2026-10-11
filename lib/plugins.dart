@@ -15,22 +15,52 @@ Future<void> initPlugins() async {
 
   Future<void> installTar(String savePath, String sub) async {
     // 把下载好的 tar.bz2 解到 Documents/tts/<sub>/（全量文件，语音引擎必需）
+    // ★27.0.20 改为流式解压：118MB 包不再一次性全量进内存（旧版在 iPhone 上易被系统杀进程
+    //   导致模型文件写一半、看起来"已下载"实际是坏的，引擎构造就失败）
     final tdir = Directory('${dir.path}/tts/$sub');
     await tdir.create(recursive: true);
-    final bytes = await File(savePath).readAsBytes();
-    final bz2 = BZip2Decoder().decodeBytes(bytes);
-    final tar = TarDecoder().decodeBytes(bz2);
-    for (final f in tar.files) {
+    final inStream = File(savePath).openRead();
+    final bz2Stream = BZip2Decoder().decodeStream(inStream);
+    final tarStream = TarDecoder().decodeStream(bz2Stream);
+    await for (final f in tarStream) {
       if (!f.isFile) continue;
       final rel = f.name.split('/').skip(1).join('/');
       if (rel.isEmpty) continue;
       final out = File('${tdir.path}/$rel');
       await out.parent.create(recursive: true);
-      await out.writeAsBytes(f.content as List<int>, flush: true);
+      final content = f.content;
+      if (content is List<int>) {
+        await out.writeAsBytes(content, flush: true);
+      }
+    }
+    // ★27.0.20 解压后完整性校验：核心文件必须齐全且 model.onnx 达到体积
+    if (!_verifyTts(sub)) {
+      throw Exception('解压不完整（文件缺失或损坏），请删除后重新下载');
     }
     try {
       await File(savePath).delete();
     } catch (_) {}
+  }
+
+  /// 校验 Documents/tts/<sub>/ 是否完整可用
+  bool _verifyTts(String sub) {
+    try {
+      final base = '${dir.path}/tts/$sub';
+      final m = File('$base/model.onnx');
+      if (!m.existsSync() || m.lengthSync() < 100000000) return false;
+      if (!File('$base/tokens.txt').existsSync()) return false;
+      if (!File('$base/lexicon.txt').existsSync()) return false;
+      final dict = Directory('$base/dict');
+      if (!dict.existsSync() || dict.listSync().isEmpty) return false;
+      var fst = 0;
+      for (final e in Directory(base).listSync()) {
+        if (e is File && e.path.endsWith('.fst')) fst++;
+      }
+      if (fst < 1) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   DlManager.i

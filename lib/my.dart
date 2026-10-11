@@ -943,8 +943,46 @@ class _SettingsPageState extends State<SettingsPage> {
                           : 'iOS 系统语音',
                       onTap: () async {
                         if (Store.voiceEngine == 'sherpa' && LocalTts.status != 'ready') {
-                          await LocalTts.init();
-                          setState(() {});
+                          // ★27.0.20 失败时弹完整错误 + 重试/去插件中心，方便定位
+                          if (LocalTts.status == 'failed') {
+                            await showDialog<void>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: kBg2,
+                                title: const Text('语音引擎加载失败',
+                                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                                content: SelectableText(
+                                  LocalTts.statusText.isEmpty ? '未知错误' : LocalTts.statusText,
+                                  style: const TextStyle(fontSize: 13.5, height: 1.5),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(),
+                                    child: const Text('知道了'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.of(ctx).pop();
+                                      Navigator.of(context).push(MaterialPageRoute(
+                                          builder: (_) => const PluginsPage()));
+                                    },
+                                    child: const Text('去插件中心'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () async {
+                                      Navigator.of(ctx).pop();
+                                      await LocalTts.init();
+                                      if (mounted) setState(() {});
+                                    },
+                                    child: const Text('重新加载'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            await LocalTts.init();
+                            setState(() {});
+                          }
                         }
                       },
                       trailing: Switch(
@@ -973,6 +1011,13 @@ class _SettingsPageState extends State<SettingsPage> {
                             for (final v in kVoiceOptions)
                               _pill(v.name, Store.voiceId == v.id, () async {
                                 await Store.setVoiceId(v.id);
+                                // ★27.0.20 切音色立即重载对应模型（melo/zhll），马上知道这个音色能不能用
+                                if (Store.voiceEngine == 'sherpa') {
+                                  Future(() async {
+                                    await LocalTts.init();
+                                    if (mounted) setState(() {});
+                                  });
+                                }
                                 setState(() {});
                               }),
                           ]),

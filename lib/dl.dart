@@ -181,7 +181,13 @@ class DlManager extends ChangeNotifier {
         try {
           await installer(t);
         } catch (e) {
+          // ★27.0.20 安装/解压失败 → 标 failed 可重试（重试=重新解压，不用重下）
           t.err = '安装失败: $e';
+          t.status = DlStatus.failed;
+          final sp0 = await SharedPreferences.getInstance();
+          await sp0.setString('dl.$id', 'failed');
+          notifyListeners();
+          return;
         }
       }
       notifyListeners();
