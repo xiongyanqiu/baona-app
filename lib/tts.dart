@@ -139,7 +139,6 @@ class LocalTts {
         return false;
       }
       final lexicon = File('$base/lexicon.txt').existsSync() ? '$base/lexicon.txt' : '';
-      final dict = Directory('$base/dict').existsSync() ? '$base/dict' : '';
       // 动态收集模型包里实际存在的规则 fst（不同模型包文件名可能不同，缺哪个传哪个）
       final fsts = <String>[];
       try {
@@ -151,8 +150,13 @@ class LocalTts {
         model: '$base/model.onnx',
         tokens: '$base/tokens.txt',
         lexicon: lexicon,
-        dataDir: dict,   // lexicon 数据目录（中文拼音表）
-        dictDir: dict,   // ★27.0.19 中文 G2P 字典目录，缺它 VITS 构造必失败（这就是加载失败的根因）
+        // ★27.0.25 根因修复：dataDir/dictDir 必须留空！
+        //   sherpa-onnx v1.12.15+ 的 VITS Validate 会把非空 data_dir 当
+        //   espeak-ng 数据目录检查（要求 data_dir/phontab、phonindex、
+        //   phondata、intonations 存在），我们的 dict/ 是 jieba 词典目录，
+        //   传了必失败（Failed to create offline tts. Please check your config）。
+        //   zh-ll 走 CharacterLexicon、melo 走 MeloTtsLexicon，都只用
+        //   lexicon + tokens，data_dir/dict_dir 不需要。
       );
       final cfg = sherpa.OfflineTtsConfig(
         model: sherpa.OfflineTtsModelConfig(vits: vcfg),
