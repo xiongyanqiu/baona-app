@@ -36,23 +36,28 @@ Future<void> initPlugins() async {
 
   Future<void> installTar(String savePath, String sub) async {
     // 把下载好的 tar.bz2 解到 Documents/tts/<sub>/（全量文件，语音引擎必需）
-    // ★27.0.20 改为流式解压：118MB 包不再一次性全量进内存（旧版在 iPhone 上易被系统杀进程
-    //   导致模型文件写一半、看起来"已下载"实际是坏的，引擎构造就失败）
+    // ★27.0.20 改为流式解压：118MB 包不再一次性全量进内存（旧版 decodeBytes 在 iPhone 上
+    //   易被系统杀进程 → 模型文件写一半、看起来"已下载"实际是坏的 → 引擎构造失败）
+    //   archive 4.x：BZip2Decoder.decodeLazy 惰性解压 + TarDecoder.decodeStream 的
+    //   callback 模式逐文件写盘，内存只占当前一个文件
     final tdir = Directory('${dir.path}/tts/$sub');
     await tdir.create(recursive: true);
-    final inStream = File(savePath).openRead();
-    final bz2Stream = BZip2Decoder().decodeStream(inStream);
-    final tarStream = TarDecoder().decodeStream(bz2Stream);
-    await for (final f in tarStream) {
-      if (!f.isFile) continue;
-      final rel = f.name.split('/').skip(1).join('/');
-      if (rel.isEmpty) continue;
-      final out = File('${tdir.path}/$rel');
-      await out.parent.create(recursive: true);
-      final content = f.content;
-      if (content is List<int>) {
-        await out.writeAsBytes(content, flush: true);
-      }
+    final input = InputFileStream(savePath);
+    try {
+      final bz2 = BZip2Decoder().decodeLazy(input);
+      TarDecoder().decodeStream(bz2,
+          storeData: true,
+          keepEntries: false,
+          callback: (f) {
+            if (!f.isFile) return;
+            final rel = f.name.split('/').skip(1).join('/');
+            if (rel.isEmpty) return;
+            final out = File('${tdir.path}/$rel');
+            out.parent.createSync(recursive: true);
+            out.writeAsBytesSync(f.content, flush: true);
+          });
+    } finally {
+      input.close();
     }
     // ★27.0.20 解压后完整性校验：核心文件必须齐全且 model.onnx 达到体积
     if (!verifyTts(sub)) {
