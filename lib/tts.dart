@@ -91,6 +91,41 @@ class LocalTts {
 
   static String _lastErr = '';
 
+  /// ★27.0.24 失败时输出文件体检表：每个核心文件的体积，一眼看出哪个坏/缺失
+  static String _fileReport(String base) {
+    final sb = StringBuffer();
+    sb.writeln('文件体检:');
+    try {
+      final names = <String>[
+        'model.onnx', 'tokens.txt', 'lexicon.txt',
+      ];
+      for (final n in names) {
+        final f = File('$base/$n');
+        sb.writeln('$n=${f.existsSync() ? f.lengthSync() : 0}B');
+      }
+      final dict = Directory('$base/dict');
+      if (dict.existsSync()) {
+        for (final n in ['jieba.dict.utf8', 'hmm_model.utf8', 'idf.utf8', 'user.dict.utf8', 'stop_words.utf8']) {
+          final f = File('${dict.path}/$n');
+          sb.writeln('dict/$n=${f.existsSync() ? f.lengthSync() : 0}B');
+        }
+      } else {
+        sb.writeln('dict/ 目录缺失');
+      }
+      var nfst = 0;
+      try {
+        for (final e in Directory(base).listSync()) {
+          if (e is File && e.path.endsWith('.fst')) {
+            nfst++;
+            sb.writeln('fst/${e.path.split('/').last}=${e.lengthSync()}B');
+          }
+        }
+      } catch (_) {}
+      if (nfst == 0) sb.writeln('无 .fst 规则文件');
+    } catch (_) {}
+    return sb.toString();
+  }
+
   /// 重建 OfflineTts（切换 melo/zhll 模型时调用）
   static Future<bool> _loadModel(String sub) async {
     try {
@@ -129,7 +164,7 @@ class LocalTts {
       _lastErr = '';
       return true;
     } catch (e) {
-      _lastErr = '（引擎构造失败：$e）';
+      _lastErr = '（引擎构造失败：$e）\n${_fileReport(base)}';
       return false;
     }
   }

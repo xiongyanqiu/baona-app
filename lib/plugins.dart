@@ -15,19 +15,34 @@ Future<void> initPlugins() async {
   final dir = await getApplicationDocumentsDirectory();
 
   /// 校验 Documents/tts/<sub>/ 是否完整可用
+  /// ★27.0.24 深度校验：文件齐全还不够，逐个查体积/词典内容/规则 FST——
+  ///   早期坏安装（一次性解压被杀进程）最常坏的就是这些小文件，
+  ///   sherpa 引擎加载时任何一个坏了都会 "Failed to create offline tts"
   bool verifyTts(String sub) {
     try {
       final base = '${dir.path}/tts/$sub';
       final m = File('$base/model.onnx');
       // 阈值 50MB：任何 VITS 模型都远大于它；损坏的"写一半"文件只有几 MB 甚至几百 KB
       if (!m.existsSync() || m.lengthSync() < 50000000) return false;
-      if (!File('$base/tokens.txt').existsSync()) return false;
-      if (!File('$base/lexicon.txt').existsSync()) return false;
+      final tok = File('$base/tokens.txt');
+      if (!tok.existsSync() || tok.lengthSync() < 100) return false;
+      final lex = File('$base/lexicon.txt');
+      if (!lex.existsSync() || lex.lengthSync() < 100000) return false;
       final dict = Directory('$base/dict');
-      if (!dict.existsSync() || dict.listSync().isEmpty) return false;
+      if (!dict.existsSync()) return false;
+      // jieba 分词必备文件：缺任何一个 → 中文 VITS 构造必失败
+      final jiebaNeed = ['jieba.dict.utf8', 'hmm_model.utf8', 'idf.utf8'];
+      for (final f in jiebaNeed) {
+        final jf = File('${dict.path}/$f');
+        if (!jf.existsSync() || jf.lengthSync() < 100) return false;
+      }
+      // 规则 FST：sherpa 构造时逐个加载，损坏/空文件 = 构造失败
       var fst = 0;
       for (final e in Directory(base).listSync()) {
-        if (e is File && e.path.endsWith('.fst')) fst++;
+        if (e is File && e.path.endsWith('.fst')) {
+          if (e.lengthSync() < 1000) return false; // 损坏的半截 fst
+          fst++;
+        }
       }
       if (fst < 1) return false;
       return true;
@@ -95,11 +110,27 @@ Future<void> initPlugins() async {
   await DlManager.restore();
   // ★27.0.21 启动时校验已安装的语音包：旧版装坏的（文件在但是坏的）自动标失败，
   //   插件中心显示「重试」，点一下重新解压即可，不用再被"已就绪"假象骗
+  // ★27.0.24 升级：损坏时【自动用缓存包重新解压修复】（缓存包 .23 起已保留，
+  //   重装=覆盖坏文件，用户不用手动操作）；修复失败才标失败
   for (final id in ['voice-melo', 'voice-zhll']) {
     final t = DlManager.i.taskOf(id);
     if (t == null) continue;
     if (t.status == DlStatus.done && !verifyTts(id == 'voice-melo' ? 'melo' : 'zhll')) {
-      DlManager.i.markFailed(id, '模型文件损坏，请点重试重新解压');
+      final sub = id == 'voice-melo' ? 'melo' : 'zhll';
+      var fixed = false;
+      try {
+        final save = File(t.savePath);
+        if (save.existsSync() && save.lengthSync() > 1000000) {
+          await installTar(t.savePath, sub); // 用缓存包覆盖重装
+          fixed = verifyTts(sub);
+        }
+      } catch (_) {}
+      if (fixed) {
+        // 修复成功：状态保持 done
+        await SharedPreferences.getInstance().then((sp) => sp.setString('dl.$id', 'done'));
+        continue;
+      }
+      DlManager.i.markFailed(id, '模型文件损坏，已尝试自动修复失败，请点重试');
       final sp = await SharedPreferences.getInstance();
       await sp.setString('dl.$id', 'failed');
     }
