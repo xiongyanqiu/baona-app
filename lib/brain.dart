@@ -682,9 +682,7 @@ class LocalBrain {
     final sysParts = <String>[
       persona ?? _layeredPersona(),
       if (rules != null && rules.trim().isNotEmpty) rules.trim(),
-      if (Store.humanLike) _lifeBlock(),
-      // ★27.0.16.15 时间感知：她知道现在几点、星期几、节日，说话带时间感
-      _nowBlock(),
+      _lifeBlock(), // ★27.0.16.15 时间感知：始终注入（她知道现在几点/星期几/节日/时段关怀）
       _outRules(),
       if (withMem) _memoryBlock(),
       if (withMem) _retrievedBlock(query),
