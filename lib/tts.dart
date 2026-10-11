@@ -1,16 +1,13 @@
-// tts.dart — ★27.0.16.16/17 本地真人语音引擎（sherpa-onnx VITS/MeloTTS，完全离线不联网）
-// ★27.0.16.17 模型不再打包进 IPA（377MB 传不动）→ 首次用语音时 App 内下载（镜像 6MB/s，约半分钟）
-// 下载一次永久本地；断网/失败自动退回 iOS 系统语音，不白屏不卡死。
+// tts.dart — ★27.0.17 本地真人语音引擎（sherpa-onnx VITS/MeloTTS，完全离线）
+// 模型不再由本文件下载：统一走「插件中心」（plugins.dart + dl.dart）下载安装到
+// Documents/tts/<melo|zhll>/，本文件只负责检查就绪 + 加载引擎 + 合成 wav。
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
-import 'package:http/http.dart' as http;
-import 'package:archive/archive.dart';
 import 'api.dart' show Store;
 
-/// 音色表：zhll 模型 5 个说话人（sid 0-4）+ melo 自然声（sid=100 表示 melo）
+/// 音色表：zhll 模型 5 个说话人（sid 0-4）+ melo 自然声（sid=0 表示 melo）
 class VoiceOption {
   final String id; // 'melo' | 'zhll0'..'zhll4'
   final String name;
@@ -38,57 +35,16 @@ class LocalTts {
   static String status = 'idle';
   static String statusText = '未启动（打开语音回复后自动加载）';
 
-  // 模型下载地址（ghfast.top 镜像加速，App 内不受浏览器安全拦截）
-  static const String _mirror = 'https://ghfast.top/';
-  static const Map<String, String> _urls = {
-    'melo': 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2',
-    'zhll': 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-vits-zh-ll.tar.bz2',
-  };
-
-  /// 确保某个模型在本地：没有就从镜像下载并解压（下载一次，永久保留）
-  static Future<bool> _ensureModel(String sub) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final tdir = Directory('${dir.path}/tts/$sub');
-    final target = File('${tdir.path}/model.onnx');
-    if (target.existsSync() && target.lengthSync() > 100000000) return true;
-    final nice = sub == 'melo' ? '自然声音色' : '角色音色';
-    status = 'loading';
-    statusText = '正在下载$nice模型（约${sub == 'melo' ? '160' : '115'}MB，首次需要）…';
+  /// 某模型是否已就绪（model + tokens + lexicon + dict + 规则文件齐全）
+  static Future<bool> modelReady(String sub) async {
     try {
-      await tdir.create(recursive: true);
-      final tmp = File('${tdir.path}/model.tar.bz2');
-      final req = http.Request('GET', Uri.parse(_mirror + _urls[sub]!));
-      final resp = await req.send().timeout(const Duration(seconds: 40));
-      if (resp.statusCode != 200) return false;
-      final total = resp.contentLength ?? 0;
-      var got = 0;
-      final sink = tmp.openWrite();
-      await for (final chunk in resp.stream) {
-        sink.add(chunk);
-        got += chunk.length;
-        if (total > 0 && got % (total ~/ 20) < 500000) {
-          statusText = '正在下载$nice模型 ${(got * 100 / total).toStringAsFixed(0)}%';
-        }
-      }
-      await sink.close();
-      statusText = '正在解压语音模型…';
-      final bytes = await tmp.readAsBytes();
-      final bz2 = BZip2Decoder().decodeBytes(bytes);
-      final tar = TarDecoder().decodeBytes(bz2);
-      for (final f in tar.files) {
-        if (!f.isFile) continue;
-        final rel = f.name.split('/').skip(1).join('/');
-        if (rel.isEmpty) continue;
-        final out = File('${tdir.path}/$rel');
-        await out.parent.create(recursive: true);
-        await out.writeAsBytes(f.content as List<int>, flush: true);
-      }
-      try {
-        await tmp.delete();
-      } catch (_) {}
-      return target.existsSync() && target.lengthSync() > 100000000;
+      final dir = await getApplicationDocumentsDirectory();
+      final base = '${dir.path}/tts/$sub';
+      return File('$base/model.onnx').existsSync() &&
+          File('$base/tokens.txt').existsSync() &&
+          File('$base/lexicon.txt').existsSync() &&
+          Directory('$base/dict').existsSync();
     } catch (_) {
-      statusText = '语音模型下载失败（检查网络后点这里重试）';
       return false;
     }
   }
@@ -110,10 +66,10 @@ class LocalTts {
     try {
       sherpa.initBindings(); // sherpa-onnx 每个用到它的 isolate 都要初始化绑定
       final sub = Store.voiceId == 'melo' ? 'melo' : 'zhll';
-      final ok = await _ensureModel(sub);
-      if (!ok) {
-        _failed = true;
-        status = 'failed';
+      if (!await modelReady(sub)) {
+        // 模型没下载：提示去插件中心，不标记失败（下载完可重试）
+        status = 'missing';
+        statusText = '语音模型未下载 · 去「插件中心」下载后点这里重试';
         return false;
       }
       if (!await _loadModel(sub)) {
@@ -170,8 +126,8 @@ class LocalTts {
       final model = voiceId == 'melo' ? 'melo' : 'zhll';
       final sid = voiceId == 'melo' ? 0 : int.parse(voiceId.substring(4));
       if (_currentModel != model) {
-        // 切到另一个模型：确保已下载，再重建引擎
-        if (!await _ensureModel(model)) return null;
+        // 切到另一个模型：必须已就绪，再重建引擎
+        if (!await modelReady(model)) return null;
         if (!await _loadModel(model)) return null;
       }
       final audio = _tts!.generateWithConfig(

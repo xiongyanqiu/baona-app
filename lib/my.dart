@@ -13,6 +13,7 @@ import 'embd.dart';
 import 'main.dart';
 import 'memlib.dart'; // ★27.0.16.14 记忆管理页
 import 'tts.dart' show LocalTts, kVoiceOptions; // ★27.0.16.16 本地真人语音引擎
+import 'plugins.dart' show PluginsPage; // ★27.0.17 插件中心入口
 import 'theme.dart';
 import 'us.dart'; // ★v27.0.9 壁纸：pickAlbumImage 从手机相册选背景图
 
@@ -1086,6 +1087,18 @@ class _SettingsPageState extends State<SettingsPage> {
                         ]),
                       ),
                   ],
+                  // ★27.0.17 插件中心：可下载功能包统一入口（语音模型等）
+                  _row(
+                    icon: Icons.widgets_outlined,
+                    title: '插件中心',
+                    sub: '下载语音模型 / 壁纸包 / 书源…（可看下载进度）',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const PluginsPage()),
+                      );
+                    },
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: kSub),
+                  ),
                   _row(
                     icon: Icons.sentiment_satisfied_outlined,
                     title: '情绪标记',

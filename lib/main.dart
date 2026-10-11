@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'tts.dart' show LocalTts; // ★27.0.16.16 本地真人语音引擎预载
+import 'plugins.dart' show initPlugins; // ★27.0.17 插件中心：注册可下载插件（语音模型等）
 import 'alib.dart';
 import 'brain.dart';
 import 'embd.dart';
@@ -298,6 +299,12 @@ class Boot extends StatelessWidget {
   Widget build(BuildContext context) {
     final brain = LocalBrain();
     app.attachBrain(brain);
+    // ★27.0.17 插件中心：注册语音模型等可下载插件 + 恢复下载状态（不阻塞）
+    Future<void>.delayed(const Duration(milliseconds: 300), () async {
+      try {
+        await initPlugins();
+      } catch (_) {}
+    });
     // ★27.0.16.13 后台预热本地记忆模型（解压+建会话，不阻塞 UI；首次对话秒用）
     if (Store.embEnabled) Embd.warmup();
     // ★27.0.16.16 语音回复开着且用真人引擎 → 后台预载 TTS 模型（首次解压 ~290MB 较慢，不阻塞）
