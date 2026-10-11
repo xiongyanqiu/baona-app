@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'tts.dart' show LocalTts; // ★27.0.16.16 本地真人语音引擎预载
 import 'alib.dart';
 import 'brain.dart';
 import 'embd.dart';
@@ -299,6 +300,14 @@ class Boot extends StatelessWidget {
     app.attachBrain(brain);
     // ★27.0.16.13 后台预热本地记忆模型（解压+建会话，不阻塞 UI；首次对话秒用）
     if (Store.embEnabled) Embd.warmup();
+    // ★27.0.16.16 语音回复开着且用真人引擎 → 后台预载 TTS 模型（首次解压 ~290MB 较慢，不阻塞）
+    if (Store.voiceReply && Store.voiceEngine == 'sherpa') {
+      Future<void>.delayed(const Duration(seconds: 1), () async {
+        try {
+          await LocalTts.init();
+        } catch (_) {}
+      });
+    }
     // ★27.0.16.14 主动消息：开了就启动她"隔段时间主动找你"的调度
     brain.startProactiveIfEnabled();
     // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）

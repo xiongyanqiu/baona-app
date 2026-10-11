@@ -12,6 +12,7 @@ import 'brain.dart';
 import 'embd.dart';
 import 'main.dart';
 import 'memlib.dart'; // ★27.0.16.14 记忆管理页
+import 'tts.dart' show LocalTts, kVoiceOptions; // ★27.0.16.16 本地真人语音引擎
 import 'theme.dart';
 import 'us.dart'; // ★v27.0.9 壁纸：pickAlbumImage 从手机相册选背景图
 
@@ -1013,7 +1014,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   _row(
                     icon: Icons.record_voice_over_outlined,
                     title: '语音回复',
-                    sub: Store.voiceReply ? '开着：她回复会带语音条（离线合成，不联网）' : '关着：只发文字',
+                    sub: Store.voiceReply ? '开着：她回复会带语音条（本地合成，不联网）' : '关着：只发文字',
                     onTap: () {},
                     trailing: Switch(
                       value: Store.voiceReply,
@@ -1021,10 +1022,70 @@ class _SettingsPageState extends State<SettingsPage> {
                       activeTrackColor: kAccent.withValues(alpha: 0.35),
                       onChanged: (v) async {
                         await Store.setVoiceReply(v);
+                        if (v && Store.voiceEngine == 'sherpa') {
+                          Future(() async {
+                            await LocalTts.init();
+                            if (mounted) setState(() {});
+                          });
+                        }
                         setState(() {});
                       },
                     ),
                   ),
+                  // ★27.0.16.16 真人语音引擎状态 + 引擎/音色/语速调节
+                  if (Store.voiceReply) ...[
+                    _row(
+                      icon: Icons.graphic_eq,
+                      title: '真人语音引擎',
+                      sub: Store.voiceEngine == 'sherpa'
+                          ? (LocalTts.status == 'ready' ? '就绪：${Store.voiceId == 'melo' ? '自然声' : _voiceName(Store.voiceId)} · ${Store.voiceSpeed == 1.0 ? '正常语速' : (Store.voiceSpeed < 1.0 ? '慢' : '快')}' : LocalTts.statusText)
+                          : 'iOS 系统语音',
+                      onTap: () async {
+                        if (Store.voiceEngine == 'sherpa' && LocalTts.status != 'ready') {
+                          await LocalTts.init();
+                          setState(() {});
+                        }
+                      },
+                      trailing: Switch(
+                        value: Store.voiceEngine == 'sherpa',
+                        activeColor: kAccent,
+                        activeTrackColor: kAccent.withValues(alpha: 0.35),
+                        onChanged: (v) async {
+                          await Store.setVoiceEngine(v ? 'sherpa' : 'system');
+                          if (v) {
+                            Future(() async {
+                              await LocalTts.init();
+                              if (mounted) setState(() {});
+                            });
+                          }
+                          setState(() {});
+                        },
+                      ),
+                    ),
+                    if (Store.voiceEngine == 'sherpa')
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('她的声音', style: TextStyle(fontSize: 13, color: kSub)),
+                          const SizedBox(height: 8),
+                          Wrap(spacing: 8, runSpacing: 8, children: [
+                            for (final v in kVoiceOptions)
+                              _pill(v.name, Store.voiceId == v.id, () async {
+                                await Store.setVoiceId(v.id);
+                                setState(() {});
+                              }),
+                          ]),
+                          const SizedBox(height: 10),
+                          const Text('语速', style: TextStyle(fontSize: 13, color: kSub)),
+                          const SizedBox(height: 8),
+                          Wrap(spacing: 8, children: [
+                            _pill('慢', Store.voiceSpeed == 0.8, () async { await Store.setVoiceSpeed(0.8); setState(() {}); }),
+                            _pill('正常', Store.voiceSpeed == 1.0, () async { await Store.setVoiceSpeed(1.0); setState(() {}); }),
+                            _pill('快', Store.voiceSpeed == 1.2, () async { await Store.setVoiceSpeed(1.2); setState(() {}); }),
+                          ]),
+                        ]),
+                      ),
+                  ],
                   _row(
                     icon: Icons.sentiment_satisfied_outlined,
                     title: '情绪标记',
@@ -1513,9 +1574,16 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // ★27.0.16.16 音色 id → 显示名（zhll0 → 苏樱雪…）
+  String _voiceName(String id) {
+    for (final v in kVoiceOptions) {
+      if (v.id == id) return v.name;
+    }
+    return '自然声';
+  }
+
   // ★27.0.16.6 思考强度 pill（轻/中/强）
-  Widget _pill(String label, bool active, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _pill(String label, bool active, VoidCallback onTap) {    return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

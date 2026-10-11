@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:math'; // ★27.0.16.6 主动消息随机间隔
 
 import 'package:flutter_tts/flutter_tts.dart'; // ★27.0.16.15 语音回复：iOS 离线 TTS
+import 'tts.dart' show LocalTts; // ★27.0.16.16 本地真人语音引擎（sherpa）
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -798,9 +799,16 @@ class LocalBrain {
     return {'ok': true};
   }
 
-  /// ★27.0.16.15 语音回复：iOS 离线 TTS 合成到本地文件（不联网），失败返回 null 静默
+  /// ★27.0.16.15/16 语音回复：优先本地真人语音引擎（sherpa，5+1 音色可调，完全离线），
+  /// 设置里可切回 iOS 系统语音；失败返回 null 静默降级（只发文字）
   static FlutterTts? _tts;
   Future<String?> _ttsToFile(String text) async {
+    // 真人语音引擎（默认）
+    if (Store.voiceEngine == 'sherpa') {
+      final p = await LocalTts.speak(text, voiceId: Store.voiceId, speed: Store.voiceSpeed);
+      if (p != null) return p;
+      // 真人引擎失败 → 退回系统语音
+    }
     try {
       _tts ??= FlutterTts();
       final dir = await getApplicationDocumentsDirectory();

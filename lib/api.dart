@@ -107,6 +107,16 @@ class Store {
   static bool get voiceReply => _p.getBool('local.voiceReply') ?? false;
   static Future<void> setVoiceReply(bool v) => _p.setBool('local.voiceReply', v);
 
+  // ★27.0.16.16 语音引擎与音色：'sherpa'=本地真人语音（默认）/'system'=iOS 系统语音
+  static String get voiceEngine => _p.getString('local.voiceEngine') ?? 'sherpa';
+  static Future<void> setVoiceEngine(String v) => _p.setString('local.voiceEngine', v);
+  // 音色：'melo'（自然声）/ 'zhll0'（苏樱雪）..'zhll4'（霸总）
+  static String get voiceId => _p.getString('local.voiceId') ?? 'melo';
+  static Future<void> setVoiceId(String v) => _p.setString('local.voiceId', v);
+  // 语速倍率：0.8 慢 / 1.0 正常 / 1.2 快
+  static double get voiceSpeed => _p.getDouble('local.voiceSpeed') ?? 1.0;
+  static Future<void> setVoiceSpeed(double v) => _p.setDouble('local.voiceSpeed', v);
+
   // ★27.0.16.6 定时任务（对话里 AI 提取，到点她自动发消息）
   // [{id, content, at(epochMs 下次触发), repeat:'once'|'daily', created}]
   static List<Map<String, dynamic>> get timers {

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 27.0.16+54
+version: 27.0.16+55
 environment:
   sdk: ^3.13.4
 
@@ -52,6 +52,7 @@ dependencies:
   flutter_onnxruntime: ^1.8.1          # ★27.0.16.11 本地语义记忆检索：bge-small-zh 手机本地跑 ONNX
   share_plus: ^7.2.2                   # ★27.0.16.14 记忆备份导出：分享 .json 到文件/微信等
   flutter_tts: ^4.0.2                  # ★27.0.16.15 语音回复：iOS 离线 TTS（AVSpeechSynthesizer，不联网）
+  sherpa_onnx: ^1.13.8                 # ★27.0.16.16 本地真人语音引擎（VITS/MeloTTS，完全离线，5+1 音色）
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +81,8 @@ flutter:
     - assets/pet.png       # ★26.2.18 全本地：桌宠立绘兜底
     - assets/video/        # ★26.2.20 桌宠裸体视频：stand 站立 / idle / sleep / sit / wake / walk
     - assets/models/       # ★27.0.16.12 本地语义记忆：bge-small-zh fp32 onnx.gz + tokenizer
+    - assets/models/tts/melo/   # ★27.0.16.16 本地真人语音：MeloTTS 中文（最自然）
+    - assets/models/tts/zhll/   # ★27.0.16.16 本地真人语音：VITS 5 音色（苏樱雪/顾念/傅诗雨/冰娇/霸总）
 
   # To add assets to your application, add an assets section, like this:
   # assets:
