@@ -13,7 +13,8 @@ jobs:
     #   新 Xcode 编译产物在手机上启动闪退（v27.0.13 之前一直正常）。
     # ★v27.0.14.16 macos-14 runner 下线、macos-13 排队 6 小时进不去 → 换 macos-15（当前主力池）。
     runs-on: macos-15
-    timeout-minutes: 45
+    # ★27.0.16.16 加了 sherpa-onnx 真人语音引擎（C++ 源码 pod，编译很慢）→ 45 分钟不够，提到 90
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
