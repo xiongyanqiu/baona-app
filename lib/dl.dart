@@ -69,6 +69,15 @@ class DlManager extends ChangeNotifier {
   String? _activeId;
   final Map<String, Future<void> Function(DlTask)> _installers = {}; // 插件安装回调
 
+  /// ★27.0.21 公开：外部校验发现任务已损坏时标记失败（如启动时发现语音模型文件坏）
+  void markFailed(String id, String err) {
+    final t = _tasks[id];
+    if (t == null) return;
+    t.status = DlStatus.failed;
+    t.err = err;
+    notifyListeners();
+  }
+
   DlTask? taskOf(String id) => _tasks[id];
 
   void register({

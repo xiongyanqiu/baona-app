@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:archive/archive.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dl.dart';
 import 'theme.dart';
 
@@ -18,7 +19,8 @@ Future<void> initPlugins() async {
     try {
       final base = '${dir.path}/tts/$sub';
       final m = File('$base/model.onnx');
-      if (!m.existsSync() || m.lengthSync() < 100000000) return false;
+      // 阈值 50MB：任何 VITS 模型都远大于它；损坏的"写一半"文件只有几 MB 甚至几百 KB
+      if (!m.existsSync() || m.lengthSync() < 50000000) return false;
       if (!File('$base/tokens.txt').existsSync()) return false;
       if (!File('$base/lexicon.txt').existsSync()) return false;
       final dict = Directory('$base/dict');
@@ -86,6 +88,17 @@ Future<void> initPlugins() async {
       installer: (t) => installTar(t.savePath, 'zhll'),
     );
   await DlManager.restore();
+  // ★27.0.21 启动时校验已安装的语音包：旧版装坏的（文件在但是坏的）自动标失败，
+  //   插件中心显示「重试」，点一下重新解压即可，不用再被"已就绪"假象骗
+  for (final id in ['voice-melo', 'voice-zhll']) {
+    final t = DlManager.i.taskOf(id);
+    if (t == null) continue;
+    if (t.status == DlStatus.done && !verifyTts(id == 'voice-melo' ? 'melo' : 'zhll')) {
+      DlManager.i.markFailed(id, '模型文件损坏，请点重试重新解压');
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString('dl.$id', 'failed');
+    }
+  }
 }
 
 class PluginsPage extends StatefulWidget {
