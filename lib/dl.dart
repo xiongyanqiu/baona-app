@@ -78,6 +78,13 @@ class DlManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ★27.0.23 安装完成的判定函数（默认=压缩包存在；语音包用安装目录校验，
+  ///   避免"安装成功后删了压缩包 → 重启判定未完成 → 又要重下"）
+  final Map<String, bool Function(DlTask)> _installedChecks = {};
+  void registerInstalledCheck(String id, bool Function(DlTask) fn) {
+    _installedChecks[id] = fn;
+  }
+
   DlTask? taskOf(String id) => _tasks[id];
 
   void register({
@@ -216,7 +223,11 @@ class DlManager extends ChangeNotifier {
     final sp = await SharedPreferences.getInstance();
     for (final t in i._tasks.values) {
       final st = sp.getString('dl.${t.id}');
-      if (st == 'done' && File(t.savePath).existsSync()) {
+      if (st != 'done') continue;
+      // ★27.0.23 用"安装完成的判定"而不是"压缩包还在"：语音包安装成功会删压缩包，
+      //   按压缩包判定会把已完成误判成未下载 → 重启后又要重新下载
+      final ok = i._installedChecks[t.id]?.call(t) ?? File(t.savePath).existsSync();
+      if (ok) {
         t.status = DlStatus.done;
         t.downloaded = t.total;
       }

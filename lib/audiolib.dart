@@ -233,6 +233,18 @@ class _AudioLibPageState extends State<AudioLibPage> {
     await _save();
   }
 
+  Future<void> _openPlayer(int index) async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => AudioPlayerPageV2(
+        tracks: _tracks,
+        initialIndex: index,
+        title: _name,
+        avatarBytes: _avatarBytes,
+      ),
+    ));
+    if (mounted) setState(() {});
+  }
+
   String _fmt(Duration d) {
     final m = d.inMinutes.toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
@@ -385,7 +397,7 @@ class _AudioLibPageState extends State<AudioLibPage> {
     final isCur = _playing == t.added;
     final active = isCur && _playingNow;
     return GestureDetector(
-      onTap: () => _playTrack(index),
+      onTap: () => _openPlayer(index),
       onLongPress: () => _deleteTrack(index),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -434,6 +446,322 @@ class _AudioLibPageState extends State<AudioLibPage> {
               child: Text('${_fmt(_pos)} / ${_fmt(_dur)}', style: const TextStyle(fontSize: 11, color: kAccent2)),
             ),
         ]),
+      ),
+    );
+  }
+}
+
+/// ★27.0.23 完整播放器页面：进度可拖、上一首/下一首、快进快退、倍速、自动连播
+class AudioPlayerPageV2 extends StatefulWidget {
+  final List<AlAudio> tracks;
+  final int initialIndex;
+  final String title;
+  final Uint8List? avatarBytes;
+  const AudioPlayerPageV2({
+    super.key,
+    required this.tracks,
+    required this.initialIndex,
+    required this.title,
+    this.avatarBytes,
+  });
+
+  @override
+  State<AudioPlayerPageV2> createState() => _AudioPlayerPageV2State();
+}
+
+class _AudioPlayerPageV2State extends State<AudioPlayerPageV2> {
+  final AudioPlayer _player = AudioPlayer();
+  late int _idx;
+  Duration _pos = Duration.zero;
+  Duration _dur = Duration.zero;
+  bool _playing = false;
+  bool _dragging = false;
+  double _dragMs = 0;
+  double _rate = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _idx = widget.initialIndex;
+    _player.onPositionChanged.listen((p) {
+      if (mounted && !_dragging) setState(() => _pos = p);
+    });
+    _player.onDurationChanged.listen((d) {
+      if (mounted) setState(() => _dur = d);
+    });
+    _player.onPlayerStateChanged.listen((s) {
+      if (!mounted) return;
+      setState(() => _playing = s == PlayerState.playing);
+      if (s == PlayerState.completed) {
+        // 自动连播下一首
+        if (_idx < widget.tracks.length - 1) {
+          _idx++;
+          _playAt(_idx);
+        } else {
+          setState(() {
+            _playing = false;
+            _pos = Duration.zero;
+          });
+        }
+      }
+    });
+    _playAt(_idx);
+  }
+
+  @override
+  void dispose() {
+    _player.stop();
+    _player.release();
+    super.dispose();
+  }
+
+  Future<void> _playAt(int i) async {
+    if (i < 0 || i >= widget.tracks.length) return;
+    final t = widget.tracks[i];
+    await _player.stop();
+    _pos = Duration.zero;
+    _dur = Duration.zero;
+    try {
+      final ctx = AudioContextConfig(respectSilence: false, stayAwake: true).build();
+      await _player.setPlaybackRate(_rate);
+      await _player.play(DeviceFileSource(t.path), ctx: ctx);
+      if (mounted) {
+        setState(() {
+          _idx = i;
+          _playing = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _playing = false);
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_playing) {
+      await _player.pause();
+      setState(() => _playing = false);
+    } else {
+      await _player.resume();
+      setState(() => _playing = true);
+    }
+  }
+
+  Future<void> _seek(Duration d) async {
+    var t = d;
+    if (t < Duration.zero) t = Duration.zero;
+    if (_dur > Duration.zero && t > _dur) t = _dur;
+    await _player.seek(t);
+    if (mounted) setState(() => _pos = t);
+  }
+
+  Future<void> _setRate(double r) async {
+    setState(() => _rate = r);
+    await _player.setPlaybackRate(r);
+  }
+
+  String _curName() {
+    final t = widget.tracks[_idx];
+    return t.name.isEmpty ? '音频 ${t.added % 100000}' : t.name;
+  }
+
+  String _fmt(Duration d) {
+    final h = d.inHours > 0 ? '${d.inHours}:' : '';
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$h$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalMs = _dur.inMilliseconds;
+    final curMs = _dragging ? _dragMs : _pos.inMilliseconds.toDouble();
+    final maxSec = totalMs > 0 ? totalMs / 1000.0 : 1.0;
+    final curSec = (curMs / 1000.0).clamp(0.0, maxSec);
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(children: [
+          // 顶栏
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Row(children: [
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: kGlass2,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.keyboard_arrow_down_rounded, size: 24, color: kText),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kText)),
+              ),
+              const SizedBox(width: 50),
+            ]),
+          ),
+          // 封面 + 曲名
+          Expanded(
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Container(
+                width: 210,
+                height: 210,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kAccent.withValues(alpha: 0.5), kAccent.withValues(alpha: 0.12)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: const Color(0x2EFFFFFF), width: 1),
+                  image: widget.avatarBytes == null
+                      ? null
+                      : DecorationImage(
+                          image: MemoryImage(widget.avatarBytes!), fit: BoxFit.cover),
+                ),
+                child: widget.avatarBytes == null
+                    ? Icon(Icons.audiotrack_rounded, size: 80, color: Colors.white.withValues(alpha: 0.9))
+                    : null,
+              ),
+              const SizedBox(height: 26),
+              Text(_curName(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: kText)),
+              const SizedBox(height: 6),
+              Text('${_idx + 1} / ${widget.tracks.length}',
+                  style: const TextStyle(fontSize: 13, color: kSub)),
+            ]),
+          ),
+          // 进度条
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(children: [
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  activeTrackColor: kAccent,
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
+                  thumbColor: kAccent,
+                  overlayColor: kAccent.withValues(alpha: 0.15),
+                ),
+                child: Slider(
+                  value: curSec,
+                  max: maxSec,
+                  onChangeStart: (_) => setState(() => _dragging = true),
+                  onChanged: (v) => setState(() => _dragMs = v * 1000),
+                  onChangeEnd: (v) {
+                    setState(() {
+                      _dragging = false;
+                      _pos = Duration(milliseconds: (v * 1000).round());
+                    });
+                    _player.seek(Duration(milliseconds: (v * 1000).round()));
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(children: [
+                  Text(_fmt(Duration(milliseconds: curMs.round())),
+                      style: const TextStyle(fontSize: 12, color: kSub)),
+                  const Spacer(),
+                  Text(totalMs > 0 ? _fmt(_dur) : '--:--',
+                      style: const TextStyle(fontSize: 12, color: kSub)),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 倍速
+              Wrap(spacing: 8, children: [
+                for (final r in [0.5, 1.0, 1.5, 2.0])
+                  GestureDetector(
+                    onTap: () => _setRate(r),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _rate == r ? kAccent.withValues(alpha: 0.25) : kGlass2,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: _rate == r
+                                ? kAccent.withValues(alpha: 0.6)
+                                : const Color(0x22FFFFFF),
+                            width: 0.8),
+                      ),
+                      child: Text('${r}x',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _rate == r ? kAccent : kText)),
+                    ),
+                  ),
+              ]),
+              const SizedBox(height: 14),
+              // 控制排
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                _ctl(Icons.replay_10_rounded, '后退 10 秒',
+                    () => _seek(_pos - const Duration(seconds: 10))),
+                const SizedBox(width: 36),
+                GestureDetector(
+                  onTap: _toggle,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      color: kAccent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: kAccent.withValues(alpha: 0.35), blurRadius: 24, spreadRadius: 2),
+                      ],
+                    ),
+                    child: Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        size: 38, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 36),
+                _ctl(Icons.forward_10_rounded, '前进 10 秒',
+                    () => _seek(_pos + const Duration(seconds: 10))),
+              ]),
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                _ctl(Icons.skip_previous_rounded, '上一首',
+                    _idx > 0 ? () => _playAt(_idx - 1) : null),
+                const SizedBox(width: 36),
+                _ctl(Icons.skip_next_rounded, '下一首',
+                    _idx < widget.tracks.length - 1 ? () => _playAt(_idx + 1) : null),
+                const SizedBox(width: 36),
+                _ctl(Icons.repeat_rounded, '自动连播', () {}),
+              ]),
+              const SizedBox(height: 16),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _ctl(IconData icon, String tooltip, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message: tooltip,
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: kGlass2,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
+          ),
+          child: Icon(icon, size: 26, color: onTap == null ? kSub.withValues(alpha: 0.4) : kText),
+        ),
       ),
     );
   }

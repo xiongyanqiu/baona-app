@@ -65,9 +65,11 @@ Future<void> initPlugins() async {
     if (!verifyTts(sub)) {
       throw Exception('解压不完整（文件缺失或损坏），请删除后重新下载');
     }
-    try {
-      await File(savePath).delete();
-    } catch (_) {}
+    // ★27.0.23 保留 tar.bz2 缓存：App 重启后 restore 用它判断已完成，
+    //   也保证"重试=重新解压"不用重新下载（118MB 不再白白重下）
+    // try {
+    //   await File(savePath).delete();
+    // } catch (_) {}
   }
 
   DlManager.i
@@ -87,6 +89,9 @@ Future<void> initPlugins() async {
       total: 118810709,
       installer: (t) => installTar(t.savePath, 'zhll'),
     );
+  // ★27.0.23 已完成判定用安装目录校验（压缩包可能已被历史版本删掉，但模型在=已完成）
+  DlManager.i.registerInstalledCheck('voice-melo', (t) => verifyTts('melo'));
+  DlManager.i.registerInstalledCheck('voice-zhll', (t) => verifyTts('zhll'));
   await DlManager.restore();
   // ★27.0.21 启动时校验已安装的语音包：旧版装坏的（文件在但是坏的）自动标失败，
   //   插件中心显示「重试」，点一下重新解压即可，不用再被"已就绪"假象骗
