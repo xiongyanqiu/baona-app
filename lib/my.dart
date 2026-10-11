@@ -1009,7 +1009,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-                if (Store.humanLike)
+                if (Store.humanLike) ...[
+                  _row(
+                    icon: Icons.record_voice_over_outlined,
+                    title: '语音回复',
+                    sub: Store.voiceReply ? '开着：她回复会带语音条（离线合成，不联网）' : '关着：只发文字',
+                    onTap: () {},
+                    trailing: Switch(
+                      value: Store.voiceReply,
+                      activeColor: kAccent,
+                      activeTrackColor: kAccent.withValues(alpha: 0.35),
+                      onChanged: (v) async {
+                        await Store.setVoiceReply(v);
+                        setState(() {});
+                      },
+                    ),
+                  ),
                   _row(
                     icon: Icons.sentiment_satisfied_outlined,
                     title: '情绪标记',
@@ -1025,6 +1040,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                   ),
+                ],
                 // ★27.0.16.3 思考模式：回复前先在脑子里过一遍（模型 thinking）
                 _row(
                   icon: Icons.psychology_outlined,

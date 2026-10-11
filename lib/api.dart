@@ -103,6 +103,10 @@ class Store {
     await _p.setInt('local.proSleepEnd', e);
   }
 
+  // ★27.0.16.15 语音回复：她回复时顺带生成一条语音条（iOS 离线 TTS，不联网不花钱）
+  static bool get voiceReply => _p.getBool('local.voiceReply') ?? false;
+  static Future<void> setVoiceReply(bool v) => _p.setBool('local.voiceReply', v);
+
   // ★27.0.16.6 定时任务（对话里 AI 提取，到点她自动发消息）
   // [{id, content, at(epochMs 下次触发), repeat:'once'|'daily', created}]
   static List<Map<String, dynamic>> get timers {

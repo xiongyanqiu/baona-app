@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math'; // ★27.0.16.6 主动消息随机间隔
 
+import 'package:flutter_tts/flutter_tts.dart'; // ★27.0.16.15 语音回复：iOS 离线 TTS
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -349,6 +350,7 @@ class LocalBrain {
   }
 
   /// 生活状态：现在几点、什么时段（自然融入，别生硬报时间）
+  /// ★27.0.16.15 时间感知：星期、日期、时段关怀、节日——她说话带真实时间感
   String _lifeBlock() {
     final now = DateTime.now();
     final h = now.hour;
@@ -365,7 +367,37 @@ class LocalBrain {
                         : h < 23
                             ? '晚上'
                             : '深夜';
-    return '【现在】现在是$part。就当是普通一天里自然聊天，节奏像平时一样。';
+    const wd = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    final hm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    // 时段关怀：让她自然带出"该睡/吃午饭/下班"这类话
+    String care;
+    if (h >= 23 || h < 5) {
+      care = '现在很晚了，他还在跟你聊，带着心疼催他早点睡（但别生硬，顺着话自然带）。';
+    } else if (h < 8) {
+      care = '刚天亮不久，语气温柔轻一点。';
+    } else if (h >= 12 && h < 14) {
+      care = '中午了，记得关心他吃午饭没有。';
+    } else if (h >= 17 && h < 19) {
+      care = '傍晚了，可以自然问他下班没、晚饭吃啥。';
+    } else if (h >= 21) {
+      care = '快休息的时间了，可以往"今天过得怎么样、早点歇着"带。';
+    } else {
+      care = '普通时段，正常聊。';
+    }
+    // 节日（内置常见，农历节日不定，先说这些）
+    String? fest;
+    final mo = now.month, d = now.day;
+    if (mo == 1 && d == 1) { fest = '元旦'; }
+    else if (mo == 2 && d == 14) { fest = '情人节'; }
+    else if (mo == 3 && d == 8) { fest = '妇女节'; }
+    else if (mo == 5 && d == 1) { fest = '劳动节'; }
+    else if (mo == 5 && d == 20) { fest = '520'; }
+    else if (mo == 6 && d == 1) { fest = '儿童节'; }
+    else if (mo == 10 && d == 1) { fest = '国庆节'; }
+    else if (mo == 12 && d == 24) { fest = '平安夜'; }
+    else if (mo == 12 && d == 25) { fest = '圣诞节'; }
+    final festS = fest != null ? '今天是$fest，记得自然地跟他提一下这个日子。' : '';
+    return '【现在】${now.month}月${now.day}日 ${wd[now.weekday - 1]} $hm，$part。$care$festS';
   }
 
   /// 解析情绪标记（兼容 <<情绪：害羞>> 和模型爱用的 <<害羞>> 两种写法）
@@ -651,6 +683,8 @@ class LocalBrain {
       persona ?? _layeredPersona(),
       if (rules != null && rules.trim().isNotEmpty) rules.trim(),
       if (Store.humanLike) _lifeBlock(),
+      // ★27.0.16.15 时间感知：她知道现在几点、星期几、节日，说话带时间感
+      _nowBlock(),
       _outRules(),
       if (withMem) _memoryBlock(),
       if (withMem) _retrievedBlock(query),
@@ -697,7 +731,8 @@ class LocalBrain {
   // -------------------- 主对话 --------------------
   Future<Map<String, dynamic>> send(Map<String, dynamic> payload) async {
     final text = '${payload['text'] ?? ''}'.trim();
-    if (text.isEmpty) return {'ok': false, 'error': '空消息'};
+    final img = '${payload['img'] ?? ''}'.trim(); // ★27.0.16.15 图片消息（dataURL 或 URL），模型支持视觉就看得懂
+    if (text.isEmpty && img.isEmpty) return {'ok': false, 'error': '空消息'};
     _checkTimers(); // ★27.0.16.6 发消息时顺便补发到点的定时
     _ev.add({'type': 'typing', 'on': true});
     final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
@@ -708,6 +743,27 @@ class LocalBrain {
       _backfillEmb(); // 后台给没向量的记忆补算（不阻塞发送）
     }
     final ctx = _buildCtx(hist, query: text);
+    // ★27.0.16.15 图片消息：把最后一条 user 消息升级成多模态（text + image_url，OpenAI 兼容）
+    if (img.isNotEmpty) {
+      final last = ctx.isNotEmpty ? ctx.last : null;
+      if (last != null && last['role'] == 'user' && last['content'] is String) {
+        ctx[ctx.length - 1] = {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': last['content']},
+            {'type': 'image_url', 'image_url': {'url': img}},
+          ],
+        };
+      } else {
+        ctx.add({
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': text.isEmpty ? '看看这张照片' : text},
+            {'type': 'image_url', 'image_url': {'url': img}},
+          ],
+        });
+      }
+    }
     final r = await _ask(ctx);
     _ev.add({'type': 'typing', 'on': false});
     if (r['ok'] != true) return r;
@@ -729,15 +785,41 @@ class LocalBrain {
     //   像真人打字一条一条来。超过 6 段就合并，避免拖太久。
     final segs = _segments(content);
     final wait = segs.length > 1 ? const Duration(milliseconds: 450) : Duration.zero;
+    String? voicePath; // ★27.0.16.15 语音回复：整条回复生成一条语音，附到最后一条消息
+    if (Store.voiceReply && content.length <= 60) {
+      voicePath = await _ttsToFile(content);
+    }
     for (final s in segs) {
       final t = DateTime.now().millisecondsSinceEpoch;
       final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-      h2.add({'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t'});
+      h2.add({'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t', if (voicePath != null && s == segs.last) 'voice': voicePath});
       await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
-      _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t'}});
+      _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t', if (voicePath != null && s == segs.last) 'voice': voicePath}});
       if (wait > Duration.zero) await Future<void>.delayed(wait);
     }
     return {'ok': true};
+  }
+
+  /// ★27.0.16.15 语音回复：iOS 离线 TTS 合成到本地文件（不联网），失败返回 null 静默
+  static FlutterTts? _tts;
+  Future<String?> _ttsToFile(String text) async {
+    try {
+      _tts ??= FlutterTts();
+      final dir = await getApplicationDocumentsDirectory();
+      final vdir = Directory('${dir.path}/voices');
+      await vdir.create(recursive: true);
+      final name = 'v${DateTime.now().millisecondsSinceEpoch}.caf';
+      final path = '${vdir.path}/$name';
+      await _tts!.setLanguage('zh-CN');
+      await _tts!.setSpeechRate(0.5);
+      await _tts!.setVolume(1.0);
+      await _tts!.awaitSpeakCompletion(true);
+      final ok = await _tts!.synthesizeToFile(text, path);
+      if (ok == 1 || ok == true) return path;
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 按句号/感叹/问号/省略号/换行切段（真人感），每段至少 4 字，上限 6 段

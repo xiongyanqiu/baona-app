@@ -437,14 +437,20 @@ class _ChatPageState extends State<ConversationPage> {
   }
 
   Future<void> _sendPhoto() async {
-    final a = app.api;
-    if (a == null) return;
     try {
       final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1400, imageQuality: 82);
       if (f == null) return;
       final bytes = await f.readAsBytes();
       final data = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      // ★27.0.16.15 本地大脑模式：图片直接进多模态消息，她能看懂内容（模型要支持视觉）
+      if (app.brain != null) {
+        toast(context, '让她看看…');
+        await _send({'text': '[图片] 你看这张照片', 'img': data}, show: '[照片]');
+        return;
+      }
       toast(context, '正在发照片…');
+      final a = app.api;
+      if (a == null) return;
       final up = await a.chatImg(data);
       if (up['ok'] != true) {
         if (mounted) toast(context, '传不上去：${up['error'] ?? ''}');
@@ -499,7 +505,12 @@ class _ChatPageState extends State<ConversationPage> {
     }
     setState(() => _playingUrl = url);
     await _audio.stop();
-    await _audio.play(UrlSource(url));
+    // ★27.0.16.15 本地语音条（brain 离线 TTS 生成在沙盒里，voice 是绝对路径）→ 用文件源播
+    if (url.startsWith('/')) {
+      await _audio.play(DeviceFileSource(url));
+    } else {
+      await _audio.play(UrlSource(url));
+    }
   }
 
   @override
