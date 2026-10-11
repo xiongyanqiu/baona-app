@@ -35,7 +35,7 @@ class LocalTts {
   static String status = 'idle';
   static String statusText = '未启动（打开语音回复后自动加载）';
 
-  /// 某模型是否已就绪（model + tokens + lexicon + dict + 规则文件齐全）
+  /// 某模型是否已就绪（模型主体 + 配套文件都齐）
   static Future<bool> modelReady(String sub) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
@@ -75,19 +75,21 @@ class LocalTts {
       if (!await _loadModel(sub)) {
         _failed = true;
         status = 'failed';
-        statusText = '语音模型加载失败';
+        statusText = '语音模型加载失败$_lastErr';
         return false;
       }
       status = 'ready';
       statusText = '真人语音就绪';
       return true;
-    } catch (_) {
+    } catch (e) {
       _failed = true;
       status = 'failed';
-      statusText = '语音模型加载失败';
+      statusText = '语音模型加载失败：$e';
       return false;
     }
   }
+
+  static String _lastErr = '';
 
   /// 重建 OfflineTts（切换 melo/zhll 模型时调用）
   static Future<bool> _loadModel(String sub) async {
@@ -96,23 +98,38 @@ class LocalTts {
       _tts = null;
       final dir = await getApplicationDocumentsDirectory();
       final base = '${dir.path}/tts/$sub';
+      if (!File('$base/model.onnx').existsSync() || !File('$base/tokens.txt').existsSync()) {
+        _lastErr = '（模型文件不全）';
+        return false;
+      }
+      final lexicon = File('$base/lexicon.txt').existsSync() ? '$base/lexicon.txt' : '';
+      final dict = Directory('$base/dict').existsSync() ? '$base/dict' : '';
+      // 动态收集模型包里实际存在的规则 fst（不同模型包文件名可能不同，缺哪个传哪个）
+      final fsts = <String>[];
+      try {
+        for (final f in Directory(base).listSync()) {
+          if (f is File && f.path.endsWith('.fst')) fsts.add(f.path);
+        }
+      } catch (_) {}
+      final vcfg = sherpa.OfflineTtsVitsModelConfig(
+        model: '$base/model.onnx',
+        tokens: '$base/tokens.txt',
+        lexicon: lexicon,
+        dataDir: dict,   // lexicon 数据目录（中文拼音表）
+        dictDir: dict,   // ★27.0.19 中文 G2P 字典目录，缺它 VITS 构造必失败（这就是加载失败的根因）
+      );
       final cfg = sherpa.OfflineTtsConfig(
-        model: sherpa.OfflineTtsModelConfig(
-          vits: sherpa.OfflineTtsVitsModelConfig(
-            model: '$base/model.onnx',
-            tokens: '$base/tokens.txt',
-            lexicon: '$base/lexicon.txt',
-            dataDir: '$base/dict',
-          ),
-        ),
-        ruleFsts: '$base/date.fst,$base/number.fst,$base/phone.fst,$base/new_heteronym.fst',
+        model: sherpa.OfflineTtsModelConfig(vits: vcfg),
+        ruleFsts: fsts.join(','),
       );
       final tts = sherpa.OfflineTts(cfg);
       _tts = tts;
       _numSpeakers = tts.numSpeakers;
       _currentModel = sub;
+      _lastErr = '';
       return true;
-    } catch (_) {
+    } catch (e) {
+      _lastErr = '（引擎构造失败：$e）';
       return false;
     }
   }
