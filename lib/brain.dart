@@ -1184,12 +1184,10 @@ class LocalBrain {
     return {'ok': true, 'added': added, 'total': _memories.length};
   }
 
-  // ★★★★★ 27.0.16.14 主动消息：她隔一段时间随机主动发一句（真人感） ★★★★★
+  // ★★★★★ 27.0.17 主动消息合并：统一走下方 ★27.0.16.6 的随机触发版（时间范围+睡眠完全自定义）
+  // 旧简化版（proactiveOn）入口已从设置页移除；此方法保留签名但不再启动调度，避免双发。
   void startProactiveIfEnabled() {
-    if (!Store.proactiveOn) return;
-    if (_proactiveTimer != null) return;
-    _proactiveNextDue = DateTime.now().millisecondsSinceEpoch + _randomGapMs();
-    _proactiveTimer = Timer.periodic(const Duration(seconds: 30), (_) => _proactiveTick());
+    // 空实现：主动消息统一由 _maybeAutoChat（每 60s 主循环检查）驱动
   }
 
   /// 间隔分钟 → 毫秒，±50% 随机（比如 120 分钟 → 60~180 分钟随机一次）
