@@ -53,7 +53,7 @@ dependencies:
   share_plus: ^7.2.2                   # ★27.0.16.14 记忆备份导出：分享 .json 到文件/微信等
   flutter_tts: ^4.0.2                  # ★27.0.16.15 语音回复：iOS 离线 TTS（AVSpeechSynthesizer，不联网）
   sherpa_onnx: ^1.13.8                 # ★27.0.16.16 本地真人语音引擎（VITS/MeloTTS，完全离线，5+1 音色）
-  archive: ^3.6.1                      # ★27.0.16.17 解压下载的语音模型 tar.bz2
+  archive: ^4.0.0                      # ★27.0.20 升级 4.x：TarDecoder 流式解压（防大包解压 OOM）
 
 dev_dependencies:
   flutter_test:

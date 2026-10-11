@@ -13,6 +13,27 @@ Future<void> initPlugins() async {
   const base = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/';
   final dir = await getApplicationDocumentsDirectory();
 
+  /// 校验 Documents/tts/<sub>/ 是否完整可用
+  bool verifyTts(String sub) {
+    try {
+      final base = '${dir.path}/tts/$sub';
+      final m = File('$base/model.onnx');
+      if (!m.existsSync() || m.lengthSync() < 100000000) return false;
+      if (!File('$base/tokens.txt').existsSync()) return false;
+      if (!File('$base/lexicon.txt').existsSync()) return false;
+      final dict = Directory('$base/dict');
+      if (!dict.existsSync() || dict.listSync().isEmpty) return false;
+      var fst = 0;
+      for (final e in Directory(base).listSync()) {
+        if (e is File && e.path.endsWith('.fst')) fst++;
+      }
+      if (fst < 1) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> installTar(String savePath, String sub) async {
     // 把下载好的 tar.bz2 解到 Documents/tts/<sub>/（全量文件，语音引擎必需）
     // ★27.0.20 改为流式解压：118MB 包不再一次性全量进内存（旧版在 iPhone 上易被系统杀进程
@@ -34,33 +55,12 @@ Future<void> initPlugins() async {
       }
     }
     // ★27.0.20 解压后完整性校验：核心文件必须齐全且 model.onnx 达到体积
-    if (!_verifyTts(sub)) {
+    if (!verifyTts(sub)) {
       throw Exception('解压不完整（文件缺失或损坏），请删除后重新下载');
     }
     try {
       await File(savePath).delete();
     } catch (_) {}
-  }
-
-  /// 校验 Documents/tts/<sub>/ 是否完整可用
-  bool _verifyTts(String sub) {
-    try {
-      final base = '${dir.path}/tts/$sub';
-      final m = File('$base/model.onnx');
-      if (!m.existsSync() || m.lengthSync() < 100000000) return false;
-      if (!File('$base/tokens.txt').existsSync()) return false;
-      if (!File('$base/lexicon.txt').existsSync()) return false;
-      final dict = Directory('$base/dict');
-      if (!dict.existsSync() || dict.listSync().isEmpty) return false;
-      var fst = 0;
-      for (final e in Directory(base).listSync()) {
-        if (e is File && e.path.endsWith('.fst')) fst++;
-      }
-      if (fst < 1) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   DlManager.i
