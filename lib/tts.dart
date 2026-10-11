@@ -128,11 +128,12 @@ class LocalTts {
 
   /// 重建 OfflineTts（切换 melo/zhll 模型时调用）
   static Future<bool> _loadModel(String sub) async {
+    var base = '';
     try {
       _tts?.free();
       _tts = null;
       final dir = await getApplicationDocumentsDirectory();
-      final base = '${dir.path}/tts/$sub';
+      base = '${dir.path}/tts/$sub';
       if (!File('$base/model.onnx').existsSync() || !File('$base/tokens.txt').existsSync()) {
         _lastErr = '（模型文件不全）';
         return false;
