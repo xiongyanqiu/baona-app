@@ -1099,6 +1099,25 @@ class _SettingsPageState extends State<SettingsPage> {
                       }),
                     ]),
                   ),
+                // ★27.0.27 上下文记忆窗口：越大她能记住越久以前的原话（按你模型真实窗口选，超了会报错）
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('上下文记忆（越大记得越久，按模型真实窗口选；超了模型会报错）',
+                        style: TextStyle(fontSize: 13, color: kSub)),
+                    const SizedBox(height: 8),
+                    Wrap(spacing: 6, runSpacing: 8, children: [
+                      for (final op in const [
+                        ['32K', 32000], ['64K', 64000], ['96K', 96000], ['128K', 128000],
+                        ['256K', 256000], ['512K', 512000], ['1M', 1000000],
+                      ])
+                        _pill(op[0] as String, Store.ctxTokens == op[1], () {
+                          Store.setCtxTokens(op[1] as int);
+                          setState(() {});
+                        }),
+                    ]),
+                  ]),
+                ),
               ]),
               // ★27.0.16.6 主动消息：随机时间范围 + 睡眠时间，完全自定义无预设限制
               _group([

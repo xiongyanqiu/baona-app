@@ -68,8 +68,8 @@ class Store {
   static Future<void> setLocalEmoji(String v) => _p.setString('local.emoji', v);
   static String get localChatExtra => _p.getString('local.chat.extra') ?? '';
   static Future<void> setLocalChatExtra(String v) => _p.setString('local.chat.extra', v);
-  /// 上下文 token 预算（默认 96K，可在模型设置里调；写 1M 也行，按模型实际上限调）
-  static int get ctxTokens => _p.getInt('local.ctxTokens') ?? 96000;
+  /// 上下文 token 预算（★27.0.27 默认 1M；可在设置→上下文记忆里调，按你模型的真实窗口选）
+  static int get ctxTokens => _p.getInt('local.ctxTokens') ?? 1000000;
   static Future<void> setCtxTokens(int v) => _p.setInt('local.ctxTokens', v);
 
   // ★27.0.16 真人感开关：总开关 + 情绪标记显示

@@ -421,12 +421,17 @@ class LocalBrain {
 
   String _memoryBlock() {
     if (_herSet['useMemories'] == false) return '';
+    // ★27.0.27 记忆更久：大上下文窗口（≥200K）时常驻记忆上限放宽到 240 摘要+400 原始，
+    //   小窗口保持 80+140 不挤占预算；记忆的总结/压缩方式不变。
+    final big = Store.ctxTokens >= 200000;
+    final maxTyped = big ? 240 : 80;
+    final maxRaw = big ? 400 : 140;
     final typed = _memories.where((m) => '${m['type'] ?? ''}' == 'summary').toList()
       ..sort((a, b) => _memScore(b).compareTo(_memScore(a)));
     final raws = _memories.where((m) => '${m['type'] ?? ''}'.isEmpty).toList()
       ..sort((a, b) => _memScore(b).compareTo(_memScore(a)));
-    final takeTyped = typed.length > 80 ? typed.sublist(0, 80) : typed;
-    final takeRaw = raws.length > 140 ? raws.sublist(0, 140) : raws;
+    final takeTyped = typed.length > maxTyped ? typed.sublist(0, maxTyped) : typed;
+    final takeRaw = raws.length > maxRaw ? raws.sublist(0, maxRaw) : raws;
     final lines = <String>[];
     for (final m in takeTyped) {
       lines.add('· ${m['text']}');
@@ -669,11 +674,10 @@ class LocalBrain {
       .replaceAll(RegExp(r'<<愿望完成[:：][\s\S]+?>>'), '')
       .trim();
 
-  // -------------------- 上下文（近 12 轮一字不差 + 更早的靠记忆摘要） --------------------
+  // -------------------- 上下文（预算内全量历史一字不差；超预算才从最新往旧滑） --------------------
   // ★27.0.8 Step0 缓存省钱：system 前缀(人设→规则→输出规则)逐字节稳定，动态块(记忆/检索/愿望/洞察)全放末尾，
   //   这样 DeepSeek 前缀缓存不会因记忆变化被击穿（命中价格差 50 倍）。
-  // ★27.0.16 真人感：人设三层 + 生活状态块；历史优先完整保留最近 12 轮（不截断），
-  //   只有近 12 轮超出 token 预算时才退回按预算滑动截断。
+  // ★27.0.27 大窗口（默认 1M）：全部历史优先完整保留，她能记住很久以前的原话；只有总量超预算才滑动截断。
   // ★27.0.26 历史消息喂模型时的内容：定时/主动消息带来源前缀，让她知道"这是我自己发的"，杜绝事后否认
   String _ctxContent(Map<String, dynamic> m) {
     final c = '${m['content'] ?? ''}'.trim();
@@ -701,10 +705,12 @@ class LocalBrain {
     var used = sys.length;
     final msgs = <Map<String, dynamic>>[];
 
-    // 1) 先尝试最近 12 轮一字不差（真人感核心：接得住梗靠完整上下文）
-    final recent = hist.length > 12 ? hist.sublist(hist.length - 12) : hist;
+    // ★27.0.27 记忆要更久：预算够就把全部历史一字不差带上（1M 窗口能装几万条），
+    //   只有全量超预算时，才从最新往旧按预算滑（保留最近、更早的靠长期记忆摘要兜底）。
+    //   硬上限 8000 条防极端超长对话时手机端拼接卡顿（真到 8000 条也早已超过任何窗口）。
+    final cap = hist.length > 8000 ? hist.sublist(hist.length - 8000) : hist;
     var fits = true;
-    for (final m in recent) {
+    for (final m in cap) {
       final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
       final c = _ctxContent(m);
       if (c.isEmpty) continue;
@@ -716,11 +722,11 @@ class LocalBrain {
       msgs.add({'role': role, 'content': c});
     }
 
-    // 2) 近 12 轮超预算 → 退回按 token 预算从最新往旧滑（保留最近、压缩更早）
+    // 全量超预算 → 按 token 预算从最新往旧滑（保留最近、压缩更早）
     if (!fits) {
       msgs.clear();
       used = sys.length;
-      for (final m in hist.reversed) {
+      for (final m in cap.reversed) {
         final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
         final c = _ctxContent(m);
         if (c.isEmpty) continue;
