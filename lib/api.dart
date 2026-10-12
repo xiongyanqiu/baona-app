@@ -211,15 +211,15 @@ const Map<String, dynamic> kDefCfg = {
 
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
-  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId, this.groupId, this.name, this.kind});
+  Msg({required this.role, required this.content, this.sticker, this.voice, this.imgUrl, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId, this.groupId, this.name, this.kind});
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
-  String? voice;        // 语音条文件名
+  String? voice;        // 语音条文件路径
   int? idx;             // 服务端序号
   int? time;
   String st;            // ok / pending / failed
-  String? imgUrl;       // 本地乐观显示用
+  String? imgUrl;       // ★27.0.28 聊天图片：本地文件路径（Documents/chatimg）或 dataURL
   String? cid;          // ★服务端给这条消息的编号（用于就地更新，比如语音条后到）
   String? detail;        // ★2026-10-01 她的【细节】（动作/表情/心里），折叠显示
   String? roleId;        // ★独立角色会话标识（空 = 包娜主对话）
@@ -232,6 +232,7 @@ class Msg {
         content: '${m['content'] ?? ''}',
         sticker: _s(m['sticker']),
         voice: _s(m['voice']),
+        imgUrl: _s(m['imgUrl']),
         idx: _i(m['idx']),
         time: _i(m['time']),
         cid: _s(m['cid']),
@@ -258,6 +259,7 @@ class Msg {
         'content': content,
         if (sticker != null) 'sticker': sticker,
         if (voice != null) 'voice': voice,
+        if (imgUrl != null) 'imgUrl': imgUrl,
         if (idx != null) 'idx': idx,
         if (time != null) 'time': time,
         'st': st,

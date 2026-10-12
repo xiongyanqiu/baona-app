@@ -680,8 +680,10 @@ class LocalBrain {
   // ★27.0.27 大窗口（默认 1M）：全部历史优先完整保留，她能记住很久以前的原话；只有总量超预算才滑动截断。
   // ★27.0.26 历史消息喂模型时的内容：定时/主动消息带来源前缀，让她知道"这是我自己发的"，杜绝事后否认
   String _ctxContent(Map<String, dynamic> m) {
-    final c = '${m['content'] ?? ''}'.trim();
+    var c = '${m['content'] ?? ''}'.trim();
     final k = '${m['kind'] ?? ''}';
+    // ★27.0.28 纯图片消息 content 为空，占位让它在上下文里是一条有效 user 消息（多模态图片在 send() 里附上）
+    if (c.isEmpty && '${m['imgUrl'] ?? ''}'.trim().isNotEmpty) c = '（我发了一张照片给你）';
     if (k == 'timer') return '（这条是你自己设定的定时提醒，刚刚到点由你自动发出的，老公问起要认账）$c';
     if (k == 'auto') return '（这条是你刚才主动发给老公的消息，老公问起要认账）$c';
     if (k == 'timerTip') return '（系统确认：你刚刚成功设下了这个定时）$c';
@@ -796,17 +798,37 @@ class LocalBrain {
     //   像真人打字一条一条来。超过 6 段就合并，避免拖太久。
     final segs = _segments(content);
     final wait = segs.length > 1 ? const Duration(milliseconds: 450) : Duration.zero;
-    String? voicePath; // ★27.0.16.15 语音回复：整条回复生成一条语音，附到最后一条消息
-    if (Store.voiceReply && content.length <= 60) {
-      voicePath = await _ttsToFile(content);
-    }
+    // ★27.0.28 语音回复：文字先全部发出（不被合成耗时卡住），整条回复异步合成一条语音，
+    //   好了以后补丁挂到最后一条消息（本地落盘 + msg-patch 事件，UI 就地刷新）
+    String? lastCid;
     for (final s in segs) {
       final t = DateTime.now().millisecondsSinceEpoch;
+      final cid = 'a$t';
+      lastCid = cid;
       final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-      h2.add({'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t', if (voicePath != null && s == segs.last) 'voice': voicePath});
+      h2.add({'role': 'assistant', 'content': s, 'time': t, 'cid': cid});
       await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
-      _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t', if (voicePath != null && s == segs.last) 'voice': voicePath}});
+      _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': cid}});
       if (wait > Duration.zero) await Future<void>.delayed(wait);
+    }
+    if (Store.voiceReply && lastCid != null) {
+      final cidForVoice = lastCid;
+      final voiceText = content.length > 300 ? content.substring(0, 300) : content;
+      () async {
+        try {
+          final p = await _ttsToFile(voiceText);
+          if (p == null) return;
+          final hh = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
+          var hit = false;
+          for (final m in hh) {
+            if ('${m['cid'] ?? ''}' == cidForVoice) { m['voice'] = p; hit = true; }
+          }
+          if (hit) {
+            await MsgsLocal.save('baona', hh.map((m) => Msg.fromJson(Map.from(m))).toList());
+            _ev.add({'type': 'msg-patch', 'cid': cidForVoice, 'patch': {'voice': p}});
+          }
+        } catch (_) {}
+      }();
     }
     // ★27.0.26 新定时可见确认（她的口吻，独立一条，防止 AI 误提取定时而用户毫不知情）
     for (final nt in newTimers) {

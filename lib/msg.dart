@@ -4,10 +4,13 @@
 //       每条消息带头像：我的在右侧（我的头像，可换）、她在左侧（她的头像）
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
@@ -37,6 +40,9 @@ class _MsgPageState extends State<MsgPage> {
   final TextEditingController _inp = TextEditingController();
   final ScrollController _sc = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _sub;
+  // ★27.0.28 语音条播放（她回复的本地语音 wav/caf）
+  final AudioPlayer _voicePlayer = AudioPlayer();
+  String? _playingVoice;
 
   dynamic get _a => app.brain ?? app.api;
 
@@ -46,6 +52,9 @@ class _MsgPageState extends State<MsgPage> {
     _load();
     _sub = _a?.events.listen(_onEv);
     _loadMyAv();
+    _voicePlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingVoice = null);
+    });
   }
 
   /// 我的头像：SharedPreferences 里的最优先（本地双写兜底）
@@ -62,6 +71,7 @@ class _MsgPageState extends State<MsgPage> {
     _sub?.cancel();
     _inp.dispose();
     _sc.dispose();
+    _voicePlayer.dispose();
     super.dispose();
   }
 
@@ -100,6 +110,24 @@ class _MsgPageState extends State<MsgPage> {
       setState(() => _typing = e['on'] == true);
     } else if (t == 'cleared') {
       setState(() => _msgs.clear());
+    } else if (t == 'msg-patch') {
+      // ★27.0.28 语音条后到：按 cid 就地补上 voice/图片等字段并落盘
+      final cid = '${e['cid'] ?? ''}';
+      final patch = e['patch'];
+      if (cid.isNotEmpty && patch is Map) {
+        Msg? hit;
+        for (final m in _msgs) {
+          if (m.cid == cid) { hit = m; break; }
+        }
+        if (hit != null) {
+          final p = Map<String, dynamic>.from(patch);
+          setState(() {
+            if (p['voice'] != null) hit!.voice = '${p['voice']}';
+            if (p['imgUrl'] != null) hit!.imgUrl = '${p['imgUrl']}';
+          });
+          MsgsLocal.save('baona', _msgs);
+        }
+      }
     }
   }
 
@@ -163,6 +191,114 @@ class _MsgPageState extends State<MsgPage> {
             behavior: SnackBarBehavior.floating));
       }
     }
+  }
+
+  // ---------- ★27.0.28 发照片给她（相册/拍照，存本地文件 + dataURL 给视觉模型） ----------
+  void _showImgSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: kBg2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 10),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: kAccent),
+            title: const Text('从相册选择', style: TextStyle(fontSize: 15.5)),
+            onTap: () { Navigator.pop(c); _pickAndSendImg(ImageSource.gallery); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined, color: kAccent),
+            title: const Text('拍照', style: TextStyle(fontSize: 15.5)),
+            onTap: () { Navigator.pop(c); _pickAndSendImg(ImageSource.camera); },
+          ),
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('取消', style: TextStyle(fontSize: 15, color: kSub)),
+          ),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _pickAndSendImg(ImageSource source) async {
+    final a = _a;
+    if (a == null) return;
+    try {
+      final p = await ImagePicker()
+          .pickImage(source: source, maxWidth: 1024, imageQuality: 82);
+      if (p == null) return;
+      final bytes = await p.readAsBytes();
+      // 图片存应用 Documents/chatimg（不进 SharedPreferences，避免消息库膨胀）
+      final dir = await getApplicationDocumentsDirectory();
+      final cdir = Directory('${dir.path}/chatimg');
+      await cdir.create(recursive: true);
+      final f = File('${cdir.path}/c${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await f.writeAsBytes(bytes);
+      final path = f.path;
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final text = _inp.text.trim();
+      _inp.clear();
+      FocusManager.instance.primaryFocus?.unfocus();
+      try { HapticFeedback.lightImpact(); } catch (_) {}
+      final cid = 'c${DateTime.now().millisecondsSinceEpoch}-${++_cidSeq}';
+      final m = Msg(
+          role: 'me', content: text, imgUrl: path, st: 'pending',
+          time: DateTime.now().millisecondsSinceEpoch, cid: cid);
+      setState(() {
+        _msgs.add(m);
+        _fresh.add(cid);
+      });
+      await MsgsLocal.save('baona', _msgs);
+      _jumpBottom(instant: true);
+      Future.delayed(const Duration(milliseconds: 380), () => _jumpBottom(instant: true));
+      final r = await a.send({'text': text, 'img': dataUrl, 'cid': cid});
+      if (mounted) {
+        setState(() => m.st = r['ok'] == true ? 'ok' : 'failed');
+        await MsgsLocal.save('baona', _msgs);
+        if (r['ok'] != true) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('图片发送失败：${r['error'] ?? '未知错误'}'),
+              behavior: SnackBarBehavior.floating));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('选图失败：$e'), behavior: SnackBarBehavior.floating));
+      }
+    }
+  }
+
+  // ---------- ★27.0.28 语音条播放/停止 ----------
+  Future<void> _playVoice(Msg m) async {
+    final v = m.voice;
+    if (v == null || v.isEmpty) return;
+    try {
+      if (_playingVoice == v) {
+        await _voicePlayer.stop();
+        if (mounted) setState(() => _playingVoice = null);
+        return;
+      }
+      await _voicePlayer.stop();
+      if (mounted) setState(() => _playingVoice = v);
+      if (v.startsWith('http')) {
+        await _voicePlayer.play(UrlSource(v));
+      } else {
+        await _voicePlayer.play(DeviceFileSource(v));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _playingVoice = null);
+    }
+  }
+
+  void _openImageViewer(String src) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _ImageViewer(src: src),
+    ));
   }
 
   // ---------- 头像 ----------
@@ -878,6 +1014,21 @@ class _MsgPageState extends State<MsgPage> {
                     ),
                   ),
                   const SizedBox(width: 6),
+                  // ★27.0.28 发照片：相册/拍照
+                  GestureDetector(
+                    onTap: _showImgSheet,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: kBg2,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0x26FFFFFF), width: 0.8),
+                      ),
+                      child: const Icon(Icons.add_photo_alternate_outlined, size: 20, color: kText),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
                       controller: _inp,
@@ -934,10 +1085,76 @@ class _MsgPageState extends State<MsgPage> {
 
   Widget _row(Msg m, String herAv, String myAv) {
     final me = m.role == 'me';
+    final tColor = me ? Colors.white : kText;
+    final subColor = me ? Colors.white.withValues(alpha: 0.7) : kSub;
+    // ★27.0.28 图片（本地文件路径或 dataURL）
+    Widget? imgPart;
+    final src = m.imgUrl ?? '';
+    if (src.isNotEmpty) {
+      ImageProvider? prov;
+      if (src.startsWith('data:')) {
+        final i = src.indexOf(',');
+        if (i > 0) {
+          try {
+            prov = MemoryImage(base64Decode(src.substring(i + 1)));
+          } catch (_) {}
+        }
+      } else {
+        prov = FileImage(File(src));
+      }
+      if (prov != null) {
+        imgPart = GestureDetector(
+          onTap: () => _openImageViewer(src),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image(
+              image: prov,
+              width: 192,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => Container(
+                width: 192,
+                height: 120,
+                color: Colors.black12,
+                child: const Icon(Icons.broken_image_outlined, color: kSub),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    // ★27.0.28 语音条（她的本地合成语音，点击播放/停止）
+    Widget? voicePart;
+    final vp = m.voice ?? '';
+    if (vp.isNotEmpty) {
+      final playing = _playingVoice == vp;
+      voicePart = GestureDetector(
+        onTap: () => _playVoice(m),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(playing ? Icons.stop_rounded : Icons.graphic_eq_rounded,
+              size: 22, color: tColor),
+          const SizedBox(width: 8),
+          ...[4.0, 7.0, 11.0, 7.0, 4.0].map((h) => Container(
+                width: 2.5,
+                height: h,
+                margin: const EdgeInsets.symmetric(horizontal: 1.6),
+                decoration: BoxDecoration(
+                  color: tColor.withValues(alpha: playing ? 0.95 : 0.55),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              )),
+          const SizedBox(width: 8),
+          Text(playing ? '播放中' : '语音',
+              style: TextStyle(fontSize: 12.5, color: subColor)),
+        ]),
+      );
+    }
+    final hasText = m.content.trim().isNotEmpty;
     final bubble = Container(
       // ★v27.0.9 文字太窄：0.68 → 0.78（微信级舒适宽度，头像+留白之外几乎铺满）
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: EdgeInsets.fromLTRB(
+          imgPart != null ? 8 : 14, 8, imgPart != null ? 8 : 14, imgPart != null ? 8 : 10),
       decoration: BoxDecoration(
         color: me ? kAccent : kBg2,
         borderRadius: BorderRadius.only(
@@ -948,12 +1165,17 @@ class _MsgPageState extends State<MsgPage> {
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text(m.content,
-            style: TextStyle(
-                fontSize: app.fontSize, height: 1.35, color: me ? Colors.white : kText)),
+        if (imgPart != null) imgPart,
+        if (imgPart != null && hasText) const SizedBox(height: 6),
+        if (hasText)
+          Text(m.content,
+              style: TextStyle(fontSize: app.fontSize, height: 1.35, color: tColor)),
+        if (voicePart != null) ...[
+          if (hasText || imgPart != null) const SizedBox(height: 6),
+          voicePart,
+        ],
         const SizedBox(height: 3),
-        Text(_hm(m.time ?? 0),
-            style: TextStyle(fontSize: 10, color: me ? Colors.white.withValues(alpha: 0.7) : kSub)),
+        Text(_hm(m.time ?? 0), style: TextStyle(fontSize: 10, color: subColor)),
         if (m.st == 'failed')
           const Padding(
             padding: EdgeInsets.only(top: 2),
@@ -1081,6 +1303,54 @@ class _DrawerBtn extends StatelessWidget {
           Text(label,
               style: const TextStyle(fontSize: 11, color: kSub, fontWeight: FontWeight.w500)),
         ]),
+      ),
+    );
+  }
+}
+
+/// ★27.0.28 全屏看图：黑底 + 双指缩放，点击关闭
+class _ImageViewer extends StatelessWidget {
+  const _ImageViewer({required this.src});
+  final String src;
+
+  @override
+  Widget build(BuildContext context) {
+    ImageProvider? prov;
+    if (src.startsWith('data:')) {
+      final i = src.indexOf(',');
+      if (i > 0) {
+        try {
+          prov = MemoryImage(base64Decode(src.substring(i + 1)));
+        } catch (_) {}
+      }
+    } else {
+      prov = FileImage(File(src));
+    }
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: SafeArea(
+          child: Stack(children: [
+            Center(
+              child: prov == null
+                  ? const Text('图片无法加载', style: TextStyle(color: Colors.white70))
+                  : InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4.0,
+                      child: Image(image: prov!, fit: BoxFit.contain),
+                    ),
+            ),
+            Positioned(
+              top: 8,
+              right: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
