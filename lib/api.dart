@@ -21,6 +21,9 @@ class Store {
 
   static String get baseUrl => _p.getString('baseUrl') ?? '';
   static Future<void> setBaseUrl(String v) => _p.setString('baseUrl', v);
+  // ★v27.0.29 通用键值存取（电脑 Agent 独立会话历史等临时数据用）
+  static String getString(String k) => _p.getString(k) ?? '';
+  static Future<void> setString(String k, String v) => _p.setString(k, v);
   static String get token => _p.getString('token') ?? '';
   static Future<void> setToken(String v) => _p.setString('token', v);
   static String get pwd => _p.getString('pwd') ?? '';

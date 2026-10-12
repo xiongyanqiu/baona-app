@@ -5,6 +5,7 @@
 //   主页只负责"她"，点她的大头像 = 开始聊天，画面和点击逻辑都简洁。
 import 'package:flutter/material.dart';
 
+import 'agent_chat.dart'; // ★v27.0.29 电脑 Agent 独立会话
 import 'api.dart';
 import 'main.dart';
 import 'novel.dart'; // ★27.0.16.8 番茄小说
@@ -52,6 +53,11 @@ class _BaonaHomeState extends State<BaonaHome> {
   // ★27.0.16.8 番茄小说：push 全屏网页阅读页
   void _openNovel() {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NovelPage()));
+  }
+
+  // ★v27.0.29 电脑 Agent：独立会话（纯 agent，非包娜），在「开始聊天」旁边
+  void _openPcAgent() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AgentChatPage()));
   }
 
   // ★27.0.16.2 万物互联：外圈卫星 = 设置里配置过的可连接设备（电脑/安卓），在线亮青绿、离线灰
@@ -207,21 +213,40 @@ class _BaonaHomeState extends State<BaonaHome> {
           delay: 230,
           dy: 8,
           fromAngle: 0.08,
-          child: GestureDetector(
-            onTap: widget.onOpenChat,
-            child: GlassSurface(
-              radius: 16,
-              blur: kBlur,
-              elevated: true,
-              pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
-                SizedBox(width: 6),
-                Text('开始聊天',
-                    style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
-              ]),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            GestureDetector(
+              onTap: widget.onOpenChat,
+              child: GlassSurface(
+                radius: 16,
+                blur: kBlur,
+                elevated: true,
+                pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.chat_bubble_outline, size: 15, color: kAccent),
+                  SizedBox(width: 6),
+                  Text('开始聊天',
+                      style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+                ]),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            // ★v27.0.29 电脑 Agent 入口（独立对话，非包娜）
+            GestureDetector(
+              onTap: _openPcAgent,
+              child: GlassSurface(
+                radius: 16,
+                blur: kBlur,
+                elevated: true,
+                pad: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.computer_outlined, size: 15, color: Color(0xFF34C759)),
+                  SizedBox(width: 6),
+                  Text('电脑 Agent',
+                      style: TextStyle(fontSize: 13.5, color: kText, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ]),
         ),
         const Spacer(flex: 3),
         // 底部统计 Bento 卡 ★v27.0.14.9：从一行均分改成便当盒——中间主卡（聊过的消息）更大更高带强调色，
