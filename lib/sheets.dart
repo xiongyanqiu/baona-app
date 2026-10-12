@@ -299,7 +299,12 @@ class _SettingsState extends State<_Settings> {
         }),
 
         const Sec('她主动找你'),
-        SwitchRow('允许她主动发消息', _b('autoChatEnabled'), (v) => _patch({'autoChatEnabled': v})),
+        // ★27.0.26 修"假开关"：原来写 herSet，发送逻辑根本不读；改为与「我的」设置页同一个真开关 Store.autoChatEnabled
+        SwitchRow('允许她主动发消息', Store.autoChatEnabled, (v) async {
+          await Store.setAutoChatEnabled(v);
+          if (v) Store.setNextAutoAt(0);
+          setState(() {});
+        }),
         SwitchRow('用你们的长记忆', _b('useMemories', true), (v) => _patch({'useMemories': v})),
         SwitchRow('她会发表情', _b('emoteEnabled', true), (v) => _patch({'emoteEnabled': v})),
         const Sec('作息（她这个点会犯困）'),

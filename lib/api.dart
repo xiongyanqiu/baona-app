@@ -90,19 +90,6 @@ class Store {
   static bool get embEnabled => _p.getBool('local.emb') ?? true;
   static Future<void> setEmbEnabled(bool v) => _p.setBool('local.emb', v);
 
-  // ★27.0.16.14 主动消息：她隔一段时间随机主动发一句（间隔分钟 ±50% 随机，睡眠时段不打扰）
-  // 注意：sleepStart/sleepEnd（String "23:00"）是旧的定时消息睡眠配置，主动消息用 int 分钟版 proSleep*
-  static bool get proactiveOn => _p.getBool('local.proactive') ?? false;
-  static Future<void> setProactiveOn(bool v) => _p.setBool('local.proactive', v);
-  static int get proactiveGap => _p.getInt('local.proactiveGap') ?? 120; // 分钟
-  static Future<void> setProactiveGap(int v) => _p.setInt('local.proactiveGap', v);
-  static int get proSleepStart => _p.getInt('local.proSleepStart') ?? 0; // 0-1439 分钟（0:00）
-  static int get proSleepEnd => _p.getInt('local.proSleepEnd') ?? 0;
-  static Future<void> setProSleep(int s, int e) async {
-    await _p.setInt('local.proSleepStart', s);
-    await _p.setInt('local.proSleepEnd', e);
-  }
-
   // ★27.0.16.15 语音回复：她回复时顺带生成一条语音条（iOS 离线 TTS，不联网不花钱）
   static bool get voiceReply => _p.getBool('local.voiceReply') ?? false;
   static Future<void> setVoiceReply(bool v) => _p.setBool('local.voiceReply', v);
@@ -130,6 +117,20 @@ class Store {
   }
   static Future<void> setTimers(List<Map<String, dynamic>> v) =>
       _p.setString('local.timers', jsonEncode(v));
+
+  // ★27.0.26 定时触发记录（单次定时发完即删后仍可查；只留 24 小时内的，最多 30 条）
+  // [{id, content, firedAt(epochMs), repeat}]
+  static List<Map<String, dynamic>> get timerLog {
+    try {
+      final s = _p.getString('local.timerLog');
+      if (s == null || s.isEmpty) return [];
+      final j = jsonDecode(s);
+      if (j is List) return j.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {}
+    return [];
+  }
+  static Future<void> setTimerLog(List<Map<String, dynamic>> v) =>
+      _p.setString('local.timerLog', jsonEncode(v));
 
   // ★27.0.16.6 主动消息：开关 + 随机触发范围（分钟，完全自定义无预设限制）+ 睡眠时间（HH:mm）
   static bool get autoChatEnabled => _p.getBool('local.autoChat') ?? false;
@@ -210,7 +211,7 @@ const Map<String, dynamic> kDefCfg = {
 
 /* ------------------------------- 数据模型 ------------------------------- */
 class Msg {
-  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId, this.groupId, this.name});
+  Msg({required this.role, required this.content, this.sticker, this.voice, this.idx, this.time, this.st = 'ok', this.cid, this.detail, this.roleId, this.groupId, this.name, this.kind});
   String role;          // me / assistant
   String content;
   String? sticker;      // /emoji/xxx.jpg 里的相对名
@@ -224,6 +225,7 @@ class Msg {
   String? roleId;        // ★独立角色会话标识（空 = 包娜主对话）
   String? groupId;       // ★群聊会话标识（空 = 单聊）
   String? name;         // ★群聊成员显示名（群消息才带）
+  String? kind;         // ★27.0.26 消息来源：null=正常对话 / 'timer'=定时到点 / 'auto'=主动消息 / 'timerTip'=定时设定确认
 
   factory Msg.fromJson(Map m) => Msg(
         role: '${m['role'] ?? 'assistant'}',
@@ -237,6 +239,7 @@ class Msg {
         roleId: _s(m['roleId']),
         groupId: _s(m['groupId']),
         name: _s(m['name']),
+        kind: _s(m['kind']),
       );
 
   static String? _s(dynamic v) {
@@ -263,6 +266,7 @@ class Msg {
         if (roleId != null) 'roleId': roleId,
         if (groupId != null) 'groupId': groupId,
         if (name != null) 'name': name,
+        if (kind != null) 'kind': kind,
       };
 }
 

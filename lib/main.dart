@@ -315,8 +315,7 @@ class Boot extends StatelessWidget {
         } catch (_) {}
       });
     }
-    // ★27.0.16.14 主动消息：开了就启动她"隔段时间主动找你"的调度
-    brain.startProactiveIfEnabled();
+    // ★27.0.26 旧版主动消息调度已删除：统一由 brain 内 60s 心跳 _maybeAutoChat 驱动
     // 有电脑地址/令牌 → 再连电脑（娱乐功能用；聊天/记忆/人设已经走本地大脑了）
     final base = Store.baseUrl;
     if (base.isNotEmpty && Store.token.isNotEmpty) {

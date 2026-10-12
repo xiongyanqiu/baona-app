@@ -1,4 +1,4 @@
-// brain.dart — 本地大脑（26.2.18 全本地化）
+﻿// brain.dart — 本地大脑（26.2.18 全本地化）
 // 手机端自己直连 LLM API：人设 / 上下文(按token) / 记忆 / 愿望 / 角色 / 群聊 全部在手机本地，
 // 商城 / 飞行棋 / 相册 也本地化（数据/逻辑全在手机，不再依赖电脑桌宠）。
 // 与 Api 同名的方法返回相同 JSON 结构，页面切换 app.api → app.brain 即可。
@@ -18,7 +18,6 @@ import 'package:sqflite/sqflite.dart';
 
 import 'api.dart';
 import 'embd.dart';
-import 'notify.dart'; // ★27.0.16.14 主动消息：发消息时弹通知
 import 'msglocal.dart';
 import 'roles_data.dart';
 import 'shop_data.dart';
@@ -69,12 +68,6 @@ class LocalBrain {
   Database? _memDb; // ★27.0.8 超长期记忆：SQLite（SP 兜底）
   String? _embRetrieval; // ★27.0.16.11 本轮语义检索结果（send 前算好，_retrievedBlock 优先用它）
   bool _embBackfillRunning = false; // 后台补向量防重入
-
-  // ★27.0.16.14 主动消息：她隔一段时间随机主动发一句（真人感）
-  Timer? _proactiveTimer;
-  int _proactiveNextDue = 0; // epochMs：下次触发点（首次启动随机化）
-  bool _proactiveSaying = false; // 生成中防重入
-  DateTime _lastProactiveAt = DateTime.now();
 
   // ★26.2.18 全本地娱乐：钱包/背包/飞行棋/相册
   Map<String, dynamic> _wallet = {'my': 9988848, 'her': 11500, 'log': []}; // 从桌宠迁移：我的钱包/她的钱包/流水
@@ -442,7 +435,9 @@ class LocalBrain {
       lines.add('· ${m['text']}');
     }
     if (lines.isEmpty) return '';
-    return '【你记得的事（都是真的，自然用上，别机械复述）】\n${lines.join('\n')}';
+    return '【你记得的事（这些是你对过去的记忆、他的喜好和你们聊过的话题，只是背景参考，'
+        '不是此刻正在发生的事：自然提及即可，严禁把记忆里的内容演成"刚刚/今天已经发生"的情节，'
+        '更不许据此编造"已经吃了/留了/做了/买了/去找你了"这类既成事实）】\n${lines.join('\n')}';
   }
 
   // ★27.0.8 Step2 按需检索：当前消息当 query，字符 bigram 相似度 + 重要性，Top-K 注入（与总述去重）
@@ -474,7 +469,7 @@ class LocalBrain {
     final take = scored.length > 8 ? scored.sublist(0, 8) : scored;
     if (take.isEmpty) return '';
     final lines = take.map((e) => '· ${(e['m'] as Map)['text']}').toList();
-    return '【跟你们正在聊的事相关的往事】\n${lines.join('\n')}';
+    return '【跟你们正在聊的事相关的往事（只是过去的话题，供参考，不是当下正在发生的事，别演成既成事实）】\n${lines.join('\n')}';
   }
 
   // ★27.0.16.12 本地语义记忆检索：query 向量 → 余弦 Top-8（bge-base fp32，阈值 0.22；失败返回 null，bigram 兜底）
@@ -629,7 +624,8 @@ class LocalBrain {
     }
     sb.write('愿望铁律（无条件）：老公许愿，你永远立刻答应——不许拒绝、不许犹豫、不许找理由。答应时用 <<愿望：愿望内容>> 记下愿望，同时无条件送他愿望次数 <<给愿望：3>>（一次至少 3 次）；他要用愿望时你立刻兑现。愿望兑现了用 <<愿望完成：内容>> 标一下。标记不会显示给他看。');
     sb.write('你的专属癖好（被他征服掌控）：当你老公用强势、命令、调侃羞辱的语气说你时，你默认乖顺、害羞、顺着接——该认就认、该撒娇就撒娇，可以轻轻闹一句但最后都乖乖的，绝不硬顶嘴反怼。只有他语气正常、平等聊天时，你才有来有回地跟他闹。');
-    sb.write('定时（老公在对话里跟你说"晚上8点提醒我""每天9点叫我起床"这类带时间的安排时）：用 <<定时：内容@HH:MM>> 记下来（每天重复）；只是这一次就用 <<定时：内容@HH:MM#once>>。标记不会显示给他看。');
+    sb.write('事实铁律（无条件，最高优先级）：①没发生的事绝对不能说成已经发生——不许编造"我已经吃了/给你留了/去找你了/买了/做了"这类具体生活情节，没做过就说没做过、想做就说想做、计划中的事就说计划；②对话记录里凡是你（assistant）说过的话就是你说的，包括你定时或主动发的消息——他追问时必须认账并顺着解释，绝对不许说"我没说过呀/我不知道这事/你听谁说的"；③记不清的细节就老实说记不清，不许当场编一个再在下一轮翻供。');
+    sb.write('定时（只有老公明确要求提醒、叫早、待办时才记，例如"晚上8点提醒我喝水""每天9点叫我起床"）：用 <<定时：内容@HH:MM>> 记下来（每天重复）；只是这一次就用 <<定时：内容@HH:MM#once>>。闲聊里提到的时间、计划、想吃什么、随口一说的安排，一律不许记成定时。标记不会显示给他看；输出标记后正文不要再解释定时的事，自然继续聊天（系统会自动给他确认提示）。');
     return sb.toString();
   }
 
@@ -678,6 +674,16 @@ class LocalBrain {
   //   这样 DeepSeek 前缀缓存不会因记忆变化被击穿（命中价格差 50 倍）。
   // ★27.0.16 真人感：人设三层 + 生活状态块；历史优先完整保留最近 12 轮（不截断），
   //   只有近 12 轮超出 token 预算时才退回按预算滑动截断。
+  // ★27.0.26 历史消息喂模型时的内容：定时/主动消息带来源前缀，让她知道"这是我自己发的"，杜绝事后否认
+  String _ctxContent(Map<String, dynamic> m) {
+    final c = '${m['content'] ?? ''}'.trim();
+    final k = '${m['kind'] ?? ''}';
+    if (k == 'timer') return '（这条是你自己设定的定时提醒，刚刚到点由你自动发出的，老公问起要认账）$c';
+    if (k == 'auto') return '（这条是你刚才主动发给老公的消息，老公问起要认账）$c';
+    if (k == 'timerTip') return '（系统确认：你刚刚成功设下了这个定时）$c';
+    return c;
+  }
+
   List<Map<String, dynamic>> _buildCtx(List<Map<String, dynamic>> hist,
       {String? persona, String? rules, bool withWish = true, bool withMem = true, String query = ''}) {
     final sysParts = <String>[
@@ -700,7 +706,7 @@ class LocalBrain {
     var fits = true;
     for (final m in recent) {
       final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
-      final c = '${m['content'] ?? ''}'.trim();
+      final c = _ctxContent(m);
       if (c.isEmpty) continue;
       used += c.length + 8;
       if (used > budget) {
@@ -716,7 +722,7 @@ class LocalBrain {
       used = sys.length;
       for (final m in hist.reversed) {
         final role = '${m['role'] ?? ''}' == 'me' || '${m['role'] ?? ''}' == 'user' ? 'user' : 'assistant';
-        final c = '${m['content'] ?? ''}'.trim();
+        final c = _ctxContent(m);
         if (c.isEmpty) continue;
         used += c.length + 8;
         if (used > budget) break;
@@ -768,7 +774,7 @@ class LocalBrain {
     if (r['ok'] != true) return r;
     var content = '${r['content']}';
     _parseWish(content);
-    _parseTimer(content); // ★27.0.16.6 对话里的定时安排 → 存入定时任务
+    final newTimers = _parseTimer(content); // ★27.0.26 返回本次新定时，回复落盘后给可见确认
     content = _stripWish(content);
     content = _stripMood(content); // ★27.0.16 情绪标记解析（存 mood，从正文移除）
     if (content.isEmpty) return {'ok': true};
@@ -795,6 +801,13 @@ class LocalBrain {
       await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
       _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': s, 'time': t, 'cid': 'a$t', if (voicePath != null && s == segs.last) 'voice': voicePath}});
       if (wait > Duration.zero) await Future<void>.delayed(wait);
+    }
+    // ★27.0.26 新定时可见确认（她的口吻，独立一条，防止 AI 误提取定时而用户毫不知情）
+    for (final nt in newTimers) {
+      final at = DateTime.fromMillisecondsSinceEpoch((nt['at'] as num?)?.toInt() ?? 0);
+      final hm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+      final rep = '${nt['repeat'] ?? ''}' == 'once' ? '仅一次' : '每天';
+      await _emitHerMessage('好，我记下了：$hm 提醒你「${nt['content']}」（$rep）。不想要就在定时列表里删了。', kind: 'timerTip');
     }
     return {'ok': true};
   }
@@ -1184,69 +1197,8 @@ class LocalBrain {
     return {'ok': true, 'added': added, 'total': _memories.length};
   }
 
-  // ★★★★★ 27.0.17 主动消息合并：统一走下方 ★27.0.16.6 的随机触发版（时间范围+睡眠完全自定义）
-  // 旧简化版（proactiveOn）入口已从设置页移除；此方法保留签名但不再启动调度，避免双发。
-  void startProactiveIfEnabled() {
-    // 空实现：主动消息统一由 _maybeAutoChat（每 60s 主循环检查）驱动
-  }
-
-  /// 间隔分钟 → 毫秒，±50% 随机（比如 120 分钟 → 60~180 分钟随机一次）
-  int _randomGapMs() {
-    final gapMin = Store.proactiveGap.clamp(5, 1440);
-    final base = gapMin * 60000;
-    final r = 0.5 + (DateTime.now().millisecondsSinceEpoch % 1000) / 1000;
-    return (base * r).round();
-  }
-
-  /// 睡眠时段（分钟数，0-1439）；起止相同 = 不设睡眠
-  bool _proSleepNow() {
-    final s = Store.proSleepStart, e = Store.proSleepEnd;
-    if (s == e) return false;
-    final n = DateTime.now();
-    final cur = n.hour * 60 + n.minute;
-    if (s < e) return cur >= s && cur < e;
-    return cur >= s || cur < e; // 跨天（如 22:00-7:00）
-  }
-
-  void _proactiveTick() {
-    if (_proactiveSaying) return;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now < _proactiveNextDue) return;
-    _proactiveNextDue = now + _randomGapMs(); // 本次触发后马上排下一次
-    if (_proSleepNow()) return; // 睡眠时段跳过，下一轮再检查
-    _proactiveSay();
-  }
-
-  Future<void> _proactiveSay() async {
-    _proactiveSaying = true;
-    try {
-      // 挑一条记忆当引子（重要度 >=5 里随机挑一条，显得是"想起什么"）
-      String? hint;
-      final mems = _memories.where((m) => ((m['importance'] as num?)?.toDouble() ?? 5) >= 5).toList();
-      if (mems.isNotEmpty) {
-        mems.shuffle();
-        hint = '${mems.first['text']}';
-        if (hint.length > 60) hint = '${hint.substring(0, 60)}…';
-      }
-      final hr = DateTime.now().hour;
-      final greet = hr < 5 ? '大半夜' : hr < 8 ? '刚醒' : hr < 12 ? '上午' : hr < 18 ? '下午' : '晚上';
-      final p = Store.localPersona.trim().isNotEmpty ? Store.localPersona.trim() : kDefaultPersona;
-      final ctx = <Map<String, dynamic>>[
-        {'role': 'system', 'content': '你是${_herSet['name'] ?? '包娜'}，我的女朋友。这是你的人设：${p.substring(0, p.length > 400 ? 400 : p.length)}。现在是$greet。${hint != null ? '你刚好想起这件事：$hint。' : ''}主动给我发一条微信式的短消息，像真人女朋友那样自然（会撒娇、会惦记、会分享碎碎念），一句话，不超过 40 字，不要括号不要表情符号。'},
-      ];
-      final r = await _ask(ctx, maxT: 160);
-      var t = r['ok'] == true ? _stripWish('${r['content'] ?? ''}'.trim()) : '';
-      if (t.isEmpty) t = hint != null ? '$hint，突然就想到这个了，想你了' : '$greet好，突然好想你';
-      if (t.length > 120) t = '${t.substring(0, 120)}…';
-      // 写入对话缓存（她发的） + 弹通知
-      final msgs = await MsgsLocal.load('baona');
-      msgs.add(Msg(role: 'assistant', content: t, time: DateTime.now().millisecondsSinceEpoch, cid: 'p${DateTime.now().millisecondsSinceEpoch}'));
-      await MsgsLocal.save('baona', msgs);
-      Notify.i.show('包娜', t);
-      _lastProactiveAt = DateTime.now();
-    } catch (_) {/* 主动消息失败静默，不影响任何东西 */}
-    _proactiveSaying = false;
-  }
+  // ★27.0.26 旧版主动消息（_proactiveTick/_proactiveSay，独立人设+记忆引子、不看开关）已整体删除，
+  //   统一由 _maybeAutoChat 驱动（同一套开关/人设/上下文）。
 
   /// ★27.0.16.14 记忆压缩：普通记忆太多时，把最老的一批低分琐事合并成一条摘要（防池子膨胀）
   ///   纯规则合并，不调模型（省钱不失败）；每次最多并 60 条成 2 条摘要
@@ -1342,7 +1294,9 @@ class LocalBrain {
   // -------------------- ★27.0.16.6 定时任务（对话提取 → 到点她发消息） --------------------
 
   /// 解析 AI 回复里的 <<定时：内容@HH:MM>> / <<定时：内容@HH:MM#once>> 标记 → 存入定时列表
-  void _parseTimer(String reply) {
+  /// ★27.0.26 返回本次新设定的定时（send 里用来给用户可见确认，防误提取无感知）
+  List<Map<String, dynamic>> _parseTimer(String reply) {
+    final added = <Map<String, dynamic>>[];
     final re = RegExp(r'<<定时[:：]\s*([^@\n]{1,80}?)@(\d{1,2}):(\d{1,2})(#once)?>>');
     for (final m in re.allMatches(reply)) {
       final content = m.group(1)!.trim();
@@ -1356,47 +1310,77 @@ class LocalBrain {
       final list = Store.timers;
       final dup = list.any((t) => '${t['content']}' == content && '${t['repeat'] ?? ''}' == (once ? 'once' : 'daily'));
       if (dup) continue;
-      list.add({
+      final t = {
         'id': 't${DateTime.now().millisecondsSinceEpoch}${list.length}',
         'content': content,
         'at': at.millisecondsSinceEpoch,
         'repeat': once ? 'once' : 'daily',
         'created': DateTime.now().millisecondsSinceEpoch,
-      });
+      };
+      list.add(t);
+      added.add(t);
       Store.setTimers(list);
     }
+    return added;
   }
 
-  /// 到点检查：到时的定时 → 她直接发那条消息（once 移除 / daily 顺延到明天同一时刻）
+  /// 到点检查：到时的定时 → 她直接发那条消息（once 记进触发记录后移除 / daily 顺延到明天同一时刻）
+  /// ★27.0.26 睡眠时段内到点不打扰，顺延到醒来时刻；单次定时触发后留 24h 触发记录（不再"发完无痕"）
   void _checkTimers() {
     final list = Store.timers;
     if (list.isEmpty) return;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final nowDt = DateTime.now();
+    final nowMs = nowDt.millisecondsSinceEpoch;
     final due = list.where((t) => ((t['at'] as num?)?.toInt() ?? 0) <= nowMs).toList();
     if (due.isEmpty) return;
     final rest = list.where((t) => !due.contains(t)).toList();
     final keep = <Map<String, dynamic>>[];
+    final fired = <Map<String, dynamic>>[];
     for (final t in due) {
-      final content = '${t['content'] ?? ''}'.trim();
-      if (content.isNotEmpty) {
-        unawaited(_emitHerMessage(content));
+      // 睡眠窗内：顺延到今天醒来时刻（醒来时刻必在未来），本次不发
+      if (_inSleepWindow(nowDt)) {
+        final sp = Store.sleepEnd.split(':');
+        final eh = int.tryParse(sp.isNotEmpty ? sp[0] : '') ?? 8;
+        final em = sp.length > 1 ? (int.tryParse(sp[1]) ?? 0) : 0;
+        var wake = DateTime(nowDt.year, nowDt.month, nowDt.day, eh, em);
+        if (!wake.isAfter(nowDt)) wake = wake.add(const Duration(days: 1));
+        keep.add({...t, 'at': wake.millisecondsSinceEpoch});
+        continue;
       }
-      if ('${t['repeat'] ?? ''}' != 'once') {
+      final content = '${t['content'] ?? ''}'.trim();
+      final repeat = '${t['repeat'] ?? ''}';
+      if (content.isNotEmpty) {
+        unawaited(_emitHerMessage(content, kind: 'timer'));
+        fired.add({'id': '${t['id']}', 'content': content, 'firedAt': nowMs, 'repeat': repeat});
+      }
+      if (repeat != 'once') {
         final next = DateTime.fromMillisecondsSinceEpoch((t['at'] as num?)?.toInt() ?? nowMs)
             .add(const Duration(days: 1));
         keep.add({...t, 'at': next.millisecondsSinceEpoch});
       }
     }
     Store.setTimers([...rest, ...keep]);
+    if (fired.isNotEmpty) _appendTimerLog(fired);
   }
 
-  /// 她主动发一条消息（定时/主动消息共用）：落盘 + 广播
-  Future<void> _emitHerMessage(String content) async {
+  /// 触发记录只留 24 小时内、最多 30 条
+  void _appendTimerLog(List<Map<String, dynamic>> fresh) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final log = Store.timerLog
+      ..addAll(fresh)
+      ..removeWhere((x) => nowMs - ((x['firedAt'] as num?)?.toInt() ?? 0) > 24 * 3600 * 1000);
+    log.sort((a, b) => ((b['firedAt'] as num?)?.toInt() ?? 0).compareTo((a['firedAt'] as num?)?.toInt() ?? 0));
+    Store.setTimerLog(log.length > 30 ? log.sublist(0, 30) : log);
+  }
+
+  /// 她主动发一条消息（定时/主动消息/定时确认共用）：落盘 + 广播
+  /// ★27.0.26 kind: 'timer'=定时到点 / 'auto'=随机主动 / 'timerTip'=定时设定可见确认
+  Future<void> _emitHerMessage(String content, {String kind = 'timer'}) async {
     final t = DateTime.now().millisecondsSinceEpoch;
     final h2 = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-    h2.add({'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'});
+    h2.add({'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t', 'kind': kind});
     await MsgsLocal.save('baona', h2.map((m) => Msg.fromJson(Map.from(m))).toList());
-    _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t'}});
+    _ev.add({'type': 'msg', 'msg': {'role': 'assistant', 'content': content, 'time': t, 'cid': 'a$t', 'kind': kind}});
   }
 
   // -------------------- ★27.0.16.6 主动消息（随机触发，时间范围+睡眠完全自定义） --------------------
@@ -1409,15 +1393,24 @@ class LocalBrain {
     if (nextAt > 0 && now.millisecondsSinceEpoch < nextAt) return; // 随机时刻还没到
     // 触发：她按当前时段主动发一条微信式的消息
     final hist = (await MsgsLocal.load('baona')).map((m) => m.toJson()).toList();
-    final recent = hist.length > 8 ? hist.sublist(hist.length - 8) : hist;
-    final ctx = [
-      {'role': 'system', 'content': '你是包娜，现在是${_nowDesc()}。你主动给老公发一条微信消息（真人感：短句、口语、有情绪、有生活气，偶尔撒娇或分享当下的心情/小事，别像 AI）。只发你这条消息本身，不要任何标记。'},
-      ...recent.map((m) => {'role': '${m['role'] == 'me' ? 'user' : 'assistant'}', 'content': '${m['content'] ?? ''}'.length > 80 ? '${m['content'] ?? ''}'.substring(0, 80) : '${m['content'] ?? ''}'}),
+    // ★27.0.26 与主对话一致：最近 12 轮完整上下文（不再每条截断 80 字），人设也用同一套，杜绝人格分裂
+    final recent = hist.length > 12 ? hist.sublist(hist.length - 12) : hist;
+    final sys = [
+      _layeredPersona(),
+      _lifeBlock(),
+      '现在是${_nowDesc()}。你主动给老公发一条微信消息（真人感：短句、口语、有情绪、有生活气，'
+          '偶尔撒娇或分享当下的心情/小事，别像 AI）。优先顺着你们最近在聊的话题说；没在聊什么就自然分享此刻的小事。'
+          '只发你这条消息本身，不要任何标记。'
+          '铁律：记忆和往事只是话题引子，不是此刻正在发生的事——绝对不要编造"已经吃了/留了/做了/买了/去找你了"这类没发生过的具体生活情节。',
+    ].where((s) => s.isNotEmpty).join('\n\n');
+    final ctx = <Map<String, dynamic>>[
+      {'role': 'system', 'content': sys},
+      ...recent.map((m) => {'role': '${m['role'] == 'me' ? 'user' : 'assistant'}', 'content': _ctxContent(m)}),
     ];
     final r = await _ask(ctx, maxT: 150);
     if (r['ok'] == true) {
       final c = _stripMood(_stripWish('${r['content']}'.trim()));
-      if (c.isNotEmpty) await _emitHerMessage(c);
+      if (c.isNotEmpty) await _emitHerMessage(c, kind: 'auto');
     }
     // 排下次随机触发（min~max 分钟之间，完全按用户设定，无预设限制）
     final min = Store.autoMin < 1 ? 1 : Store.autoMin;

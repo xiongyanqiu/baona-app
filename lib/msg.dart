@@ -220,6 +220,17 @@ class _MsgPageState extends State<MsgPage> {
                     const Text('定时任务',
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
                     const Spacer(),
+                    if (timers.isNotEmpty)
+                      GestureDetector(
+                        onTap: () async {
+                          await Store.setTimers([]);
+                          setSt(() {});
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: Text('清空', style: TextStyle(fontSize: 14, color: Color(0xFFFF6B66))),
+                        ),
+                      ),
                     GestureDetector(
                       onTap: () => Navigator.pop(c),
                       child: Container(
@@ -286,6 +297,38 @@ class _MsgPageState extends State<MsgPage> {
                     }),
                   const SizedBox(height: 10),
                   _TimerAddBar(onAdded: () => setSt(() {})),
+                  // ★27.0.26 单次定时发完即删，事后无痕迹 → 这里留 24 小时触发记录
+                  Builder(builder: (_) {
+                    final log = Store.timerLog;
+                    if (log.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('最近触发（24 小时内）',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kSub)),
+                        const SizedBox(height: 8),
+                        ...log.take(10).map((x) {
+                          final at = DateTime.fromMillisecondsSinceEpoch((x['firedAt'] as num?)?.toInt() ?? 0);
+                          final hm = '${at.month}/${at.day} ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+                          final rep = '${x['repeat'] ?? ''}' == 'once' ? '单次' : '每天';
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 7),
+                            child: Row(children: [
+                              const Icon(Icons.check_circle_outline, size: 14, color: kSub),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text('${x['content'] ?? ''}',
+                                    style: const TextStyle(fontSize: 13.5),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('$hm · $rep', style: const TextStyle(fontSize: 11.5, color: kSub)),
+                            ]),
+                          );
+                        }),
+                      ]),
+                    );
+                  }),
                   const SizedBox(height: 4),
                 ]),
               );
