@@ -89,6 +89,11 @@ class Store {
   static int get thinkLevel => _p.getInt('local.thinkLevel') ?? 2;
   static Future<void> setThinkLevel(int v) => _p.setInt('local.thinkLevel', v);
 
+  // ★27.0.31 随机度 temperature：越高越鲜活、越敢自由发挥（默认 1.0）。
+  //   之前请求体没传这个参数，走模型默认值，偏保守，她容易端着。
+  static double get temperature => _p.getDouble('local.temperature') ?? 1.0;
+  static Future<void> setTemperature(double v) => _p.setDouble('local.temperature', v);
+
   // ★27.0.16.11 本地语义记忆检索（bge-small-zh 本地推理，失败自动降级关键词）
   static bool get embEnabled => _p.getBool('local.emb') ?? true;
   static Future<void> setEmbEnabled(bool v) => _p.setBool('local.emb', v);
