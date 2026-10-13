@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'api.dart';
+import 'main.dart'; // ★v27.0.30 app.bg 全局壁纸
 import 'theme.dart';
 
 class AgentChatPage extends StatefulWidget {
@@ -165,23 +166,28 @@ class _AgentChatPageState extends State<AgentChatPage> {
   Widget build(BuildContext context) {
     final base = _host();
     return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(children: [
-          _header(),
-          const Divider(height: 1, color: kLine),
-          Expanded(
-            child: _msgs.isEmpty
-                ? _empty(base)
-                : ListView.builder(
-                    controller: _sc,
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                    itemCount: _msgs.length,
-                    itemBuilder: (_, i) => _bubble(_msgs[i]),
-                  ),
-          ),
-          _input(),
-        ]),
+      backgroundColor: Colors.transparent, // ★v27.0.30 全局壁纸透出（原来 kBg 纯黑盖住壁纸）
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: SafeArea(
+          child: Column(children: [
+            _header(),
+            const Divider(height: 1, color: kLine),
+            Expanded(
+              child: _msgs.isEmpty
+                  ? _empty(base)
+                  : ListView.builder(
+                      controller: _sc,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                      itemCount: _msgs.length,
+                      itemBuilder: (_, i) => _bubble(_msgs[i]),
+                    ),
+            ),
+            _input(),
+          ]),
+        ),
       ),
     );
   }
@@ -293,7 +299,7 @@ class _AgentChatPageState extends State<AgentChatPage> {
   Widget _input() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      color: kBg,
+      color: Colors.transparent, // ★v27.0.30 输入栏也让壁纸透出（输入框本身半透明玻璃）
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Expanded(
           child: TextField(

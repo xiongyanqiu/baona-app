@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'main.dart'; // ★v27.0.30 app.bg 全局壁纸
 import 'novel_api.dart';
 import 'theme.dart';
 
@@ -18,99 +19,144 @@ class NovelPage extends StatefulWidget {
 
 class _NovelPageState extends State<NovelPage> {
   final TextEditingController _kw = TextEditingController();
+  int _tab = 0; // ★v27.0.30 书城：0 书架 / 1 书城
 
   @override
   Widget build(BuildContext context) {
     final shelf = Store.novelShelf;
     return Scaffold(
-      backgroundColor: kBg,
-      body: Column(children: [
-        GlassBar(
-          top: true,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-              child: Row(children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFFFFFF),
-                      borderRadius: BorderRadius.circular(19),
-                      border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+      backgroundColor: Colors.transparent, // ★v27.0.30 壁纸透出（原来 kBg 纯黑盖住壁纸）
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: Column(children: [
+          GlassBar(
+            top: true,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                child: Row(children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0x1AFFFFFF),
+                        borderRadius: BorderRadius.circular(19),
+                        border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new, size: 17, color: kText),
                     ),
-                    child: const Icon(Icons.arrow_back_ios_new, size: 17, color: kText),
                   ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('番茄小说',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-                ),
-                GestureDetector(
-                  onTap: _openSourceSettings,
-                  child: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFFFFFF),
-                      borderRadius: BorderRadius.circular(19),
-                      border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text('番茄小说',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                  ),
+                  GestureDetector(
+                    onTap: _openSourceSettings,
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0x1AFFFFFF),
+                        borderRadius: BorderRadius.circular(19),
+                        border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+                      ),
+                      child: const Icon(Icons.tune, size: 18, color: kText),
                     ),
-                    child: const Icon(Icons.tune, size: 18, color: kText),
                   ),
-                ),
-              ]),
-            ),
-          ),
-        ),
-        // 搜索框
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
-          child: GestureDetector(
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const NovelSearchPage())),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: const Color(0x0FFFFFFF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
+                ]),
               ),
-              child: const Row(children: [
-                Icon(Icons.search, size: 19, color: kSub),
-                SizedBox(width: 8),
-                Text('搜索番茄小说书名 / 作者', style: TextStyle(fontSize: 14.5, color: kSub)),
+            ),
+          ),
+          // ★v27.0.30 书架 / 书城 切换
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: const Color(0x14FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                _tabBtn('书架', 0),
+                _tabBtn('书城', 1),
               ]),
             ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Expanded(
-          child: shelf.isEmpty
-              ? const _ShelfEmpty()
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
-                  itemCount: shelf.length,
-                  itemBuilder: (_, i) {
-                    final b = shelf[i];
-                    return _ShelfCard(
-                      book: b,
-                      onTap: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => NovelDetailPage(book: b))),
-                      onRemove: () {
-                        final l = Store.novelShelf;
-                        l.removeWhere((x) => x['book_id'] == b['book_id']);
-                        Store.setNovelShelf(l);
-                        setState(() {});
-                      },
-                    );
-                  },
+          // 搜索框
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const NovelSearchPage())),
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0x0FFFFFFF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0x14FFFFFF), width: 0.8),
                 ),
+                child: const Row(children: [
+                  Icon(Icons.search, size: 19, color: kSub),
+                  SizedBox(width: 8),
+                  Text('搜索番茄小说书名 / 作者', style: TextStyle(fontSize: 14.5, color: kSub)),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: _tab == 0
+                ? (shelf.isEmpty
+                    ? const _ShelfEmpty()
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                        itemCount: shelf.length,
+                        itemBuilder: (_, i) {
+                          final b = shelf[i];
+                          return _ShelfCard(
+                            book: b,
+                            onTap: () => Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => NovelDetailPage(book: b))),
+                            onRemove: () {
+                              final l = Store.novelShelf;
+                              l.removeWhere((x) => x['book_id'] == b['book_id']);
+                              Store.setNovelShelf(l);
+                              setState(() {});
+                            },
+                          );
+                        },
+                      ))
+                : const _BookCityView(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _tabBtn(String label, int idx) {
+    final on = _tab == idx;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _tab = idx),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on ? const Color(0xFF3A3A3E) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: on ? kText : kSub)),
         ),
-      ]),
+      ),
     );
   }
 
@@ -207,8 +253,12 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
-      body: Column(children: [
+      backgroundColor: Colors.transparent, // ★v27.0.30 壁纸透出
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: Column(children: [
         GlassBar(
           top: true,
           child: SafeArea(
@@ -300,6 +350,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                         ),
         ),
       ]),
+      ),
     );
   }
 }
@@ -367,8 +418,12 @@ class _NovelDetailPageState extends State<NovelDetailPage> {
     final author = '${_detail?['author'] ?? widget.book['author'] ?? '未知作者'}';
     final abstract = '${_detail?['abstract'] ?? widget.book['abstract'] ?? ''}';
     return Scaffold(
-      backgroundColor: kBg,
-      body: Column(children: [
+      backgroundColor: Colors.transparent, // ★v27.0.30 壁纸透出
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: Column(children: [
         GlassBar(
           top: true,
           child: SafeArea(
@@ -492,6 +547,7 @@ class _NovelDetailPageState extends State<NovelDetailPage> {
                 ),
         ),
       ]),
+      ),
     );
   }
 }
@@ -597,8 +653,12 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0E),
-      body: Column(children: [
+      backgroundColor: Colors.transparent, // ★v27.0.30 阅读页也透出壁纸（原来 0xFF0B0B0E 纯黑）
+      body: Wall(
+        url: app.bg,
+        blur: app.bgBlur,
+        opacity: app.bgOpacity,
+        child: Column(children: [
         GlassBar(
           top: true,
           child: SafeArea(
@@ -734,6 +794,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           ),
         ),
       ]),
+      ),
     );
   }
 }
@@ -876,10 +937,113 @@ class _ShelfEmpty extends StatelessWidget {
         const SizedBox(height: 14),
         const Text('书架还空着', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
-        const Text('顶部搜索框搜番茄小说\n搜到后点进来看详情，就能加入书架', 
+        const Text('顶部搜索框搜番茄小说\n搜到后点进来看详情，就能加入书架',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: kSub, height: 1.5)),
       ]),
     );
+  }
+}
+
+/// ★v27.0.30 书城：分类标签 + 该分类的书（复用搜索接口拉分类热书，不依赖新后端）
+class _BookCityView extends StatefulWidget {
+  const _BookCityView();
+  @override
+  State<_BookCityView> createState() => _BookCityViewState();
+}
+
+class _BookCityViewState extends State<_BookCityView> {
+  static const _cats = ['玄幻', '都市', '言情', '科幻', '悬疑', '历史', '游戏', '武侠', '奇幻', '军事', '灵异', '短篇'];
+  String _cat = '玄幻';
+  List<dynamic> _books = [];
+  bool _loading = true;
+  String _err = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load([String? cat]) async {
+    final c = cat ?? _cat;
+    setState(() {
+      if (cat != null) _cat = cat;
+      _loading = true;
+      _err = '';
+    });
+    final r = await NovelApi.search(c);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (r['ok'] == true) {
+        final data = r['data'];
+        _books = (data is Map ? (data['results'] as List?) ?? [] : []) as List<dynamic>;
+        if (_books.isEmpty) _err = '这个分类暂时没拉到书，换一个试试';
+      } else {
+        _err = '${r['error'] ?? '加载失败'}';
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      // 分类标签（横向滑动）
+      SizedBox(
+        height: 40,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          itemCount: _cats.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final c = _cats[i];
+            final on = c == _cat;
+            return GestureDetector(
+              onTap: () => _load(c),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: on ? kAccent : const Color(0x14FFFFFF),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(c,
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: on ? Colors.white : kSub)),
+              ),
+            );
+          },
+        ),
+      ),
+      Expanded(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: kAccent))
+            : _err.isNotEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Text(_err,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13.5, color: kSub, height: 1.5)),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
+                    itemCount: _books.length,
+                    itemBuilder: (_, i) {
+                      final b = _books[i] as Map;
+                      return _SearchCard(
+                        book: b,
+                        onTap: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => NovelDetailPage(book: Map<String, dynamic>.from(b)))),
+                      );
+                    },
+                  ),
+      ),
+    ]);
   }
 }
